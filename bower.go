@@ -1,11 +1,13 @@
 package main
 
-type BowerProject struct {
-	DirRootPath     string
-	JsonFileRelPath string
-	SrcDirRelPath   string
-	DepsDirRelPath  string
-}
+import (
+	"encoding/json"
+	"errors"
+	"io/ioutil"
+	"net/url"
+	"path/filepath"
+	"strings"
+)
 
 type BowerFile struct {
 	Name        string `json:"name"`
@@ -33,4 +35,41 @@ type BowerFile struct {
 	_Target         string `json:"_target,omitempty"`
 	_OriginalSource string `json:"_originalSource,omitempty"`
 	_Direct         bool   `json:"_direct,omitempty"`
+}
+
+type BowerProject struct {
+	JsonFilePath     string
+	SrcDirPath       string
+	DepsDirPath      string
+	DumpsDirProjPath string
+	JsonFile         BowerFile
+	GoOut            struct {
+		PkgDirPath string
+	}
+}
+
+func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
+	var jsonbytes []byte
+	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {
+		if err = json.Unmarshal(jsonbytes, &me.JsonFile); err == nil {
+			me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, me.JsonFile.Name)
+			if u, _ := url.Parse(me.JsonFile.Repository.URL); u != nil && len(u.Path) > 0 { // yeap, double-check apparently needed ..
+				if i := strings.LastIndex(u.Path, "."); i > 0 {
+					me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, u.Path[:i])
+					if !strings.HasSuffix(me.GoOut.PkgDirPath, me.JsonFile.Name) {
+						me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Name)
+					}
+				} else if i := strings.LastIndexAny(u.Path, "/\\"); i > 0 {
+					me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, u.Path[:i], me.JsonFile.Name)
+				} else {
+					me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, u.Path)
+				}
+			}
+			println(me.GoOut.PkgDirPath)
+		}
+	}
+	if err != nil {
+		err = errors.New(me.JsonFilePath + ": " + err.Error())
+	}
+	return
 }
