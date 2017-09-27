@@ -15,10 +15,11 @@ var (
 	Proj BowerProject
 	Deps = map[string]*BowerProject{}
 	Flag struct {
-		NoPrefix     bool
-		Comments     bool
-		GoDirSrcPath string
-		GoNamespace  string
+		NoPrefix      bool
+		Comments      bool
+		ForceRegenAll bool
+		GoDirSrcPath  string
+		GoNamespace   string
 	}
 )
 
@@ -31,6 +32,7 @@ func main() {
 	pflag.StringVar(&Proj.DumpsDirProjPath, "coreimp-dumps-path", "output", "Directory path of 'purs' per-module output directories")
 	pflag.BoolVar(&Flag.NoPrefix, "no-prefix", false, "Do not include comment header")
 	pflag.BoolVar(&Flag.Comments, "comments", false, "Include comments in the generated code")
+	pflag.BoolVar(&Flag.ForceRegenAll, "force", false, "Force re-generating all applicable (coreimp dumps present) packages")
 	for _, gopath := range ugo.GoPaths() {
 		if Flag.GoDirSrcPath = filepath.Join(gopath, "src"); ufs.DirExists(Flag.GoDirSrcPath) {
 			break

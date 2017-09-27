@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,6 +51,11 @@ type BowerProject struct {
 	}
 }
 
+var (
+	slashestodots = strings.NewReplacer("\\", ".", "/", ".")
+	dotstoempty   = strings.NewReplacer(".", "")
+)
+
 func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	var jsonbytes []byte
 	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {
@@ -72,24 +76,9 @@ func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 			}
 			gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 			if err = ufs.EnsureDirExists(gopkgdir); err == nil {
-				repl := strings.NewReplacer("\\", ".", "/", ".")
 				ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
 					if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-						i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
-						modinfo := &ModuleInfo{srcFilePath: filepath.Join(me.SrcDirPath, relpath), qName: repl.Replace(relpath[:l])}
-						modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json")
-						modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
-						modinfo.goOutFilePath = filepath.Join(relpath[:l], relpath[i+1:l]) + ".go"
-						gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
-						if !ufs.FileExists(gopkgfile) {
-							modinfo.regenerate = true
-						} else if !ufs.FileExists(modinfo.impFilePath) {
-							modinfo.regenerate = false
-							os.RemoveAll(gopkgdir)
-						} else {
-							modinfo.regenerate, _ = ufs.IsNewerThan(modinfo.impFilePath, gopkgfile)
-						}
-						me.Modules = append(me.Modules, modinfo)
+						me.AddModuleInfoFromPursFileIfCoreimp(relpath, gopkgdir)
 					}
 					return true
 				})

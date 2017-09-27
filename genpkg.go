@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/metaleap/go-util-fs"
 )
@@ -10,21 +11,40 @@ type ModuleInfo struct {
 	regenerate    bool
 	qName         string //	eg	Control.Monad.Eff.Uncurried
 	lName         string //	eg	Uncurried
+	pName         string //	eg	ControlMonadEffUncurried
 	srcFilePath   string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs
 	impFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json
 	extFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/externs.json
 	goOutFilePath string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
 }
 
+func (me *BowerProject) AddModuleInfoFromPursFileIfCoreimp(relpath string, gopkgdir string) {
+	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
+	modinfo := &ModuleInfo{
+		srcFilePath: filepath.Join(me.SrcDirPath, relpath),
+		qName:       slashestodots.Replace(relpath[:l]), lName: relpath[i+1 : l],
+	}
+	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
+		modinfo.pName = dotstoempty.Replace(modinfo.qName)
+		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
+		modinfo.goOutFilePath = filepath.Join(relpath[:l], modinfo.lName) + ".go"
+		gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
+		if !ufs.FileExists(gopkgfile) {
+			modinfo.regenerate = true
+		} else if ufs.FileExists(modinfo.impFilePath) {
+			modinfo.regenerate, _ = ufs.IsNewerThan(modinfo.impFilePath, gopkgfile)
+		}
+		me.Modules = append(me.Modules, modinfo)
+	}
+}
+
 func (me *BowerProject) RegeneratePkgs() {
 	gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 	for _, modinfo := range me.Modules {
-		gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if ufs.DirExists(gopkgdir) {
-			println("OK!\t" + gopkgfile)
-		} else {
-			println("UH!\t" + gopkgfile)
+		if modinfo.regenerate || Flag.ForceRegenAll {
+			gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
+			ufs.WriteTextFile(gopkgfile, "package "+modinfo.pName)
+			println(gopkgfile)
 		}
-		// ufs.WriteTextFile("filePath", "contents")
 	}
 }
