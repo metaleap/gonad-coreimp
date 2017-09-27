@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/metaleap/go-util-fs"
 )
@@ -11,11 +13,13 @@ type ModuleInfo struct {
 	regenerate    bool
 	qName         string //	eg	Control.Monad.Eff.Uncurried
 	lName         string //	eg	Uncurried
-	pName         string //	eg	ControlMonadEffUncurried
+	pName         string //	eg	Control_Monad_Eff_Uncurried
 	srcFilePath   string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs
 	impFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json
 	extFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/externs.json
 	goOutFilePath string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
+
+	gopkgfilepath string //	full target file path (not necessarily absolute but starting with the applicable gopath)
 }
 
 var (
@@ -33,29 +37,45 @@ func (me *BowerProject) AddModuleInfoFromPursFileIfCoreimp(relpath string, gopkg
 		modinfo.pName = dot2underscore.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
 		modinfo.goOutFilePath = filepath.Join(relpath[:l], modinfo.lName) + ".go"
-		gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if !ufs.FileExists(gopkgfile) {
+		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
+		if !ufs.FileExists(modinfo.gopkgfilepath) {
 			modinfo.regenerate = true
 		} else if ufs.FileExists(modinfo.impFilePath) {
-			modinfo.regenerate, _ = ufs.IsNewerThan(modinfo.impFilePath, gopkgfile)
+			modinfo.regenerate, _ = ufs.IsNewerThan(modinfo.impFilePath, modinfo.gopkgfilepath)
 		}
 		me.Modules = append(me.Modules, modinfo)
 	}
 }
 
-func (me *BowerProject) RegeneratePkgs() (err error) {
-	gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
+func (me *BowerProject) RegenerateModulePkgs() (err error) {
 	for _, modinfo := range me.Modules {
 		if modinfo.regenerate || Flag.ForceRegenAll {
-			gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
-			if err = ufs.EnsureDirExists(filepath.Dir(gopkgfile)); err != nil {
+			if err = ufs.EnsureDirExists(filepath.Dir(modinfo.gopkgfilepath)); err != nil {
 				return
 			}
-			if err = ufs.WriteTextFile(gopkgfile, "package "+modinfo.pName); err != nil {
-				return
-			}
-			println(gopkgfile)
 		}
+	}
+	var wg sync.WaitGroup
+	regenmodulepkg := func(modinfo *ModuleInfo) {
+		defer wg.Done()
+		if e := modinfo.regenPkg(me); e != nil {
+			panic(e)
+		}
+	}
+	for _, modinfo := range me.Modules {
+		if modinfo.regenerate || Flag.ForceRegenAll {
+			wg.Add(1)
+			go regenmodulepkg(modinfo)
+		}
+	}
+	wg.Wait()
+	return
+}
+
+func (me *ModuleInfo) regenPkg(proj *BowerProject) (err error) {
+	var buf bytes.Buffer
+	if _, err = buf.WriteString("package " + me.pName); err == nil {
+		err = ufs.WriteBinaryFile(me.gopkgfilepath, buf.Bytes())
 	}
 	return
 }

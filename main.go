@@ -86,14 +86,14 @@ func main() {
 			if wg.Wait(); err == nil {
 				regeneratepackages := func(depname string, dep *BowerProject) {
 					defer wg.Done()
-					dep.RegeneratePkgs()
+					dep.RegenerateModulePkgs()
 				}
-				wg.Add(1)
-				go regeneratepackages("", &Proj)
 				for dk, dv := range Deps {
 					wg.Add(1)
 					go regeneratepackages(dk, dv)
 				}
+				wg.Add(1)
+				go regeneratepackages("", &Proj)
 				if wg.Wait(); err == nil {
 				}
 			}
