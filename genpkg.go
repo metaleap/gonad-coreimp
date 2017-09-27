@@ -18,14 +18,19 @@ type ModuleInfo struct {
 	goOutFilePath string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
 }
 
+var (
+	slash2dot      = strings.NewReplacer("\\", ".", "/", ".")
+	dot2underscore = strings.NewReplacer(".", "_")
+)
+
 func (me *BowerProject) AddModuleInfoFromPursFileIfCoreimp(relpath string, gopkgdir string) {
 	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
 	modinfo := &ModuleInfo{
 		srcFilePath: filepath.Join(me.SrcDirPath, relpath),
-		qName:       slashestodots.Replace(relpath[:l]), lName: relpath[i+1 : l],
+		qName:       slash2dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
 	}
 	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
-		modinfo.pName = dotstoempty.Replace(modinfo.qName)
+		modinfo.pName = dot2underscore.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
 		modinfo.goOutFilePath = filepath.Join(relpath[:l], modinfo.lName) + ".go"
 		gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
@@ -38,13 +43,19 @@ func (me *BowerProject) AddModuleInfoFromPursFileIfCoreimp(relpath string, gopkg
 	}
 }
 
-func (me *BowerProject) RegeneratePkgs() {
+func (me *BowerProject) RegeneratePkgs() (err error) {
 	gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 	for _, modinfo := range me.Modules {
 		if modinfo.regenerate || Flag.ForceRegenAll {
 			gopkgfile := filepath.Join(gopkgdir, modinfo.goOutFilePath)
-			ufs.WriteTextFile(gopkgfile, "package "+modinfo.pName)
+			if err = ufs.EnsureDirExists(filepath.Dir(gopkgfile)); err != nil {
+				return
+			}
+			if err = ufs.WriteTextFile(gopkgfile, "package "+modinfo.pName); err != nil {
+				return
+			}
 			println(gopkgfile)
 		}
 	}
+	return
 }

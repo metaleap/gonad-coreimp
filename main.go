@@ -76,8 +76,12 @@ func main() {
 				}
 			}
 			for dk, dv := range Deps {
-				wg.Add(1)
-				go loaddepfrombowerfile(dk, dv)
+				if err = ufs.EnsureDirExists(filepath.Join(Flag.GoDirSrcPath, dv.GoOut.PkgDirPath)); err != nil {
+					break
+				} else {
+					wg.Add(1)
+					go loaddepfrombowerfile(dk, dv)
+				}
 			}
 			if wg.Wait(); err == nil {
 				regeneratepackages := func(depname string, dep *BowerProject) {

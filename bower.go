@@ -51,11 +51,6 @@ type BowerProject struct {
 	}
 }
 
-var (
-	slashestodots = strings.NewReplacer("\\", ".", "/", ".")
-	dotstoempty   = strings.NewReplacer(".", "")
-)
-
 func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	var jsonbytes []byte
 	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {
@@ -75,14 +70,12 @@ func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Version)
 			}
 			gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
-			if err = ufs.EnsureDirExists(gopkgdir); err == nil {
-				ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
-					if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-						me.AddModuleInfoFromPursFileIfCoreimp(relpath, gopkgdir)
-					}
-					return true
-				})
-			}
+			ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
+				if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
+					me.AddModuleInfoFromPursFileIfCoreimp(relpath, gopkgdir)
+				}
+				return true
+			})
 		}
 	}
 	if err != nil {
