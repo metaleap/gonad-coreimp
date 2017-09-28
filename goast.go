@@ -14,11 +14,7 @@ type GoAst struct {
 
 	PkgName string
 	Imports []*ModuleInfo
-	Decls   []GoAstNode
-}
-
-type GoAstNode struct {
-	srcAst *CoreImpAst
+	Decls   []*CoreImpAst
 }
 
 func (me *GoAst) PopulateFrom(coreimp *CoreImp) (err error) {
@@ -26,9 +22,18 @@ func (me *GoAst) PopulateFrom(coreimp *CoreImp) (err error) {
 		switch ast.Ast_tag {
 		case "StringLiteral", "Assignment":
 		case "VariableIntroduction":
-			me.Decls = append(me.Decls, GoAstNode{srcAst: ast})
-		case "Comment":
-			me.Decls = append(me.Decls, GoAstNode{srcAst: ast})
+			if ast.Ast_rightHandSide != nil && ast.Ast_rightHandSide.App != nil && ast.Ast_rightHandSide.App.Var == "require" && len(ast.Ast_rightHandSide.Ast_appArgs) == 1 {
+				// println("Skipped require()")
+			} else {
+				if ast.Ast_rightHandSide != nil && ast.Ast_rightHandSide.Ast_tag == "Function" {
+					// turn top-level "var foo = func(..){..}" into top-level "func foo(..){..}"
+					ast.Ast_rightHandSide.Function = ast.VariableIntroduction
+					ast = ast.Ast_rightHandSide
+				}
+				me.Decls = append(me.Decls, ast)
+			}
+		case "Function", "Comment":
+			me.Decls = append(me.Decls, ast)
 		default:
 			return errors.New(me.modinfo.impFilePath + ": unrecognized top-level tag, please report: " + ast.Ast_tag)
 		}
@@ -61,38 +66,26 @@ func (me *GoAst) WriteTo(w io.Writer) (err error) {
 			case "Var":
 				fmt.Fprintf(w, "%s", ast.Var)
 			case "Block":
-				fmt.Print("{")
+				fmt.Fprint(w, "{")
 				for _, expr := range ast.Block {
 					printast(expr)
 				}
-				fmt.Print("}")
+				fmt.Fprint(w, "}")
 			case "While":
 				fmt.Fprint(w, "\nfor ")
 				printast(ast.While)
-				if ast.Ast_body == nil {
-					println(me.modinfo.srcFilePath + ": While body nil")
-				} else {
-					printast(ast.Ast_body)
-				}
+				printast(ast.Ast_body)
 			case "For":
 				fmt.Fprintf(w, "\nfor %s ; ", ast.For)
 				printast(ast.Ast_for1)
 				fmt.Fprint(w, " ; ")
 				printast(ast.Ast_for2)
 				fmt.Fprint(w, " ")
-				if ast.Ast_body == nil {
-					println(me.modinfo.srcFilePath + ": For body nil")
-				} else {
-					printast(ast.Ast_body)
-				}
+				printast(ast.Ast_body)
 			case "ForIn":
 				fmt.Fprintf(w, "\nfor _, %s := range ", ast.ForIn)
 				printast(ast.Ast_for1)
-				if ast.Ast_body == nil {
-					println(me.modinfo.srcFilePath + ": ForIn body nil")
-				} else {
-					printast(ast.Ast_body)
-				}
+				printast(ast.Ast_body)
 			case "IfElse":
 				fmt.Fprint(w, "if ")
 				printast(ast.IfElse)
@@ -121,11 +114,7 @@ func (me *GoAst) WriteTo(w io.Writer) (err error) {
 					fmt.Fprint(w, argname)
 				}
 				fmt.Fprint(w, ") ")
-				if ast.Ast_body == nil {
-					println(me.modinfo.srcFilePath + ": Function body nil")
-				} else {
-					printast(ast.Ast_body)
-				}
+				printast(ast.Ast_body)
 			case "Unary":
 				fmt.Fprint(w, "(")
 				switch ast.Ast_op {
@@ -198,15 +187,19 @@ func (me *GoAst) WriteTo(w io.Writer) (err error) {
 				printast(ast.Ast_rightHandSide)
 				fmt.Fprint(w, ")")
 			case "VariableIntroduction":
-				fmt.Fprintf(w, "\nvar %s = ", ast.VariableIntroduction)
-				printast(ast.Ast_rightHandSide)
+				fmt.Fprintf(w, "\nvar %s", ast.VariableIntroduction)
+				if ast.Ast_rightHandSide != nil {
+					fmt.Fprint(w, " = ")
+					printast(ast.Ast_rightHandSide)
+				}
+				fmt.Fprint(w, "\n")
 			case "Comment":
 				for _, c := range ast.Comment {
 					if c != nil {
 						if len(c.BlockComment) > 0 {
 							fmt.Fprintf(w, "/*%s*/", c.BlockComment)
 						} else {
-							fmt.Fprintf(w, "//%s\n", c.LineComment)
+							fmt.Fprintf(w, "\n//%s", c.LineComment)
 						}
 					}
 				}
@@ -256,11 +249,11 @@ func (me *GoAst) WriteTo(w io.Writer) (err error) {
 				fmt.Fprint(w, " is ")
 				printast(ast.Ast_rightHandSide)
 			default:
-				println(ast.Ast_tag)
+				println(me.modinfo.srcFilePath + ": unhandled " + ast.Ast_tag)
 			}
 		}
 		for _, topleveldecl := range me.Decls {
-			printast(topleveldecl.srcAst)
+			printast(topleveldecl)
 		}
 	}
 	return

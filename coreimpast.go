@@ -9,11 +9,11 @@ type CoreImp struct {
 }
 
 type CoreImpAst struct {
-	Ast_sourceSpan    *CoreImpSourceSpan `json:"x,omitempty"`
+	Ast_sourceSpan    *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
 	Ast_tag           string             `json:"tag,omitempty"`
-	Ast_rightHandSide *CoreImpAst        `json:"rhs,omitempty"`
 	Ast_body          *CoreImpAst        `json:"body,omitempty"`
-	Ast_decl          *CoreImpAst        `json:"body,omitempty"`
+	Ast_rightHandSide *CoreImpAst        `json:"rhs,omitempty"`
+	Ast_decl          *CoreImpAst        `json:"decl,omitempty"`
 	Ast_appArgs       []*CoreImpAst      `json:"args,omitempty"`
 	Ast_op            string             `json:"op,omitempty"`
 	Ast_funcParams    []string           `json:"params,omitempty"`
@@ -22,6 +22,7 @@ type CoreImpAst struct {
 	Ast_ifThen        *CoreImpAst        `json:"then,omitempty"`
 	Ast_ifElse        *CoreImpAst        `json:"else,omitempty"`
 
+	Function               string                   `json:",omitempty"`
 	StringLiteral          string                   `json:",omitempty"`
 	BooleanLiteral         bool                     `json:",omitempty"`
 	NumericLiteral_Integer int64                    `json:",omitempty"`
@@ -33,7 +34,6 @@ type CoreImpAst struct {
 	App                    *CoreImpAst              `json:",omitempty"`
 	Unary                  *CoreImpAst              `json:",omitempty"`
 	Comment                []*CoreImpComment        `json:",omitempty"`
-	Function               string                   `json:",omitempty"`
 	Binary                 *CoreImpAst              `json:",omitempty"`
 	ForIn                  string                   `json:",omitempty"`
 	For                    string                   `json:",omitempty"`
@@ -45,7 +45,8 @@ type CoreImpAst struct {
 	Assignment             *CoreImpAst              `json:",omitempty"`
 	Indexer                *CoreImpAst              `json:",omitempty"`
 	InstanceOf             *CoreImpAst              `json:",omitempty"`
-	// ReturnNoResult         *CoreImpVoid
+
+	parent *CoreImpAst
 }
 
 type CoreImpComment struct {

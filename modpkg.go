@@ -115,6 +115,44 @@ func (me *ModuleInfo) regenerateGoPkg(proj *BowerProject) (err error) {
 					pkg.Imports = append(pkg.Imports, FindModuleByQName(impname))
 				}
 			}
+
+			var setparents func(*CoreImpAst, ...*CoreImpAst)
+			setparents = func(parent *CoreImpAst, asts ...*CoreImpAst) {
+				for _, a := range asts {
+					if a != nil {
+						a.parent = parent
+						setparents(a, a.App)
+						setparents(a, a.ArrayLiteral...)
+						setparents(a, a.Assignment)
+						setparents(a, a.Ast_appArgs...)
+						setparents(a, a.Ast_body)
+						setparents(a, a.Ast_decl)
+						setparents(a, a.Ast_for1)
+						setparents(a, a.Ast_for2)
+						setparents(a, a.Ast_ifElse)
+						setparents(a, a.Ast_ifThen)
+						setparents(a, a.Ast_rightHandSide)
+						setparents(a, a.Binary)
+						setparents(a, a.Block...)
+						setparents(a, a.IfElse)
+						setparents(a, a.Indexer)
+						setparents(a, a.InstanceOf)
+						setparents(a, a.Return)
+						setparents(a, a.Throw)
+						setparents(a, a.Unary)
+						setparents(a, a.While)
+						for _, m := range a.ObjectLiteral {
+							for _, expr := range m {
+								setparents(a, expr)
+							}
+						}
+					}
+				}
+			}
+			for _, decl := range coreimp.Body {
+				setparents(nil, decl)
+			}
+
 			if err = pkg.PopulateFrom(&coreimp); err == nil {
 				if err = pkg.WriteTo(&buf); err == nil {
 					err = ufs.WriteBinaryFile(me.gopkgfilepath, buf.Bytes())
