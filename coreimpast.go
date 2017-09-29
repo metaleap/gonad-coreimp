@@ -1,7 +1,7 @@
 package main
 
 import (
-	"unicode"
+// "unicode"
 )
 
 type CoreImp struct {
@@ -90,14 +90,14 @@ func (me *CoreImp) preProcessTopLevel() {
 					a.Ast_rightHandSide.Function = a.VariableIntroduction
 					a = a.Ast_rightHandSide
 					a.parent, me.Body[i] = nil, a
-					if unicode.IsUpper([]rune(a.Function)[0]) {
-						a.typedecl = &GoAstTypeDecl{}
-						if len(a.Ast_funcParams) == 1 && a.Ast_funcParams[0] == "x" && a.Ast_body != nil && a.Ast_body.Ast_tag == "Block" && len(a.Ast_body.Block) == 1 && a.Ast_body.Block[0].Ast_tag == "Return" && a.Ast_body.Block[0].Return != nil && a.Ast_body.Block[0].Return.Var == "x" {
-							a.typedecl.NtCtor.Name = a.Function
-						} else {
-							println(a.Function + ":::UNKNOWN")
-						}
-					}
+					// if unicode.IsUpper([]rune(a.Function)[0]) {
+					// 	a.typedecl = &GoAstTypeDecl{}
+					// 	if len(a.Ast_funcParams) == 1 && a.Ast_funcParams[0] == "x" && a.Ast_body != nil && a.Ast_body.Ast_tag == "Block" && len(a.Ast_body.Block) == 1 && a.Ast_body.Block[0].Ast_tag == "Return" && a.Ast_body.Block[0].Return != nil && a.Ast_body.Block[0].Return.Var == "x" {
+					// 		a.typedecl.NtCtor.Name = a.Function
+					// 	} else {
+					// 		println(a.Function + ":::UNKNOWN")
+					// 	}
+					// }
 				}
 			}
 		}
