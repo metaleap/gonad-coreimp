@@ -107,10 +107,10 @@ func (me *ModuleInfo) regenerateGoPkg(proj *BowerProject) (err error) {
 		if err = json.Unmarshal(jsonbytes, &me.ext); err == nil {
 			me.ext.modinfo = me
 			if jsonbytes, err = ioutil.ReadFile(me.impFilePath); err == nil {
-				jsonstr := strings.TrimSpace(string(jsonbytes))[1:]
-				jsonstr = jsonstr[:len(jsonstr)-1]
-				jsonstr = jsonstr[strings.IndexRune(jsonstr, '{'):]
-				if err = json.Unmarshal([]byte(jsonstr), &coreimp); err == nil {
+				// jsonstr := strings.TrimSpace(string(jsonbytes))[1:]
+				// jsonstr = jsonstr[:len(jsonstr)-1]
+				// jsonstr = jsonstr[strings.IndexRune(jsonstr, '{'):]
+				if err = json.Unmarshal(jsonbytes, &coreimp); err == nil {
 					if err = me.ext.process(); err == nil {
 						pkg := GoAst{modinfo: me, proj: proj, PkgName: me.pName}
 						for _, impname := range coreimp.Imports {
