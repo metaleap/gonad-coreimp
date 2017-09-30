@@ -1,15 +1,13 @@
 package main
 
-import (
-// "unicode"
-)
-
 type CoreImp struct {
 	BuiltWith string        `json:"builtWith,omitempty"`
 	Imports   []string      `json:"imports,omitempty"`
 	Exports   []string      `json:"exports,omitempty"`
 	Foreign   []string      `json:"foreign,omitempty"`
 	Body      []*CoreImpAst `json:"body,omitempty"`
+
+	namedRequires map[string]string
 }
 
 type CoreImpAst struct {
@@ -50,8 +48,7 @@ type CoreImpAst struct {
 	Indexer                *CoreImpAst              `json:",omitempty"`
 	InstanceOf             *CoreImpAst              `json:",omitempty"`
 
-	parent   *CoreImpAst
-	typedecl *GoAstTypeDecl
+	parent *CoreImpAst
 }
 
 type CoreImpComment struct {
@@ -66,6 +63,7 @@ type CoreImpSourceSpan struct {
 }
 
 func (me *CoreImp) preProcessTopLevel() {
+	me.namedRequires = map[string]string{}
 	me.setParents(nil, me.Body...)
 	i := 0
 	ditch := func() {
@@ -83,22 +81,13 @@ func (me *CoreImp) preProcessTopLevel() {
 		} else if a.Ast_tag == "VariableIntroduction" {
 			if a.Ast_rightHandSide != nil && a.Ast_rightHandSide.App != nil && a.Ast_rightHandSide.App.Var == "require" && len(a.Ast_rightHandSide.Ast_appArgs) == 1 {
 				// println("Dropped top-level require()" )
+				me.namedRequires[a.VariableIntroduction] = a.Ast_rightHandSide.Ast_appArgs[0].StringLiteral
 				ditch()
-			} else {
-				if a.Ast_rightHandSide != nil && a.Ast_rightHandSide.Ast_tag == "Function" {
-					// turn top-level "var foo = func(..){..}" into top-level "func foo(..){..}"
-					a.Ast_rightHandSide.Function = a.VariableIntroduction
-					a = a.Ast_rightHandSide
-					a.parent, me.Body[i] = nil, a
-					// if unicode.IsUpper([]rune(a.Function)[0]) {
-					// 	a.typedecl = &GoAstTypeDecl{}
-					// 	if len(a.Ast_funcParams) == 1 && a.Ast_funcParams[0] == "x" && a.Ast_body != nil && a.Ast_body.Ast_tag == "Block" && len(a.Ast_body.Block) == 1 && a.Ast_body.Block[0].Ast_tag == "Return" && a.Ast_body.Block[0].Return != nil && a.Ast_body.Block[0].Return.Var == "x" {
-					// 		a.typedecl.NtCtor.Name = a.Function
-					// 	} else {
-					// 		println(a.Function + ":::UNKNOWN")
-					// 	}
-					// }
-				}
+			} else if a.Ast_rightHandSide != nil && a.Ast_rightHandSide.Ast_tag == "Function" {
+				// turn top-level `var foo = func()` into `func foo()`
+				a.Ast_rightHandSide.Function = a.VariableIntroduction
+				a = a.Ast_rightHandSide
+				a.parent, me.Body[i] = nil, a
 			}
 		}
 	}

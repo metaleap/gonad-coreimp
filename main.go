@@ -76,26 +76,32 @@ func main() {
 				}
 			}
 			for dk, dv := range Deps {
-				if err = ufs.EnsureDirExists(filepath.Join(Flag.GoDirSrcPath, dv.GoOut.PkgDirPath)); err != nil {
-					break
-				} else {
-					wg.Add(1)
-					go loaddepfrombowerfile(dk, dv)
-				}
+				wg.Add(1)
+				go loaddepfrombowerfile(dk, dv)
 			}
 			if wg.Wait(); err == nil {
-				regeneratepackages := func(depname string, dep *BowerProject) {
+				loadgirmetas := func(dep *BowerProject) {
 					defer wg.Done()
-					dep.RegenerateModulePkgs()
+					dep.EnsureModPkgGirMetas()
 				}
-				for dk, dv := range Deps {
+				for _, dep := range Deps {
 					wg.Add(1)
-					go regeneratepackages(dk, dv)
+					go loadgirmetas(dep)
 				}
 				wg.Add(1)
-				go regeneratepackages("", &Proj)
-				if wg.Wait(); err == nil {
+				go loadgirmetas(&Proj)
+				wg.Wait()
+				regengirasts := func(dep *BowerProject) {
+					defer wg.Done()
+					dep.RegenModPkgGirAsts()
 				}
+				for _, dep := range Deps {
+					wg.Add(1)
+					go regengirasts(dep)
+				}
+				wg.Add(1)
+				go regengirasts(&Proj)
+				wg.Wait()
 			}
 		}
 	}

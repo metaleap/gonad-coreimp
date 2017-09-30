@@ -5,6 +5,12 @@ type TaggedContents struct {
 	Contents interface{} `json:"contents,omitempty"`
 }
 
+func newTaggedContents(m map[string]interface{}) (tc TaggedContents) {
+	tc.Tag = m["tag"].(string)
+	tc.Contents = m["contents"]
+	return
+}
+
 type PsExt struct {
 	modinfo *ModuleInfo
 
@@ -38,71 +44,43 @@ type PsExtImportType struct {
 }
 
 type PsExtDecl struct {
-	EDClass struct {
-		members []classMember
-
-		EdClassName              string          `json:"edClassName,omitempty"`
-		EdClassTypeArguments     [][]string      `json:"edClassTypeArguments,omitempty"`
-		EdFunctionalDependencies []interface{}   `json:"edFunctionalDependencies,omitempty"`
-		EdClassMembers           [][]interface{} `json:"edClassMembers,omitempty"`
-		EdClassConstraints       []struct {
-			ConstraintClass []interface{}    `json:"constraintClass,omitempty"`
-			ConstraintArgs  []TaggedContents `json:"constraintArgs,omitempty"`
-			ConstraintData  interface{}      `json:"constraintData,omitempty"`
-		} `json:"edClassConstraints,omitempty"`
-	}
-	EDType            map[string]interface{}
-	EDTypeSynonym     map[string]interface{}
-	EDValue           map[string]interface{}
-	EDInstance        map[string]interface{}
-	EDDataConstructor map[string]interface{}
+	EDClass           *PsExtTypeClass        `json:",omitempty"`
+	EDType            *PsExtType             `json:",omitempty"`
+	EDTypeSynonym     *PsExtTypeAlias        `json:",omitempty"`
+	EDValue           map[string]interface{} `json:",omitempty"`
+	EDInstance        map[string]interface{} `json:",omitempty"`
+	EDDataConstructor map[string]interface{} `json:",omitempty"`
 }
 
-type classMember struct {
-	name         string
-	argTypeNames []string
+type PsExtType struct {
+	Name     string          `json:"edTypeName,omitempty"`
+	Kind     *TaggedContents `json:"edTypeKind,omitempty"`
+	DeclKind interface{}     `json:"edTypeDeclarationKind,omitempty"`
 }
 
-func (me *PsExt) process() (err error) {
-	for _, d := range me.EfDecls {
-		if len(d.EDClass.EdClassName) > 0 {
-			me.figureTypeClass(d)
-		}
-	}
-	return
+type PsExtTypeAlias struct {
+	Name      string          `json:"edTypeSynonymName,omitempty"`
+	Arguments []interface{}   `json:"edTypeSynonymArguments,omitempty"`
+	Type      *TaggedContents `json:"edTypeSynonymType,omitempty"`
 }
 
-func (me *PsExt) figureTypeClass(d *PsExtDecl) {
-	errmsg := me.modinfo.extFilePath + ": " + d.EDClass.EdClassName + ": unexpected type-class format, please report!"
-	walk := func(x []interface{}, mem *classMember) {
-		left, right := x[0], x[1]
-		switch l := left.(type) {
-		case string:
-			mem.argTypeNames = append(mem.argTypeNames, l)
-		case map[string]interface{}:
-			mem.argTypeNames = append(mem.argTypeNames, l["tag"].(string))
-		default:
-			panic(errmsg)
-		}
-		if right == nil {
-		}
-	}
-	if len(d.EDClass.EdClassName) > 0 {
-		for _, m := range d.EDClass.EdClassMembers {
-			if len(m) != 2 {
-				panic(errmsg)
-			} else {
-				mem := classMember{name: m[0].(map[string]interface{})["Ident"].(string)}
-				mtc := m[1].(map[string]interface{})["contents"]
-				switch x := mtc.(type) {
-				case string:
-					mem.argTypeNames = append(mem.argTypeNames, x)
-				case []interface{}:
-					walk(x, &mem)
-				}
-				d.EDClass.members = append(d.EDClass.members, mem)
-			}
+type PsExtTypeClass struct {
+	Name           string          `json:"edClassName,omitempty"`
+	TypeArgs       [][]string      `json:"edClassTypeArguments,omitempty"`
+	FunctionalDeps []interface{}   `json:"edFunctionalDependencies,omitempty"`
+	Members        [][]interface{} `json:"edClassMembers,omitempty"`
+	Constraints    []struct {
+		Class []interface{}    `json:"constraintClass,omitempty"`
+		Args  []TaggedContents `json:"constraintArgs,omitempty"`
+		Data  interface{}      `json:"constraintData,omitempty"`
+	} `json:"edClassConstraints,omitempty"`
+}
+
+func (me *PsExt) findTypeClass(name string) *PsExtTypeClass {
+	for _, decl := range me.EfDecls {
+		if decl.EDClass != nil && decl.EDClass.Name == name {
+			return decl.EDClass
 		}
 	}
-	return
+	return nil
 }

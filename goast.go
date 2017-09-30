@@ -53,7 +53,7 @@ func (me *GoAst) WriteTo(w io.Writer) {
 func (me *GoAst) writeTypeDeclsTo(w io.Writer) {
 	if ext := me.modinfo.ext; ext != nil {
 		for _, d := range ext.EfDecls {
-			if false && len(d.EDClass.EdClassName) > 0 {
+			if false && len(d.EDClass.Name) > 0 {
 				me.writeTypeClassToInterface(w, d)
 			}
 		}
@@ -61,19 +61,19 @@ func (me *GoAst) writeTypeDeclsTo(w io.Writer) {
 }
 
 func (me *GoAst) writeTypeClassToInterface(w io.Writer, d *PsExtDecl) {
-	fmt.Fprintf(w, "type %s interface {\n", d.EDClass.EdClassName)
-	for _, m := range d.EDClass.members {
-		fmt.Fprintf(w, "\t%s(", m.name)
-		for i, l := 0, len(m.argTypeNames); i < l; i++ {
-			if i == l-1 {
-				fmt.Fprint(w, ") ")
-			} else if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
-			fmt.Fprint(w, m.argTypeNames[i])
-		}
-		fmt.Fprint(w, "\n")
-	}
+	fmt.Fprintf(w, "type %s interface {\n", d.EDClass.Name)
+	// for _, m := range d.EDClass.members {
+	// 	fmt.Fprintf(w, "\t%s(", m.name)
+	// 	for i, l := 0, len(m.argTypeNames); i < l; i++ {
+	// 		if i == l-1 {
+	// 			fmt.Fprint(w, ") ")
+	// 		} else if i > 0 {
+	// 			fmt.Fprint(w, ", ")
+	// 		}
+	// 		fmt.Fprint(w, m.argTypeNames[i])
+	// 	}
+	// 	fmt.Fprint(w, "\n")
+	// }
 	fmt.Fprintf(w, "}\n\n")
 }
 
@@ -137,9 +137,9 @@ func (me *GoAst) writeTopLevelDeclsTo(w io.Writer) {
 			}
 			fmt.Fprint(w, ")")
 		case "Function":
-			if ast.typedecl != nil {
-				fmt.Fprint(w, "/*\n")
-			}
+			// if ast.typedecl != nil {
+			// 	fmt.Fprint(w, "/*\n")
+			// }
 			fmt.Fprintf(w, "func %s(", ast.Function)
 			for i, argname := range ast.Ast_funcParams {
 				if i > 0 {
@@ -149,12 +149,12 @@ func (me *GoAst) writeTopLevelDeclsTo(w io.Writer) {
 			}
 			fmt.Fprint(w, ") ")
 			printast(ast.Ast_body)
-			if ast.typedecl != nil {
-				fmt.Fprint(w, "*/\n")
-				if len(ast.typedecl.NtCtor.Name) > 0 {
-					fmt.Fprintf(w, "type %s struct{}", ast.typedecl.NtCtor.Name)
-				}
-			}
+			// if ast.typedecl != nil {
+			// 	fmt.Fprint(w, "*/\n")
+			// 	if len(ast.typedecl.NtCtor.Name) > 0 {
+			// 		fmt.Fprintf(w, "type %s struct{}", ast.typedecl.NtCtor.Name)
+			// 	}
+			// }
 		case "Unary":
 			fmt.Fprint(w, "(")
 			switch ast.Ast_op {

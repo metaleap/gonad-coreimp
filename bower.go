@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/metaleap/go-util-fs"
 )
@@ -51,6 +52,15 @@ type BowerProject struct {
 	}
 }
 
+func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
+	for _, m := range me.Modules {
+		if m.qName == qname {
+			return m
+		}
+	}
+	return nil
+}
+
 func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	var jsonbytes []byte
 	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {
@@ -72,7 +82,7 @@ func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 			gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 			ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
 				if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-					me.AddModuleInfoFromPursFileIfCoreimp(relpath, gopkgdir)
+					me.AddModuleInfoFromPsSrcFileIfCoreimp(relpath, gopkgdir)
 				}
 				return true
 			})
@@ -82,4 +92,70 @@ func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 		err = errors.New(me.JsonFilePath + ": " + err.Error())
 	}
 	return
+}
+
+func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
+	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
+	modinfo := &ModuleInfo{
+		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
+		qName: slash2dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
+	}
+	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
+		modinfo.pName = dot2underscore.Replace(modinfo.qName)
+		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
+		modinfo.girMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonadmeta.json")
+		modinfo.girAstFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonadast.json")
+		modinfo.goOutDirPath = relpath[:l]
+		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
+		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
+		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.girAstFilePath) && ufs.FileExists(modinfo.goOutFilePath) {
+			modinfo.regenGir = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
+				modinfo.girMetaFilePath, modinfo.girAstFilePath, modinfo.goOutFilePath)
+		} else {
+			modinfo.regenGir = true
+		}
+		me.Modules = append(me.Modules, modinfo)
+	}
+}
+
+func (me *BowerProject) EnsureModPkgGirMetas() {
+	var wg sync.WaitGroup
+	ensuregirmeta := func(modinfo *ModuleInfo) {
+		var err error
+		defer wg.Done()
+		if modinfo.regenGir || Flag.ForceRegenAll {
+			err = modinfo.regenPkgGirMeta()
+		} else {
+			if err = modinfo.loadPkgGirMeta(); err != nil {
+				modinfo.regenGir = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
+				println(modinfo.qName + ": regenerating due to error when loading " + modinfo.girMetaFilePath + ": " + err.Error())
+				err = modinfo.regenPkgGirMeta()
+			}
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
+	for _, modinfo := range me.Modules {
+		wg.Add(1)
+		go ensuregirmeta(modinfo)
+	}
+	wg.Wait()
+}
+
+func (me *BowerProject) RegenModPkgGirAsts() {
+	var wg sync.WaitGroup
+	regengirast := func(modinfo *ModuleInfo) {
+		defer wg.Done()
+		if err := modinfo.regenPkgGirAst(); err != nil {
+			panic(err)
+		}
+	}
+	for _, modinfo := range me.Modules {
+		if modinfo.regenGir || Flag.ForceRegenAll {
+			wg.Add(1)
+			go regengirast(modinfo)
+		}
+	}
+	wg.Wait()
 }

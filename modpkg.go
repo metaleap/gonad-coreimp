@@ -5,27 +5,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/metaleap/go-util-fs"
 )
 
 type ModuleInfo struct {
-	regenerate    bool
-	qName         string //	eg	Control.Monad.Eff.Uncurried
-	lName         string //	eg	Uncurried
-	pName         string //	eg	Control_Monad_Eff_Uncurried
-	srcFilePath   string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs
-	impFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json
-	extFilePath   string //	eg	output/Control.Monad.Eff.Uncurried/externs.json
-	goOutDirPath  string //	eg	Control/Monad/Eff/Uncurried
-	goOutFilePath string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
+	regenGir        bool
+	qName           string //	eg	Control.Monad.Eff.Uncurried
+	lName           string //	eg	Uncurried
+	pName           string //	eg	Control_Monad_Eff_Uncurried
+	srcFilePath     string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs
+	impFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json
+	extFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/externs.json
+	girMetaFilePath string //	eg	output/Control.Monad.Eff.Uncurried/gonadmeta.json
+	girAstFilePath  string //	eg	output/Control.Monad.Eff.Uncurried/gonadast.json
+	goOutDirPath    string //	eg	Control/Monad/Eff/Uncurried
+	goOutFilePath   string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
 
+	girMeta       *GonadIrMeta
+	gitAst        *GonadIrAst
 	proj          *BowerProject
 	gopkgfilepath string //	full target file path (not necessarily absolute but starting with the applicable gopath)
 	ext           *PsExt
+	coreimp       *CoreImp
 }
 
 var (
@@ -44,89 +47,55 @@ func FindModuleByQName(qname string) (modinfo *ModuleInfo) {
 	return
 }
 
-func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
-	for _, m := range me.Modules {
-		if m.qName == qname {
-			return m
+func (me *ModuleInfo) loadPkgGirMeta() (err error) {
+	var jsonbytes []byte
+	if jsonbytes, err = ioutil.ReadFile(me.girMetaFilePath); err == nil {
+		if err = json.Unmarshal(jsonbytes, &me.girMeta); err == nil {
+			err = me.girMeta.PopulateFromLoaded()
 		}
 	}
-	return nil
-}
-
-func (me *BowerProject) AddModuleInfoFromPursFileIfCoreimp(relpath string, gopkgdir string) {
-	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
-	modinfo := &ModuleInfo{
-		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
-		qName: slash2dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
-	}
-	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
-		modinfo.pName = dot2underscore.Replace(modinfo.qName)
-		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
-		modinfo.goOutDirPath = relpath[:l]
-		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
-		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if !ufs.FileExists(modinfo.gopkgfilepath) {
-			modinfo.regenerate = true
-		} else if ufs.FileExists(modinfo.impFilePath) {
-			modinfo.regenerate, _ = ufs.IsNewerThan(modinfo.impFilePath, modinfo.gopkgfilepath)
-		}
-		me.Modules = append(me.Modules, modinfo)
-	}
-}
-
-func (me *BowerProject) RegenerateModulePkgs() (err error) {
-	for _, modinfo := range me.Modules {
-		if modinfo.regenerate || Flag.ForceRegenAll {
-			if err = ufs.EnsureDirExists(filepath.Dir(modinfo.gopkgfilepath)); err != nil {
-				return
-			}
-		}
-	}
-	var wg sync.WaitGroup
-	regenmodulepkg := func(modinfo *ModuleInfo) {
-		defer wg.Done()
-		if e := modinfo.regenerateGoPkg(me); e != nil {
-			panic(e)
-		}
-	}
-	for _, modinfo := range me.Modules {
-		if modinfo.regenerate || Flag.ForceRegenAll {
-			wg.Add(1)
-			go regenmodulepkg(modinfo)
-		}
-	}
-	wg.Wait()
 	return
 }
 
-func (me *ModuleInfo) regenerateGoPkg(proj *BowerProject) (err error) {
+func (me *ModuleInfo) regenPkgGirMeta() (err error) {
 	var buf bytes.Buffer
 	var jsonbytes []byte
-	var coreimp CoreImp
 	if jsonbytes, err = ioutil.ReadFile(me.extFilePath); err == nil {
 		if err = json.Unmarshal(jsonbytes, &me.ext); err == nil {
 			me.ext.modinfo = me
 			if jsonbytes, err = ioutil.ReadFile(me.impFilePath); err == nil {
+				// the below in case coreimp.json format reverts back again from current {..} to {"Module.Name": {..}}
 				// jsonstr := strings.TrimSpace(string(jsonbytes))[1:]
 				// jsonstr = jsonstr[:len(jsonstr)-1]
 				// jsonstr = jsonstr[strings.IndexRune(jsonstr, '{'):]
-				if err = json.Unmarshal(jsonbytes, &coreimp); err == nil {
-					if err = me.ext.process(); err == nil {
-						pkg := GoAst{modinfo: me, proj: proj, PkgName: me.pName}
-						for _, impname := range coreimp.Imports {
-							if impname != "Prim" && impname != "Prelude" && impname != me.qName {
-								pkg.Imports = append(pkg.Imports, FindModuleByQName(impname))
-							}
-						}
-						coreimp.preProcessTopLevel()
-						if err = pkg.PopulateFrom(&coreimp); err == nil {
-							if !Flag.NoPrefix {
-								fmt.Fprintf(&buf, "// Generated by gonad %s from: %s, generated from: %s\n", coreimp.BuiltWith, me.impFilePath, me.srcFilePath)
-							}
-							pkg.WriteTo(&buf)
-							err = ufs.WriteBinaryFile(me.gopkgfilepath, buf.Bytes())
+				// jsonbytes=[]byte(jsonstr)
+				if err = json.Unmarshal(jsonbytes, &me.coreimp); err == nil {
+					girmeta := GonadIrMeta{modinfo: me, proj: me.proj}
+					if err = girmeta.PopulateFromCoreImp(); err == nil {
+						if err = girmeta.WriteAsJsonTo(&buf); err == nil {
+							err = ufs.WriteBinaryFile(me.girMetaFilePath, buf.Bytes())
 						}
 					}
+				}
+			}
+		}
+	}
+	return
+}
+
+func (me *ModuleInfo) regenPkgGirAst() (err error) {
+	var buf bytes.Buffer
+	me.coreimp.preProcessTopLevel()
+	girast := GonadIrAst{modinfo: me, proj: me.proj}
+	if err = girast.PopulateFromCoreImp(); err == nil {
+		if err = girast.WriteAsJsonTo(&buf); err == nil {
+			if err = ufs.WriteBinaryFile(me.girAstFilePath, buf.Bytes()); err == nil {
+				buf.Reset()
+				if !Flag.NoPrefix {
+					fmt.Fprintf(&buf, "// Generated by gonad %s from: %s, generated from: %s\n", me.coreimp.BuiltWith, me.impFilePath, me.srcFilePath)
+				}
+				if err = girast.WriteAsGoTo(&buf); err == nil {
+					// err = ufs.WriteBinaryFile(me.gopkgfilepath, buf.Bytes())
 				}
 			}
 		}
