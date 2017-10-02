@@ -89,6 +89,8 @@ func (me *CoreImp) preProcessTopLevel() {
 				a = a.Ast_rightHandSide
 				a.parent, me.Body[i] = nil, a
 			}
+		} else {
+			panic(a.Ast_tag)
 		}
 	}
 }

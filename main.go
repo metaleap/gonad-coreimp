@@ -96,18 +96,28 @@ func main() {
 				}
 				wg.Add(1)
 				go loadgirmetas(&Proj)
-				wg.Wait()
-				regengirasts := func(dep *BowerProject) {
-					defer wg.Done()
-					dep.RegenModPkgGirAsts()
+				if err = Proj.EnsureOutDirs(); err == nil {
+					for _, dep := range Deps {
+						if err = dep.EnsureOutDirs(); err != nil {
+							break
+						}
+					}
 				}
-				for _, dep := range Deps {
+				wg.Wait()
+				if err == nil {
+					regengirasts := func(dep *BowerProject) {
+						defer wg.Done()
+						dep.RegenModPkgGirAsts()
+						dep.WriteOutDirtyGirMetas()
+					}
+					for _, dep := range Deps {
+						wg.Add(1)
+						go regengirasts(dep)
+					}
 					wg.Add(1)
-					go regengirasts(dep)
+					go regengirasts(&Proj)
+					wg.Wait()
 				}
-				wg.Add(1)
-				go regengirasts(&Proj)
-				wg.Wait()
 			}
 		}
 	}

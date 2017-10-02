@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -50,6 +51,18 @@ type BowerProject struct {
 	GoOut            struct {
 		PkgDirPath string
 	}
+}
+
+func (me *BowerProject) EnsureOutDirs() (err error) {
+	dirpath := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
+	if err = ufs.EnsureDirExists(dirpath); err == nil {
+		for _, depmod := range me.Modules {
+			if err = ufs.EnsureDirExists(filepath.Join(dirpath, depmod.goOutDirPath)); err != nil {
+				break
+			}
+		}
+	}
+	return
 }
 
 func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
@@ -158,4 +171,20 @@ func (me *BowerProject) RegenModPkgGirAsts() {
 		}
 	}
 	wg.Wait()
+}
+
+func (me *BowerProject) WriteOutDirtyGirMetas() (err error) {
+	var buf bytes.Buffer
+	for _, m := range me.Modules {
+		if m.regenGir || m.girMeta.save {
+			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
+				err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes())
+				buf.Reset()
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+	return
 }
