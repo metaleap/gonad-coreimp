@@ -8,11 +8,11 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports       []GIrMPkgRef
+	Imports       []*GIrMPkgRef
 	TypeAliases   []GIrMTypeAlias
 	TypeDataDecls []GIrMTypeDataDecl
 
-	GoTypeDefs []*GIrATypeDef `json:",omitempty"`
+	GoTypeDefs []*GIrANamedTypeRef `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -29,6 +29,10 @@ type GIrMPkgRef struct {
 	used bool
 }
 
+func newModImp(impmod *ModuleInfo) *GIrMPkgRef {
+	return &GIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
+}
+
 func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	for _, impname := range me.mod.coreimp.Imports {
 		if impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
@@ -41,7 +45,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 
 	if err == nil {
 		for _, impmod := range me.imports {
-			me.Imports = append(me.Imports, GIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)})
+			me.Imports = append(me.Imports, newModImp(impmod))
 		}
 	}
 	return
