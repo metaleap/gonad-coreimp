@@ -8,8 +8,9 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports     []GIrMPkgRef
-	TypeAliases []GIrMTypeAlias
+	Imports       []GIrMPkgRef
+	TypeAliases   []GIrMTypeAlias
+	TypeDataDecls []GIrMTypeDataDecl
 
 	GoTypeDefs []*GIrATypeDef `json:",omitempty"`
 
@@ -35,6 +36,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 		}
 	}
 	me.populateTypeAliases()
+	me.populateTypeDataDecls()
 	me.populateGoTypeDefs()
 
 	if err == nil {
