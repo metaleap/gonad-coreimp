@@ -7,21 +7,25 @@ import (
 	"io"
 )
 
-type GIrATypeRef interface {
-}
-
 type GIrATypeDef struct {
-	Name string
-	Ref  GIrATypeRef
+	Name      string                `json:",omitempty"`
+	Alias     string                `json:",omitempty"`
+	Interface *GIrATypeRefInterface `json:",omitempty"`
+	Unknown   int                   `json:",omitempty"`
 }
-
-type GIrATypeRefNamed struct {
-	Name string
+type GIrATypeRefInterface struct {
+	Embeds  []string      `json:",omitempty"`
+	Methods []interface{} `json:",omitempty"`
 }
-type GIrATypeRefVoid struct {
+type GIrATypeRefFunc struct {
+	ArgTypes []GIrATypeDef `json:",omitempty"`
+	RetType  GIrATypeDef   `json:",omitempty"`
 }
-type GIrATypeRefUnknown struct {
-	Num int
+type GIrATypeRefStruct struct {
+	Fields []struct {
+		Name string      `json:",omitempty"`
+		Type GIrATypeDef `json:",omitempty"`
+	} `json:",omitempty"`
 }
 
 type GonadIrAst struct {

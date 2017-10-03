@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 )
 
 type GIrMTypeAlias struct {
@@ -117,28 +116,38 @@ func (me *GonadIrMeta) populateTypeAliases() {
 }
 
 func (me *GonadIrMeta) populateGoTypeDefs() {
-	dict := map[string][]string{}
+	mdict := map[string][]string{}
 	for _, ta := range me.TypeAliases {
-		gtd := &GIrATypeDef{Name: ta.Name, Ref: me.toGIrATypeRef(dict, ta.Ref)}
+		tdict := map[string][]string{}
+		gtd := &GIrATypeDef{Name: ta.Name}
+		switch gtr := me.toGIrATypeRef(mdict, tdict, ta.Ref).(type) {
+		case string:
+			gtd.Alias = gtr
+		case int:
+			gtd.Unknown = gtr
+		case *GIrATypeRefInterface:
+			gtd.Interface = gtr
+		case nil:
+		}
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 }
 
-func (me *GonadIrMeta) toGIrATypeRef(dict map[string][]string, tr *GIrMTypeRef) (gtr GIrATypeRef) {
+func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string][]string, tr *GIrMTypeRef) (gtr interface{}) {
 	if len(tr.TypeConstructor) > 0 {
-		gtr = GIrATypeRefNamed{Name: tr.TypeConstructor}
+		gtr = tr.TypeConstructor
 	} else if tr.REmpty {
-		gtr = &GIrATypeRefVoid{}
+		gtr = nil
 	} else if tr.TUnknown > 0 {
-		gtr = &GIrATypeRefUnknown{tr.TUnknown}
+		gtr = tr.TUnknown
 	} else if len(tr.TypeVar) > 0 {
-		gtr = GIrATypeRefNamed{Name: strings.Join(dict[tr.TypeVar], "And")}
+		gtr = &GIrATypeRefInterface{Embeds: tdict[tr.TypeVar]}
 	} else if tr.ConstrainedType != nil {
 		if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
 			panic(fmt.Errorf("%s: unexpected type-class/type-var association %v, please report!", me.mod.srcFilePath, tr.ConstrainedType))
 		}
-		dict[tr.ConstrainedType.Args[0].TypeVar] = append(dict[tr.ConstrainedType.Args[0].TypeVar], tr.ConstrainedType.Class)
-		gtr = me.toGIrATypeRef(dict, tr.ConstrainedType.Ref)
+		tdict[tr.ConstrainedType.Args[0].TypeVar] = append(tdict[tr.ConstrainedType.Args[0].TypeVar], tr.ConstrainedType.Class)
+		gtr = me.toGIrATypeRef(mdict, tdict, tr.ConstrainedType.Ref)
 	}
 	return
 }
