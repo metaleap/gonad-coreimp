@@ -37,7 +37,8 @@ type GIrANamedTypeRef struct {
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
 
-	mbody CoreImpAsts
+	mCtor bool
+	mBody CoreImpAsts
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {

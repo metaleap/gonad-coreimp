@@ -361,11 +361,15 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 
 func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTypeRefResolver) {
 	for _, method := range tr.Methods {
-		fmt.Fprintf(w, "func (me *%s) %s", tr.Name, method.Name)
+		if method.mCtor {
+			fmt.Fprintf(w, "func %s", method.Name)
+		} else {
+			fmt.Fprintf(w, "func (this *%s) %s", tr.Name, method.Name)
+		}
 		codeEmitFuncArgs(w, method.RefFunc.Args, typerefresolver, false)
 		codeEmitFuncArgs(w, method.RefFunc.Rets, typerefresolver, true)
 		fmt.Fprint(w, "{\n")
-		codeEmitCoreImps(w, 1, method.mbody)
+		codeEmitCoreImps(w, 1, method.mBody)
 		fmt.Fprintln(w, "}\n")
 	}
 }

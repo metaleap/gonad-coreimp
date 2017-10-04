@@ -253,30 +253,40 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					method_iskind := &GIrANamedTypeRef{Name: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
 					}}
-					method_iskind.mbody.Add(
-						ſRet(ſEq(ſDot(ſV("me"), "kind"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
+					method_iskind.mBody.Add(
+						ſRet(ſEq(ſDot(ſV("this"), "kind"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
 					gtd.Methods = append(gtd.Methods, method_iskind)
+
+					method_new := &GIrANamedTypeRef{mCtor: true, Name: gtd.Name + "As" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{Name: "this", RefAlias: gtd.Name}},
+					}}
+					method_new.mBody.Add(ſSet("this.kind", ſV(toGIrAEnumConstName(gtd.Name, ctor.Name))))
+
 					if numargs := len(ctor.Args); numargs > 0 {
 						method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
 						for i, ctorarg := range ctor.Args {
 							if ctorarg.tmp_assoc != nil {
 								retarg := &GIrANamedTypeRef{Name: fmt.Sprintf("v%v", i)}
 								retarg.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+								method_new.RefFunc.Args = append(method_new.RefFunc.Args, retarg)
+								method_new.mBody.Add(ſSet("this."+ctorarg.tmp_assoc.Name, ſV(retarg.Name)))
 								method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
-								method_ctor.mbody.Add(
-									ſSet(retarg.Name, ſDot(ſV("me"), fmt.Sprintf("%v", ctorarg.tmp_assoc.Name))))
+								method_ctor.mBody.Add(
+									ſSet(retarg.Name, ſDot(ſV("this"), fmt.Sprintf("%v", ctorarg.tmp_assoc.Name))))
 								if numargs > 1 {
 									method_ctorarg := &GIrANamedTypeRef{Name: fmt.Sprintf("%s%d", ctor.Name, i),
 										RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{}}}}
 									method_ctorarg.RefFunc.Rets[0].setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
-									method_ctorarg.mbody.Add(ſRet(ſDot(ſV("me"), ctorarg.tmp_assoc.Name)))
+									method_ctorarg.mBody.Add(ſRet(ſDot(ſV("this"), ctorarg.tmp_assoc.Name)))
 									gtd.Methods = append(gtd.Methods, method_ctorarg)
 								}
 							}
 						}
-						method_ctor.mbody.Add(ſRet(nil))
+						method_ctor.mBody.Add(ſRet(nil))
 						gtd.Methods = append(gtd.Methods, method_ctor)
 					}
+					method_new.mBody.Add(ſRet(nil))
+					gtd.Methods = append(gtd.Methods, method_new)
 				}
 			}
 			me.GoTypeDefs = append(me.GoTypeDefs, gtd)
@@ -285,11 +295,11 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 }
 
 func toGIrAEnumConstName(dataname string, ctorname string) string {
-	return "_ĸ" + dataname + ctorname
+	return "ĸ" + dataname + "_" + ctorname
 }
 
 func toGIrAEnumTypeName(dataname string) string {
-	return "_ĸ" + dataname
+	return "ĸ" + dataname
 }
 
 func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string][]string, tr *GIrMTypeRef) interface{} {
