@@ -3,11 +3,20 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/metaleap/go-util-slice"
 )
 
-type GIrMTypeAlias struct {
-	Name string       `json:"tan"`
-	Ref  *GIrMTypeRef `json:"tar,omitempty"`
+type GIrMNamedTypeRef struct {
+	Name string       `json:"tnn"`
+	Ref  *GIrMTypeRef `json:"tnr,omitempty"`
+}
+
+type GIrMTypeClass struct {
+	Name        string               `json:"tcn"`
+	Constraints []*GIrMTypeRefConstr `json:"tcc,omitempty"`
+	TypeArgs    []string             `json:"tca,omitempty"`
+	Members     []GIrMNamedTypeRef   `json:"tcm,omitempty"`
 }
 
 type GIrMTypeDataDecl struct {
@@ -17,8 +26,8 @@ type GIrMTypeDataDecl struct {
 }
 
 type GIrMTypeDataCtor struct {
-	Name string       `json:"tcn"`
-	Args GIrMTypeRefs `json:"tca,omitempty"`
+	Name string       `json:"tdcn"`
+	Args GIrMTypeRefs `json:"tdca,omitempty"`
 }
 
 type GIrMTypeRefs []*GIrMTypeRef
@@ -103,110 +112,40 @@ func (me *GIrMTypeRefSkolem) Eq(cmp *GIrMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
 }
 
-func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef) {
-	tref = &GIrMTypeRef{}
-	switch tc.Tag {
-	case "TypeConstructor":
-		for _, s := range tc.Contents.([]interface{})[0].([]interface{}) {
-			tref.TypeConstructor += (s.(string) + ".")
-		}
-		tref.TypeConstructor += tc.Contents.([]interface{})[1].(string)
-	case "TypeVar":
-		tref.TypeVar = tc.Contents.(string)
-	case "TUnknown":
-		tref.TUnknown = tc.Contents.(int)
-	case "REmpty":
-		tref.REmpty = true
-	case "RCons":
-		disc := tc.Contents.([]interface{})
-		tcdis, tcsub := disc[1].(map[string]interface{}), disc[2].(map[string]interface{})
-		tref.RCons = &GIrMTypeRefRow{
-			Label: disc[0].(string), Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-	case "ForAll":
-		disc := tc.Contents.([]interface{})
-		tcdis := disc[1].(map[string]interface{})
-		tref.ForAll = &GIrMTypeRefExist{Name: disc[0].(string), Ref: me.newTypeRefFromExtTc(newTaggedContents(tcdis))}
-		if len(disc) > 2 && disc[2] != nil {
-			if i, ok := disc[2].(int); ok {
-				tref.ForAll.SkolemScope = &i
-			}
-		}
-	case "Skolem":
-		disc := tc.Contents.([]interface{})
-		tref.Skolem = &GIrMTypeRefSkolem{
-			Name: disc[0].(string), Value: disc[1].(int), Scope: disc[2].(int)}
-	case "TypeApp":
-		disc := tc.Contents.([]interface{})
-		tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
-		tref.TypeApp = &GIrMTypeRefAppl{
-			Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-	case "ConstrainedType":
-		disc := tc.Contents.([]interface{})
-		tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
-		tref.ConstrainedType = &GIrMTypeRefConstr{
-			Data: tcdis["constraintData"], Ref: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-		for _, tca := range tcdis["constraintArgs"].([]interface{}) {
-			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromExtTc(newTaggedContents(tca.(map[string]interface{}))))
-		}
-		for _, s := range tcdis["constraintClass"].([]interface{})[0].([]interface{}) {
-			tref.ConstrainedType.Class += (s.(string) + ".")
-		}
-		tref.ConstrainedType.Class += tcdis["constraintClass"].([]interface{})[1].(string)
-	default:
-		fmt.Printf("\n%s?!\n\t%v\n", tc.Tag, tc.Contents)
-	}
-	return
-}
-
-func (me *GonadIrMeta) populateTypeDataDecls() {
-	for _, d := range me.mod.ext.EfDecls {
-		if d.EDType != nil && d.EDType.DeclKind != nil {
-			if m_edTypeDeclarationKind, ok := d.EDType.DeclKind.(map[string]interface{}); ok && m_edTypeDeclarationKind != nil {
-				if m_DataType, ok := m_edTypeDeclarationKind["DataType"].(map[string]interface{}); ok && m_DataType != nil {
-					datadecl := GIrMTypeDataDecl{Name: d.EDType.Name}
-					for _, argif := range m_DataType["args"].([]interface{}) {
-						datadecl.Args = append(datadecl.Args, argif.([]interface{})[0].(string))
-					}
-					for _, ctorif := range m_DataType["ctors"].([]interface{}) {
-						if ctorarr, ok := ctorif.([]interface{}); (!ok) || len(ctorarr) != 2 {
-							panic(fmt.Errorf("%s: unexpected ctor array in %s, please report: %v", me.mod.srcFilePath, datadecl.Name, ctorif))
-						} else {
-							ctor := GIrMTypeDataCtor{Name: ctorarr[0].(string)}
-							for _, ctorarg := range ctorarr[1].([]interface{}) {
-								ctor.Args = append(ctor.Args, me.newTypeRefFromExtTc(newTaggedContents(ctorarg.(map[string]interface{}))))
-							}
-							datadecl.Ctors = append(datadecl.Ctors, ctor)
-						}
-					}
-					me.TypeDataDecls = append(me.TypeDataDecls, datadecl)
-				}
-			}
-		}
-	}
-}
-
-func (me *GonadIrMeta) populateTypeAliases() {
-	for _, d := range me.mod.ext.EfDecls {
-		if d.EDTypeSynonym != nil && d.EDTypeSynonym.Type != nil && len(d.EDTypeSynonym.Name) > 0 && me.mod.ext.findTypeClass(d.EDTypeSynonym.Name) == nil {
-			ta := GIrMTypeAlias{Name: d.EDTypeSynonym.Name}
-			ta.Ref = me.newTypeRefFromExtTc(*d.EDTypeSynonym.Type)
-			me.TypeAliases = append(me.TypeAliases, ta)
-		}
-	}
-}
-
 func (me *GonadIrMeta) populateGoTypeDefs() {
 	mdict := map[string][]string{}
+	var tdict map[string][]string
 
-	for _, ta := range me.TypeAliases {
-		tdict := map[string][]string{}
-		gtd := &GIrANamedTypeRef{Name: ta.Name}
+	for _, ta := range me.ExtTypeAliases {
+		tdict = map[string][]string{}
+		gtd := &GIrANamedTypeRef{Name: ta.Name, Export: true}
 		gtd.setFrom(me.toGIrATypeRef(mdict, tdict, ta.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 
-	for _, td := range me.TypeDataDecls {
-		tdict := map[string][]string{}
+	for _, tc := range me.ExtTypeClasses {
+		tdict = map[string][]string{}
+		gif := &GIrATypeRefInterface{xtc: &tc}
+		for _, tcc := range tc.Constraints {
+			if !uslice.StrHas(gif.Embeds, tcc.Class) {
+				gif.Embeds = append(gif.Embeds, tcc.Class)
+			}
+		}
+		for _, tcm := range tc.Members {
+			ifm := &GIrANamedTypeRef{Name: tcm.Name}
+			ifm.setFrom(me.toGIrATypeRef(mdict, tdict, tcm.Ref))
+			gif.Methods = append(gif.Methods, ifm)
+			if ifm.RefFunc == nil && ifm.RefInterface == nil {
+				println(tc.Name + "." + ifm.Name)
+			}
+		}
+		tgif := &GIrANamedTypeRef{Name: tc.Name, Export: true}
+		tgif.setFrom(gif)
+		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
+	}
+
+	for _, td := range me.ExtTypeDataDecls {
+		tdict = map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
@@ -310,7 +249,11 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	} else if tr.TUnknown > 0 {
 		return tr.TUnknown
 	} else if len(tr.TypeVar) > 0 {
-		return &GIrATypeRefInterface{Embeds: tdict[tr.TypeVar]}
+		embeds := tdict[tr.TypeVar]
+		if len(embeds) == 1 {
+			return embeds[0]
+		}
+		return &GIrATypeRefInterface{Embeds: embeds}
 	} else if tr.ConstrainedType != nil {
 		if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
 			panic(fmt.Errorf("%s: unexpected type-class/type-var association %v, please report!", me.mod.srcFilePath, tr.ConstrainedType))

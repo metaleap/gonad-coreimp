@@ -298,8 +298,20 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		} else {
 			fmt.Fprint(w, "interface{")
 		}
-		for _, ifaceembed := range gtd.RefInterface.Embeds {
-			fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifaceembed)))
+		for _, ifembed := range gtd.RefInterface.Embeds {
+			fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifembed)))
+		}
+		var buf bytes.Buffer
+		for _, ifmethod := range gtd.RefInterface.Methods {
+			fmt.Fprint(&buf, ifmethod.Name)
+			if ifmethod.RefFunc == nil {
+				// fmt.Printf("%s\t%s\n%v\n\n", gtd.Name, ifmethod.Name, ifmethod)
+			} else {
+				codeEmitFuncArgs(w, ifmethod.RefFunc.Args, typerefresolver, false)
+				codeEmitFuncArgs(w, ifmethod.RefFunc.Rets, typerefresolver, true)
+			}
+			fmt.Fprintf(w, fmtembeds, buf.String())
+			buf.Reset()
 		}
 		fmt.Fprint(w, "}")
 	} else if gtd.RefStruct != nil {

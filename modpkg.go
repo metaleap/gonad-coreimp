@@ -38,6 +38,8 @@ var (
 
 func FindModuleByQName(qname string) (modinfo *ModuleInfo) {
 	if modinfo = Proj.ModuleByQName(qname); modinfo == nil {
+		// defer mapsmutex.Unlock()
+		// mapsmutex.Lock()
 		for _, dep := range Deps {
 			if modinfo = dep.ModuleByQName(qname); modinfo != nil {
 				return

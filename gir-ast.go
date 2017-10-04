@@ -36,6 +36,7 @@ type GIrANamedTypeRef struct {
 
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
+	Export         bool              `json:",omitempty"`
 
 	mCtor bool
 	mBody CoreImpAsts
@@ -67,6 +68,8 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 type GIrATypeRefInterface struct {
 	Embeds  []string          `json:",omitempty"`
 	Methods GIrANamedTypeRefs `json:",omitempty"`
+
+	xtc *GIrMTypeClass
 }
 
 func (me *GIrATypeRefInterface) Eq(cmp *GIrATypeRefInterface) bool {

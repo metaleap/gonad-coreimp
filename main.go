@@ -14,7 +14,7 @@ import (
 var (
 	Proj      BowerProject
 	Deps      = map[string]*BowerProject{}
-	depsmutex sync.RWMutex
+	mapsmutex sync.Mutex
 	Flag      struct {
 		NoPrefix      bool
 		Comments      bool
@@ -59,14 +59,12 @@ func main() {
 					jsonfilepath = filepath.Join(reldirpath, "bower.json")
 				}
 				if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
-					depsmutex.Lock()
-					Deps[depname] = &BowerProject{
+					bproj := &BowerProject{
 						DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
 					}
-					depsmutex.Unlock()
-					if Deps["foo"] != nil {
-						println(10)
-					}
+					defer mapsmutex.Unlock()
+					mapsmutex.Lock()
+					Deps[depname] = bproj
 				}
 			}
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {

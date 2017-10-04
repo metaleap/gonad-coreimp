@@ -66,13 +66,16 @@ type PsExtTypeAlias struct {
 
 type PsExtTypeClass struct {
 	Name           string          `json:"edClassName,omitempty"`
-	TypeArgs       [][]string      `json:"edClassTypeArguments,omitempty"`
-	FunctionalDeps []interface{}   `json:"edFunctionalDependencies,omitempty"`
-	Members        [][]interface{} `json:"edClassMembers,omitempty"`
-	Constraints    []struct {
+	TypeArgs       [][]interface{} `json:"edClassTypeArguments,omitempty"`
+	FunctionalDeps []struct {
+		Determiners []int `json:"determiners,omitempty"`
+		Determined  []int `json:"determined,omitempty"`
+	} `json:"edFunctionalDependencies,omitempty"`
+	Members     [][]interface{} `json:"edClassMembers,omitempty"`
+	Constraints []struct {
 		Class []interface{}    `json:"constraintClass,omitempty"`
 		Args  []TaggedContents `json:"constraintArgs,omitempty"`
-		Data  interface{}      `json:"constraintData,omitempty"`
+		Data  [][]interface{}  `json:"constraintData,omitempty"`
 	} `json:"edClassConstraints,omitempty"`
 }
 
