@@ -297,9 +297,9 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 											Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: fmt.Sprintf("%v", ctorarg.tmp_assoc.Name)},
 										}})
 								}
-								method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{Ast_tag: "ReturnNoResult"})
-								gtd.Methods = append(gtd.Methods, method_ctor)
 							}
+							method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{Ast_tag: "ReturnNoResult"})
+							gtd.Methods = append(gtd.Methods, method_ctor)
 						}
 					}
 				}
