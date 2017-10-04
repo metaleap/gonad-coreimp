@@ -33,6 +33,8 @@ type GIrMTypeRef struct {
 	RCons           *GIrMTypeRefRow    `json:"rc,omitempty"`
 	ForAll          *GIrMTypeRefExist  `json:"fa,omitempty"`
 	Skolem          *GIrMTypeRefSkolem `json:"sk,omitempty"`
+
+	tmp_assoc *GIrANamedTypeRef
 }
 
 func (me *GIrMTypeRef) Eq(cmp *GIrMTypeRef) bool {
@@ -225,15 +227,16 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					gtd.EnumConstNames = nil
 				} else {
 					gtd.RefStruct = &GIrATypeRefStruct{}
-					gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "vKind", RefAlias: td.Name + "Kinds"})
+					gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "kind", RefAlias: td.Name + "Kinds"})
 					for _, ctor := range td.Ctors {
 						for ia, ctorarg := range ctor.Args {
 							prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
 							field := &GIrANamedTypeRef{}
 							field.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+							ctorarg.tmp_assoc = field
 							for _, f := range gtd.RefStruct.Fields {
 								if strings.HasPrefix(f.Name, prefix) && f.Eq(field) {
-									hasfieldherewithsametype = true
+									hasfieldherewithsametype, ctorarg.tmp_assoc = true, f
 									f.Name = fmt.Sprintf("%s_%s", f.Name, ctor.Name)
 									break
 								}
@@ -246,8 +249,60 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					}
 				}
 			}
-			if gtd.RefStruct != nil {
+			if !noctorargs {
+				method_kind := &GIrANamedTypeRef{Name: "Kind", RefFunc: &GIrATypeRefFunc{
+					Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: td.Name + "Kinds"}},
+				}}
+				method_kind.methodBody = append(method_kind.methodBody, &CoreImpAst{
+					Ast_tag: "Return", Return: &CoreImpAst{
+						Ast_tag:           "Indexer",
+						Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
+						Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: "kind"},
+					}})
+				gtd.Methods = append(gtd.Methods, method_kind)
 
+				if !isnewtype {
+					for _, ctor := range td.Ctors {
+						method_iskind := &GIrANamedTypeRef{Name: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+							Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
+						}}
+						method_iskind.methodBody = append(method_iskind.methodBody, &CoreImpAst{
+							Ast_tag: "Return", Return: &CoreImpAst{
+								Ast_tag: "Binary",
+								Binary: &CoreImpAst{
+									Ast_tag:           "Indexer",
+									Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
+									Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: "kind"},
+								},
+								Ast_op:            "EqualTo",
+								Ast_rightHandSide: &CoreImpAst{Ast_tag: "Var", Var: gtd.Name + "_" + ctor.Name},
+							}})
+						gtd.Methods = append(gtd.Methods, method_iskind)
+						if len(ctor.Args) > 0 {
+							method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
+							for i, ctorarg := range ctor.Args {
+								if ctorarg.tmp_assoc != nil {
+									retarg := &GIrANamedTypeRef{Name: fmt.Sprintf("v%v", i)}
+									retarg.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+									method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
+									if ctorarg.tmp_assoc == nil {
+										println(me.mod.srcFilePath + ": " + td.Name + " : " + ctor.Name + " > " + retarg.Name)
+									}
+									method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{
+										Ast_tag:    "Assignment",
+										Assignment: &CoreImpAst{Ast_tag: "Var", Var: retarg.Name},
+										Ast_rightHandSide: &CoreImpAst{
+											Ast_tag:           "Indexer",
+											Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
+											Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: fmt.Sprintf("%v", ctorarg.tmp_assoc.Name)},
+										}})
+								}
+								method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{Ast_tag: "ReturnNoResult"})
+								gtd.Methods = append(gtd.Methods, method_ctor)
+							}
+						}
+					}
+				}
 			}
 			me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 		}
