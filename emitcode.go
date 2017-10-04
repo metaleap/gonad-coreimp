@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/metaleap/go-util-str"
 )
 
 type goTypeRefResolver func(tref string) (pname string, tname string)
@@ -78,13 +80,13 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 	case "Unary":
 		fmt.Fprint(w, "(")
 		switch ast.Ast_op {
-		case "Negate":
+		case "Negate", "-":
 			fmt.Fprint(w, "-")
-		case "Not":
+		case "Not", "!":
 			fmt.Fprint(w, "!")
-		case "Positive":
+		case "Positive", "+":
 			fmt.Fprint(w, "+")
-		case "BitwiseNot":
+		case "BitwiseNot", "^":
 			fmt.Fprint(w, "^")
 		default:
 			fmt.Fprintf(w, "?%s?", ast.Ast_op)
@@ -96,43 +98,43 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		fmt.Fprint(w, "(")
 		codeEmitCoreImp(w, indent, ast.Binary)
 		switch ast.Ast_op {
-		case "Add":
+		case "Add", "+":
 			fmt.Fprint(w, " + ")
-		case "Subtract":
+		case "Subtract", "-":
 			fmt.Fprint(w, " - ")
-		case "Multiply":
+		case "Multiply", "*":
 			fmt.Fprint(w, " * ")
-		case "Divide":
+		case "Divide", "/":
 			fmt.Fprint(w, " / ")
-		case "Modulus":
+		case "Modulus", "%":
 			fmt.Fprint(w, " % ")
-		case "EqualTo":
+		case "EqualTo", "==":
 			fmt.Fprint(w, " == ")
-		case "NotEqualTo":
+		case "NotEqualTo", "!=":
 			fmt.Fprint(w, " != ")
-		case "LessThan":
+		case "LessThan", "<":
 			fmt.Fprint(w, " < ")
-		case "LessThanOrEqualTo":
+		case "LessThanOrEqualTo", "<=":
 			fmt.Fprint(w, " <= ")
-		case "GreaterThan":
+		case "GreaterThan", ">":
 			fmt.Fprint(w, " > ")
-		case "GreaterThanOrEqualTo":
+		case "GreaterThanOrEqualTo", ">=":
 			fmt.Fprint(w, " >= ")
-		case "And":
+		case "And", "&&":
 			fmt.Fprint(w, " && ")
-		case "Or":
+		case "Or", "||":
 			fmt.Fprint(w, " || ")
-		case "BitwiseAnd":
+		case "BitwiseAnd", "&":
 			fmt.Fprint(w, " & ")
-		case "BitwiseOr":
+		case "BitwiseOr", "|":
 			fmt.Fprint(w, " | ")
-		case "BitwiseXor":
+		case "BitwiseXor", "^":
 			fmt.Fprint(w, " ^ ")
-		case "ShiftLeft":
+		case "ShiftLeft", "<<":
 			fmt.Fprint(w, " << ")
-		case "ShiftRight":
+		case "ShiftRight", ">>":
 			fmt.Fprint(w, " >> ")
-		case "ZeroFillShiftRight":
+		case "ZeroFillShiftRight", "&^":
 			fmt.Fprint(w, " &^ ")
 		default:
 			fmt.Fprintf(w, " ?%s? ", ast.Ast_op)
@@ -198,16 +200,15 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		fmt.Fprint(w, " = ")
 		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
 		fmt.Fprint(w, "\n")
+	case "Accessor":
+		codeEmitCoreImp(w, indent, ast.Accessor)
+		fmt.Fprintf(w, ".%s", ast.Ast_rightHandSide.Var)
 	case "Indexer":
 		codeEmitCoreImp(w, indent, ast.Indexer)
-		if ast.Ast_rightHandSide.Ast_tag == "StringLiteral" {
-			fmt.Fprintf(w, ".%s", ast.Ast_rightHandSide.StringLiteral)
-			// codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
-		} else {
-			fmt.Fprint(w, "[")
-			codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
-			fmt.Fprint(w, "]")
-		}
+		// if ast.Ast_rightHandSide.Ast_tag == "StringLiteral" {
+		fmt.Fprint(w, "[")
+		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+		fmt.Fprint(w, "]")
 	case "InstanceOf":
 		codeEmitCoreImp(w, indent, ast.InstanceOf)
 		fmt.Fprint(w, " is ")
@@ -217,7 +218,7 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 	}
 }
 
-func codeEmitCoreImps(w io.Writer, indent int, body []*CoreImpAst) {
+func codeEmitCoreImps(w io.Writer, indent int, body CoreImpAsts) {
 	for _, ast := range body {
 		codeEmitCoreImp(w, indent, ast)
 	}
@@ -253,7 +254,7 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, typerefresolver
 	}
 	if parens {
 		fmt.Fprint(w, ") ")
-	} else {
+	} else if len(methodargs) > 0 {
 		fmt.Fprint(w, " ")
 	}
 }
@@ -308,13 +309,20 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		}
 		fmt.Fprint(w, "struct {\n")
 		for _, structembed := range gtd.RefStruct.Embeds {
-			fmt.Fprintf(w, fmtembeds, structembed)
+			fmt.Fprint(w, tabind)
+			fmt.Fprintf(w, ftembedstoplevel, structembed)
+		}
+		fnlen := 0
+		for _, structfield := range gtd.RefStruct.Fields {
+			if l := len(structfield.Name); l > fnlen {
+				fnlen = l
+			}
 		}
 		for _, structfield := range gtd.RefStruct.Fields {
 			var buf bytes.Buffer
 			codeEmitTypeDecl(&buf, structfield, indlevel+1, typerefresolver)
 			fmt.Fprint(w, tabind)
-			fmt.Fprintf(w, ftembedstoplevel, structfield.Name+" "+buf.String())
+			fmt.Fprintf(w, ftembedstoplevel, ustr.PadRight(structfield.Name, fnlen)+" "+buf.String())
 		}
 		fmt.Fprintf(w, "%s}", tabind)
 	} else if gtd.RefFunc != nil {
@@ -352,12 +360,12 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 }
 
 func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTypeRefResolver) {
-	for _, meth := range tr.Methods {
-		fmt.Fprintf(w, "func (me *%s) %s", tr.Name, meth.Name)
-		codeEmitFuncArgs(w, meth.RefFunc.Args, typerefresolver, false)
-		codeEmitFuncArgs(w, meth.RefFunc.Rets, typerefresolver, true)
+	for _, method := range tr.Methods {
+		fmt.Fprintf(w, "func (me *%s) %s", tr.Name, method.Name)
+		codeEmitFuncArgs(w, method.RefFunc.Args, typerefresolver, false)
+		codeEmitFuncArgs(w, method.RefFunc.Rets, typerefresolver, true)
 		fmt.Fprint(w, "{\n")
-		codeEmitCoreImps(w, 1, meth.methodBody)
+		codeEmitCoreImps(w, 1, method.mbody)
 		fmt.Fprintln(w, "}\n")
 	}
 }

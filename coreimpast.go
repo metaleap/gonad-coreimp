@@ -1,13 +1,26 @@
 package main
 
 type CoreImp struct {
-	BuiltWith string        `json:"builtWith,omitempty"`
-	Imports   []string      `json:"imports,omitempty"`
-	Exports   []string      `json:"exports,omitempty"`
-	Foreign   []string      `json:"foreign,omitempty"`
-	Body      []*CoreImpAst `json:"body,omitempty"`
+	BuiltWith string      `json:"builtWith,omitempty"`
+	Imports   []string    `json:"imports,omitempty"`
+	Exports   []string    `json:"exports,omitempty"`
+	Foreign   []string    `json:"foreign,omitempty"`
+	Body      CoreImpAsts `json:"body,omitempty"`
 
 	namedRequires map[string]string
+}
+
+type CoreImpAsts []*CoreImpAst
+
+func (me *CoreImpAsts) Add(asts ...*CoreImpAst) {
+	(*me) = append(*me, asts...)
+}
+
+func (me CoreImpAsts) Last() *CoreImpAst {
+	if l := len(me); l > 0 {
+		return me[l-1]
+	}
+	return nil
 }
 
 type CoreImpAst struct {
@@ -16,7 +29,7 @@ type CoreImpAst struct {
 	Ast_body          *CoreImpAst        `json:"body,omitempty"`
 	Ast_rightHandSide *CoreImpAst        `json:"rhs,omitempty"`
 	Ast_decl          *CoreImpAst        `json:"decl,omitempty"`
-	Ast_appArgs       []*CoreImpAst      `json:"args,omitempty"`
+	Ast_appArgs       CoreImpAsts        `json:"args,omitempty"`
 	Ast_op            string             `json:"op,omitempty"`
 	Ast_funcParams    []string           `json:"params,omitempty"`
 	Ast_for1          *CoreImpAst        `json:"for1,omitempty"`
@@ -29,7 +42,7 @@ type CoreImpAst struct {
 	BooleanLiteral         bool                     `json:",omitempty"`
 	NumericLiteral_Integer int64                    `json:",omitempty"`
 	NumericLiteral_Double  float64                  `json:",omitempty"`
-	Block                  []*CoreImpAst            `json:",omitempty"`
+	Block                  CoreImpAsts              `json:",omitempty"`
 	Var                    string                   `json:",omitempty"`
 	VariableIntroduction   string                   `json:",omitempty"`
 	While                  *CoreImpAst              `json:",omitempty"`
@@ -43,9 +56,10 @@ type CoreImpAst struct {
 	ObjectLiteral          []map[string]*CoreImpAst `json:",omitempty"`
 	Return                 *CoreImpAst              `json:",omitempty"`
 	Throw                  *CoreImpAst              `json:",omitempty"`
-	ArrayLiteral           []*CoreImpAst            `json:",omitempty"`
+	ArrayLiteral           CoreImpAsts              `json:",omitempty"`
 	Assignment             *CoreImpAst              `json:",omitempty"`
 	Indexer                *CoreImpAst              `json:",omitempty"`
+	Accessor               *CoreImpAst              `json:",omitempty"`
 	InstanceOf             *CoreImpAst              `json:",omitempty"`
 
 	parent *CoreImpAst
@@ -114,6 +128,7 @@ func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
 			me.setParents(a, a.Block...)
 			me.setParents(a, a.IfElse)
 			me.setParents(a, a.Indexer)
+			me.setParents(a, a.Assignment)
 			me.setParents(a, a.InstanceOf)
 			me.setParents(a, a.Return)
 			me.setParents(a, a.Throw)
@@ -126,4 +141,39 @@ func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
 			}
 		}
 	}
+}
+
+func ſDot(left *CoreImpAst, right string) *CoreImpAst {
+	return &CoreImpAst{Ast_tag: "Accessor", Accessor: left, Ast_rightHandSide: ſV(right)}
+}
+
+func ſEq(left *CoreImpAst, right *CoreImpAst) *CoreImpAst {
+	return ſO2(left, "==", right)
+}
+
+func ſO1(op string, operand *CoreImpAst) *CoreImpAst {
+	return &CoreImpAst{Ast_op: op, Ast_tag: "Unary", Unary: operand}
+}
+
+func ſO2(left *CoreImpAst, op string, right *CoreImpAst) *CoreImpAst {
+	return &CoreImpAst{Ast_op: op, Ast_tag: "Binary", Binary: left, Ast_rightHandSide: right}
+}
+
+func ſRet(expr *CoreImpAst) *CoreImpAst {
+	if expr == nil {
+		return &CoreImpAst{Ast_tag: "ReturnNoResult"}
+	}
+	return &CoreImpAst{Ast_tag: "Return", Return: expr}
+}
+
+func ſS(literal string) *CoreImpAst {
+	return &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: literal}
+}
+
+func ſSet(left string, right *CoreImpAst) *CoreImpAst {
+	return &CoreImpAst{Ast_tag: "Assignment", Assignment: ſV(left), Ast_rightHandSide: right}
+}
+
+func ſV(name string) *CoreImpAst {
+	return &CoreImpAst{Ast_tag: "Var", Var: name}
 }

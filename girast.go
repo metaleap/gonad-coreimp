@@ -37,7 +37,7 @@ type GIrANamedTypeRef struct {
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
 
-	methodBody []*CoreImpAst
+	mbody CoreImpAsts
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
@@ -115,8 +115,9 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	for _, gtd := range me.girM.GoTypeDefs {
 		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRef)
 		if len(gtd.EnumConstNames) > 0 {
-			codeEmitTypeAlias(buf, gtd.Name+"Kinds", "int")
-			codeEmitEnumConsts(buf, gtd.EnumConstNames, gtd.Name+"Kinds")
+			enumtypename := toGIrAEnumTypeName(gtd.Name)
+			codeEmitTypeAlias(buf, enumtypename, "int")
+			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
 			codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 		}
 	}

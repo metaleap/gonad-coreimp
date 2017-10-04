@@ -210,103 +210,86 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
-			gtd, noctorargs, isnewtype := &GIrANamedTypeRef{Name: td.Name, RefAlias: td.Name + "Kinds"}, true, false
+			gtd, isnewtype := &GIrANamedTypeRef{Name: td.Name, RefAlias: toGIrAEnumTypeName(td.Name)}, false
 			for _, ctor := range td.Ctors {
-				gtd.EnumConstNames = append(gtd.EnumConstNames, fmt.Sprintf("%s_%s", td.Name, ctor.Name))
+				gtd.EnumConstNames = append(gtd.EnumConstNames, toGIrAEnumConstName(td.Name, ctor.Name))
 				if numargs := len(ctor.Args); numargs > 0 {
-					if noctorargs = false; numargs == 1 && numctors == 1 {
+					// noctorargs = false
+					if numargs == 1 && numctors == 1 {
 						isnewtype = true
 					}
 				}
 			}
 
-			if !noctorargs {
-				gtd.RefAlias = ""
-				if isnewtype {
-					gtd.setFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
-					gtd.EnumConstNames = nil
-				} else {
-					gtd.RefStruct = &GIrATypeRefStruct{}
-					gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "kind", RefAlias: td.Name + "Kinds"})
-					for _, ctor := range td.Ctors {
-						for ia, ctorarg := range ctor.Args {
-							prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
-							field := &GIrANamedTypeRef{}
-							field.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
-							ctorarg.tmp_assoc = field
-							for _, f := range gtd.RefStruct.Fields {
-								if strings.HasPrefix(f.Name, prefix) && f.Eq(field) {
-									hasfieldherewithsametype, ctorarg.tmp_assoc = true, f
-									f.Name = fmt.Sprintf("%s_%s", f.Name, ctor.Name)
-									break
-								}
+			gtd.RefAlias = ""
+			if isnewtype {
+				gtd.setFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
+				gtd.EnumConstNames = nil
+			} else {
+				gtd.RefStruct = &GIrATypeRefStruct{}
+				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "kind", RefAlias: toGIrAEnumTypeName(td.Name)})
+				for _, ctor := range td.Ctors {
+					for ia, ctorarg := range ctor.Args {
+						prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
+						field := &GIrANamedTypeRef{}
+						field.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+						ctorarg.tmp_assoc = field
+						for _, f := range gtd.RefStruct.Fields {
+							if strings.HasPrefix(f.Name, prefix) && f.Eq(field) {
+								hasfieldherewithsametype, ctorarg.tmp_assoc = true, f
+								f.Name = fmt.Sprintf("%s_%s", f.Name, ctor.Name)
+								break
 							}
-							if !hasfieldherewithsametype {
-								field.Name = fmt.Sprintf("%s%s", prefix, ctor.Name)
-								gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, field)
-							}
+						}
+						if !hasfieldherewithsametype {
+							field.Name = fmt.Sprintf("%s%s", prefix, ctor.Name)
+							gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, field)
 						}
 					}
 				}
 			}
-			if !noctorargs {
-				method_kind := &GIrANamedTypeRef{Name: "Kind", RefFunc: &GIrATypeRefFunc{
-					Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: td.Name + "Kinds"}},
-				}}
-				method_kind.methodBody = append(method_kind.methodBody, &CoreImpAst{
-					Ast_tag: "Return", Return: &CoreImpAst{
-						Ast_tag:           "Indexer",
-						Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
-						Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: "kind"},
-					}})
-				gtd.Methods = append(gtd.Methods, method_kind)
-
-				if !isnewtype {
-					for _, ctor := range td.Ctors {
-						method_iskind := &GIrANamedTypeRef{Name: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
-							Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
-						}}
-						method_iskind.methodBody = append(method_iskind.methodBody, &CoreImpAst{
-							Ast_tag: "Return", Return: &CoreImpAst{
-								Ast_tag: "Binary",
-								Binary: &CoreImpAst{
-									Ast_tag:           "Indexer",
-									Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
-									Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: "kind"},
-								},
-								Ast_op:            "EqualTo",
-								Ast_rightHandSide: &CoreImpAst{Ast_tag: "Var", Var: gtd.Name + "_" + ctor.Name},
-							}})
-						gtd.Methods = append(gtd.Methods, method_iskind)
-						if len(ctor.Args) > 0 {
-							method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
-							for i, ctorarg := range ctor.Args {
-								if ctorarg.tmp_assoc != nil {
-									retarg := &GIrANamedTypeRef{Name: fmt.Sprintf("v%v", i)}
-									retarg.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
-									method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
-									if ctorarg.tmp_assoc == nil {
-										println(me.mod.srcFilePath + ": " + td.Name + " : " + ctor.Name + " > " + retarg.Name)
-									}
-									method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{
-										Ast_tag:    "Assignment",
-										Assignment: &CoreImpAst{Ast_tag: "Var", Var: retarg.Name},
-										Ast_rightHandSide: &CoreImpAst{
-											Ast_tag:           "Indexer",
-											Indexer:           &CoreImpAst{Ast_tag: "Var", Var: "me"},
-											Ast_rightHandSide: &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: fmt.Sprintf("%v", ctorarg.tmp_assoc.Name)},
-										}})
+			if !isnewtype {
+				for _, ctor := range td.Ctors {
+					method_iskind := &GIrANamedTypeRef{Name: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
+					}}
+					method_iskind.mbody.Add(
+						ſRet(ſEq(ſDot(ſV("me"), "kind"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
+					gtd.Methods = append(gtd.Methods, method_iskind)
+					if numargs := len(ctor.Args); numargs > 0 {
+						method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
+						for i, ctorarg := range ctor.Args {
+							if ctorarg.tmp_assoc != nil {
+								retarg := &GIrANamedTypeRef{Name: fmt.Sprintf("v%v", i)}
+								retarg.setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+								method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
+								method_ctor.mbody.Add(
+									ſSet(retarg.Name, ſDot(ſV("me"), fmt.Sprintf("%v", ctorarg.tmp_assoc.Name))))
+								if numargs > 1 {
+									method_ctorarg := &GIrANamedTypeRef{Name: fmt.Sprintf("%s%d", ctor.Name, i),
+										RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{}}}}
+									method_ctorarg.RefFunc.Rets[0].setFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+									method_ctorarg.mbody.Add(ſRet(ſDot(ſV("me"), ctorarg.tmp_assoc.Name)))
+									gtd.Methods = append(gtd.Methods, method_ctorarg)
 								}
 							}
-							method_ctor.methodBody = append(method_ctor.methodBody, &CoreImpAst{Ast_tag: "ReturnNoResult"})
-							gtd.Methods = append(gtd.Methods, method_ctor)
 						}
+						method_ctor.mbody.Add(ſRet(nil))
+						gtd.Methods = append(gtd.Methods, method_ctor)
 					}
 				}
 			}
 			me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 		}
 	}
+}
+
+func toGIrAEnumConstName(dataname string, ctorname string) string {
+	return "_ĸ" + dataname + ctorname
+}
+
+func toGIrAEnumTypeName(dataname string) string {
+	return "_ĸ" + dataname
 }
 
 func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string][]string, tr *GIrMTypeRef) interface{} {
