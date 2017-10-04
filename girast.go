@@ -113,14 +113,14 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	var buf = &bytes.Buffer{}
 
 	for _, gtd := range me.girM.GoTypeDefs {
-		codeEmitTypeDecl(buf, gtd, true, me.resolveGoTypeRef)
+		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRef)
 		if len(gtd.EnumConstNames) > 0 {
 			codeEmitTypeAlias(buf, gtd.Name+"Kinds", "int")
 			codeEmitEnumConsts(buf, gtd.EnumConstNames, gtd.Name+"Kinds")
 			codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 		}
-		fmt.Fprintln(buf)
 	}
+
 	codeEmitPkgDecl(writer, me.mod.pName)
 	codeEmitModImps(writer, me.girM.Imports)
 	buf.WriteTo(writer)
