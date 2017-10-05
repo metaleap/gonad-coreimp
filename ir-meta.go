@@ -189,6 +189,15 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 	return nil
 }
 
+func (me *GonadIrMeta) GoTypeDefByName(name string) *GIrANamedTypeRef {
+	for _, gtd := range me.GoTypeDefs {
+		if gtd.Name == name {
+			return gtd
+		}
+	}
+	return nil
+}
+
 func (me *GonadIrMeta) WriteAsJsonTo(w io.Writer) error {
 	jsonenc := json.NewEncoder(w)
 	jsonenc.SetIndent("", "\t")

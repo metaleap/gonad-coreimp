@@ -35,6 +35,7 @@ type GIrANamedTypeRef struct {
 	RefFunc      *GIrATypeRefFunc      `json:",omitempty"`
 	RefStruct    *GIrATypeRefStruct    `json:",omitempty"`
 	RefArray     *GIrATypeRefArray     `json:",omitempty"`
+	RefPtr       *GIrATypeRefPtr       `json:",omitempty"`
 
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
@@ -45,11 +46,19 @@ type GIrANamedTypeRef struct {
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray))
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray) && me.RefPtr.Eq(cmp.RefPtr))
 }
 
-func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
+func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
 	switch tr := tref.(type) {
+	case *GIrANamedTypeRef:
+		me.RefAlias = tr.RefAlias
+		me.RefArray = tr.RefArray
+		me.RefFunc = tr.RefFunc
+		me.RefInterface = tr.RefInterface
+		me.RefPtr = tr.RefPtr
+		me.RefStruct = tr.RefStruct
+		me.RefUnknown = tr.RefUnknown
 	case *GIrATypeRefInterface:
 		me.RefInterface = tr
 	case *GIrATypeRefFunc:
@@ -58,6 +67,8 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 		me.RefStruct = tr
 	case *GIrATypeRefArray:
 		me.RefArray = tr
+	case *GIrATypeRefPtr:
+		me.RefPtr = tr
 	case int:
 		me.RefUnknown = tr
 	case string:
@@ -74,6 +85,14 @@ type GIrATypeRefArray struct {
 }
 
 func (me *GIrATypeRefArray) Eq(cmp *GIrATypeRefArray) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.Eq(cmp.Of))
+}
+
+type GIrATypeRefPtr struct {
+	Of *GIrANamedTypeRef
+}
+
+func (me *GIrATypeRefPtr) Eq(cmp *GIrATypeRefPtr) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.Eq(cmp.Of))
 }
 
@@ -98,8 +117,9 @@ func (me *GIrATypeRefFunc) Eq(cmp *GIrATypeRefFunc) bool {
 }
 
 type GIrATypeRefStruct struct {
-	Embeds []string          `json:",omitempty"`
-	Fields GIrANamedTypeRefs `json:",omitempty"`
+	Embeds    []string          `json:",omitempty"`
+	Fields    GIrANamedTypeRefs `json:",omitempty"`
+	PassByPtr bool              `json:",omitempty"`
 }
 
 func (me *GIrATypeRefStruct) Eq(cmp *GIrATypeRefStruct) bool {
@@ -166,17 +186,17 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string) (pname string, tname string)
 				panic("Unknown Prim type: " + tname)
 			}
 		} else {
-			found, qn, mod := false, pname, FindModuleByQName(pname)
+			foundimport, qn, mod := false, pname, FindModuleByQName(pname)
 			if mod == nil {
 				panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
 			}
 			pname = mod.pName
 			for _, imp := range me.girM.Imports {
 				if imp.Q == qn {
-					found, imp.used = true, true
+					foundimport, imp.used = true, true
 				}
 			}
-			if !found {
+			if !foundimport {
 				imp := newModImp(mod)
 				imp.used, me.girM.imports, me.girM.Imports = true, append(me.girM.imports, mod), append(me.girM.Imports, imp)
 			}

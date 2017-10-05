@@ -226,6 +226,7 @@ func codeEmitCoreImps(w io.Writer, indent int, body CoreImpAsts) {
 
 func codeEmitEnumConsts(buf io.Writer, enumconstnames []string, enumconsttype string) {
 	fmt.Fprint(buf, "const (\n")
+	fmt.Fprintf(buf, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
 	for i, enumconstname := range enumconstnames {
 		fmt.Fprintf(buf, "\t%s", enumconstname)
 		if i == 0 {
@@ -294,6 +295,9 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	} else if gtd.RefArray != nil {
 		fmt.Fprint(w, "[]")
 		codeEmitTypeDecl(w, gtd.RefArray.Of, -1, typerefresolver)
+	} else if gtd.RefPtr != nil {
+		fmt.Fprint(w, "*")
+		codeEmitTypeDecl(w, gtd.RefPtr.Of, -1, typerefresolver)
 	} else if gtd.RefInterface != nil {
 		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
 			fmt.Fprint(w, "interface{}")
@@ -388,8 +392,10 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 	for _, method := range tr.Methods {
 		if method.mCtor {
 			fmt.Fprintf(w, "func %s", method.Name)
-		} else {
+		} else if tr.RefStruct.PassByPtr {
 			fmt.Fprintf(w, "func (this *%s) %s", tr.Name, method.Name)
+		} else {
+			fmt.Fprintf(w, "func (this %s) %s", tr.Name, method.Name)
 		}
 		codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 		codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
