@@ -121,9 +121,9 @@ func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopk
 		modinfo.goOutDirPath = relpath[:l]
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.girAstFilePath) && ufs.FileExists(modinfo.goOutFilePath) {
+		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.girAstFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
 			modinfo.regenGir = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
-				modinfo.girMetaFilePath, modinfo.girAstFilePath, modinfo.goOutFilePath)
+				modinfo.girMetaFilePath, modinfo.girAstFilePath, modinfo.gopkgfilepath)
 		} else {
 			modinfo.regenGir = true
 		}
@@ -138,12 +138,10 @@ func (me *BowerProject) EnsureModPkgGirMetas() {
 		defer wg.Done()
 		if modinfo.regenGir || Flag.ForceRegenAll {
 			err = modinfo.regenPkgGirMeta()
-		} else {
-			if err = modinfo.loadPkgGirMeta(); err != nil {
-				modinfo.regenGir = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
-				println(modinfo.qName + ": regenerating due to error when loading " + modinfo.girMetaFilePath + ": " + err.Error())
-				err = modinfo.regenPkgGirMeta()
-			}
+		} else if err = modinfo.loadPkgGirMeta(); err != nil {
+			modinfo.regenGir = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
+			println(modinfo.qName + ": regenerating due to error when loading " + modinfo.girMetaFilePath + ": " + err.Error())
+			err = modinfo.regenPkgGirMeta()
 		}
 		if err != nil {
 			panic(err)
@@ -176,7 +174,7 @@ func (me *BowerProject) RegenModPkgGirAsts() {
 func (me *BowerProject) WriteOutDirtyGirMetas() (err error) {
 	var buf bytes.Buffer
 	for _, m := range me.Modules {
-		if m.regenGir || m.girMeta.save {
+		if m.regenGir || Flag.ForceRegenAll || m.girMeta.save {
 			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
 				err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes())
 				buf.Reset()

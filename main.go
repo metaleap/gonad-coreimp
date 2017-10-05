@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-forks/pflag"
 	"github.com/metaleap/go-util-fs"
@@ -25,9 +26,11 @@ var (
 		GoDirSrcPath  string
 		GoNamespace   string
 	}
+	allpkgimppaths = map[string]bool{}
 )
 
 func main() {
+	starttime := time.Now()
 	var wg sync.WaitGroup
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
@@ -75,22 +78,22 @@ func main() {
 				go checkifdepdirhasbowerfile(reldirpath)
 				return true
 			})
-			wg.Wait()
 			loaddepfrombowerfile := func(depname string, dep *BowerProject) {
 				defer wg.Done()
 				if e := dep.LoadFromJsonFile(true); e != nil {
 					panic(e)
 				}
 			}
+			wg.Wait()
 			for dk, dv := range Deps {
 				wg.Add(1)
 				go loaddepfrombowerfile(dk, dv)
 			}
+			loadgirmetas := func(dep *BowerProject) {
+				defer wg.Done()
+				dep.EnsureModPkgGirMetas()
+			}
 			if wg.Wait(); err == nil {
-				loadgirmetas := func(dep *BowerProject) {
-					defer wg.Done()
-					dep.EnsureModPkgGirMetas()
-				}
 				for _, dep := range Deps {
 					wg.Add(1)
 					go loadgirmetas(dep)
@@ -104,20 +107,42 @@ func main() {
 						}
 					}
 				}
+				regengirasts := func(dep *BowerProject) {
+					defer wg.Done()
+					dep.RegenModPkgGirAsts()
+					if e := dep.WriteOutDirtyGirMetas(); e != nil {
+						panic(e)
+					}
+				}
 				wg.Wait()
 				if err == nil {
-					regengirasts := func(dep *BowerProject) {
-						defer wg.Done()
-						dep.RegenModPkgGirAsts()
-						dep.WriteOutDirtyGirMetas()
-					}
 					for _, dep := range Deps {
 						wg.Add(1)
 						go regengirasts(dep)
 					}
 					wg.Add(1)
 					go regengirasts(&Proj)
+					numregen := 0
+					for _, mod := range Proj.Modules {
+						if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.regenGir; mod.regenGir {
+							numregen++
+						}
+					}
+					for _, dep := range Deps {
+						for _, mod := range dep.Modules {
+							if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.regenGir; mod.regenGir {
+								numregen++
+							}
+						}
+					}
+					if Flag.ForceRegenAll {
+						numregen = len(allpkgimppaths)
+					}
 					wg.Wait()
+					dur := time.Now().Sub(starttime)
+					if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
+						fmt.Printf("\t(avg. %v per re-generated module)\n", dur/time.Duration(numregen))
+					}
 					err = writeTestMainGo()
 				}
 			}
@@ -129,15 +154,6 @@ func main() {
 }
 
 func writeTestMainGo() (err error) {
-	allpkgimppaths := map[string]bool{}
-	for _, mod := range Proj.Modules {
-		allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = true
-	}
-	for _, dep := range Deps {
-		for _, mod := range dep.Modules {
-			allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = true
-		}
-	}
 	w := &bytes.Buffer{}
 	if _, err = fmt.Fprintln(w, "package main\n\nimport ("); err == nil {
 		for pkgimppath, _ := range allpkgimppaths {
