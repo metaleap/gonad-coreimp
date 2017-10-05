@@ -59,7 +59,7 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 	case string:
 		me.RefAlias = tr
 	case nil:
-		me.RefAlias = fmt.Sprintf("voidnilbottomnull/*%v*/", tref)
+		me.RefAlias = "TodoTRefWasNil"
 	default:
 		println(tref.(float32))
 	}

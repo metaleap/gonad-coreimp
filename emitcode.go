@@ -352,7 +352,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if argname := gtd.RefFunc.Args[i].Name; len(argname) > 0 {
 				fmt.Fprintf(w, "%s ", argname)
 			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], -1, typerefresolver)
+			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], indlevel, typerefresolver)
 		}
 		fmt.Fprint(w, ") ")
 		numrets := len(gtd.RefFunc.Rets)
@@ -366,7 +366,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if retname := gtd.RefFunc.Rets[i].Name; len(retname) > 0 {
 				fmt.Fprintf(w, "%s ", retname)
 			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], -1, typerefresolver)
+			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], indlevel, typerefresolver)
 		}
 		if numrets > 1 {
 			fmt.Fprint(w, ")")
