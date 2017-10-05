@@ -112,6 +112,13 @@ func (me *GIrMTypeRefSkolem) Eq(cmp *GIrMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
 }
 
+func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname string) {
+	if ifaces4tvar := tdict[tvar]; !uslice.StrHas(ifaces4tvar, ifacetname) {
+		ifaces4tvar = append(ifaces4tvar, ifacetname)
+		tdict[tvar] = ifaces4tvar
+	}
+}
+
 func (me *GonadIrMeta) populateGoTypeDefs() {
 	mdict := map[string][]string{}
 	var tdict map[string][]string
@@ -127,6 +134,9 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		tdict = map[string][]string{}
 		gif := &GIrATypeRefInterface{xtc: &tc}
 		for _, tcc := range tc.Constraints {
+			for _, tcca := range tcc.Args {
+				ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
+			}
 			if !uslice.StrHas(gif.Embeds, tcc.Class) {
 				gif.Embeds = append(gif.Embeds, tcc.Class)
 			}
@@ -258,7 +268,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
 			panic(fmt.Errorf("%s: unexpected type-class/type-var association %v, please report!", me.mod.srcFilePath, tr.ConstrainedType))
 		}
-		tdict[tr.ConstrainedType.Args[0].TypeVar] = append(tdict[tr.ConstrainedType.Args[0].TypeVar], tr.ConstrainedType.Class)
+		ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
 		return me.toGIrATypeRef(mdict, tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {
 		return me.toGIrATypeRef(mdict, tdict, tr.ForAll.Ref)

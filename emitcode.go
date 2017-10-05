@@ -236,7 +236,7 @@ func codeEmitEnumConsts(buf io.Writer, enumconstnames []string, enumconsttype st
 	fmt.Fprint(buf, ")\n\n")
 }
 
-func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, typerefresolver goTypeRefResolver, isretargs bool) {
+func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, typerefresolver goTypeRefResolver, isretargs bool) {
 	parens := (!isretargs) || len(methodargs) > 1 || (len(methodargs) == 1 && len(methodargs[0].Name) > 0)
 	if parens {
 		fmt.Fprint(w, "(")
@@ -249,7 +249,7 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, typerefresolver
 			if len(arg.Name) > 0 {
 				fmt.Fprintf(w, "%s ", arg.Name)
 			}
-			codeEmitTypeDecl(w, arg, -1, typerefresolver)
+			codeEmitTypeDecl(w, arg, indlevel, typerefresolver)
 		}
 	}
 	if parens {
@@ -283,9 +283,8 @@ func codeEmitTypeAlias(buf io.Writer, tname string, ttype string) {
 
 func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
 	toplevel := indlevel == 0
-	fmtembeds, ftembedstoplevel := "%s; ", "\t%s\n"
+	fmtembeds := "\t%s\n"
 	if toplevel {
-		fmtembeds = ftembedstoplevel
 		fmt.Fprintf(w, "type %s ", gtd.Name)
 	}
 	if len(gtd.RefAlias) > 0 {
@@ -293,27 +292,33 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	} else if gtd.RefUnknown > 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefInterface != nil {
-		if toplevel {
-			fmt.Fprint(w, "interface {\n")
+		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
+			fmt.Fprint(w, "interface{}")
 		} else {
-			fmt.Fprint(w, "interface{")
-		}
-		for _, ifembed := range gtd.RefInterface.Embeds {
-			fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifembed)))
-		}
-		var buf bytes.Buffer
-		for _, ifmethod := range gtd.RefInterface.Methods {
-			fmt.Fprint(&buf, ifmethod.Name)
-			if ifmethod.RefFunc == nil {
-				// fmt.Printf("%s\t%s\n%v\n\n", gtd.Name, ifmethod.Name, ifmethod)
-			} else {
-				codeEmitFuncArgs(w, ifmethod.RefFunc.Args, typerefresolver, false)
-				codeEmitFuncArgs(w, ifmethod.RefFunc.Rets, typerefresolver, true)
+			var tabind string
+			if indlevel > 0 {
+				tabind = strings.Repeat("\t", indlevel)
 			}
-			fmt.Fprintf(w, fmtembeds, buf.String())
-			buf.Reset()
+			fmt.Fprint(w, "interface {\n")
+			for _, ifembed := range gtd.RefInterface.Embeds {
+				fmt.Fprint(w, tabind)
+				fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifembed)))
+			}
+			var buf bytes.Buffer
+			for _, ifmethod := range gtd.RefInterface.Methods {
+				fmt.Fprint(&buf, ifmethod.Name)
+				if ifmethod.RefFunc == nil {
+					fmt.Printf("OKAY %s\t%s\n%v\n\n", gtd.Name, ifmethod.Name, ifmethod)
+				} else {
+					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Args, indlevel+1, typerefresolver, false)
+					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Rets, indlevel+1, typerefresolver, true)
+				}
+				fmt.Fprint(w, tabind)
+				fmt.Fprintf(w, fmtembeds, buf.String())
+				buf.Reset()
+			}
+			fmt.Fprintf(w, "%s}", tabind)
 		}
-		fmt.Fprint(w, "}")
 	} else if gtd.RefStruct != nil {
 		var tabind string
 		if indlevel > 0 {
@@ -322,7 +327,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		fmt.Fprint(w, "struct {\n")
 		for _, structembed := range gtd.RefStruct.Embeds {
 			fmt.Fprint(w, tabind)
-			fmt.Fprintf(w, ftembedstoplevel, structembed)
+			fmt.Fprintf(w, fmtembeds, structembed)
 		}
 		fnlen := 0
 		for _, structfield := range gtd.RefStruct.Fields {
@@ -330,11 +335,12 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 				fnlen = l
 			}
 		}
+		var buf bytes.Buffer
 		for _, structfield := range gtd.RefStruct.Fields {
-			var buf bytes.Buffer
 			codeEmitTypeDecl(&buf, structfield, indlevel+1, typerefresolver)
 			fmt.Fprint(w, tabind)
-			fmt.Fprintf(w, ftembedstoplevel, ustr.PadRight(structfield.Name, fnlen)+" "+buf.String())
+			fmt.Fprintf(w, fmtembeds, ustr.PadRight(structfield.Name, fnlen)+" "+buf.String())
+			buf.Reset()
 		}
 		fmt.Fprintf(w, "%s}", tabind)
 	} else if gtd.RefFunc != nil {
@@ -378,8 +384,8 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 		} else {
 			fmt.Fprintf(w, "func (this *%s) %s", tr.Name, method.Name)
 		}
-		codeEmitFuncArgs(w, method.RefFunc.Args, typerefresolver, false)
-		codeEmitFuncArgs(w, method.RefFunc.Rets, typerefresolver, true)
+		codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
+		codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
 		fmt.Fprint(w, "{\n")
 		codeEmitCoreImps(w, 1, method.mBody)
 		fmt.Fprintln(w, "}\n")
