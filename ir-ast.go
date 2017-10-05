@@ -33,6 +33,7 @@ type GIrANamedTypeRef struct {
 	RefInterface *GIrATypeRefInterface `json:",omitempty"`
 	RefFunc      *GIrATypeRefFunc      `json:",omitempty"`
 	RefStruct    *GIrATypeRefStruct    `json:",omitempty"`
+	RefArray     *GIrATypeRefArray     `json:",omitempty"`
 
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
@@ -43,7 +44,7 @@ type GIrANamedTypeRef struct {
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct))
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray))
 }
 
 func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
@@ -54,6 +55,8 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 		me.RefFunc = tr
 	case *GIrATypeRefStruct:
 		me.RefStruct = tr
+	case *GIrATypeRefArray:
+		me.RefArray = tr
 	case int:
 		me.RefUnknown = tr
 	case string:
@@ -63,6 +66,14 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 	default:
 		println(tref.(float32))
 	}
+}
+
+type GIrATypeRefArray struct {
+	Of *GIrANamedTypeRef
+}
+
+func (me *GIrATypeRefArray) Eq(cmp *GIrATypeRefArray) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.Eq(cmp.Of))
 }
 
 type GIrATypeRefInterface struct {

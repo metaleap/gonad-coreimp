@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -115,6 +118,7 @@ func main() {
 					wg.Add(1)
 					go regengirasts(&Proj)
 					wg.Wait()
+					err = writeTestMainGo()
 				}
 			}
 		}
@@ -122,4 +126,28 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
+}
+
+func writeTestMainGo() (err error) {
+	allpkgimppaths := map[string]bool{}
+	for _, mod := range Proj.Modules {
+		allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = true
+	}
+	for _, dep := range Deps {
+		for _, mod := range dep.Modules {
+			allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = true
+		}
+	}
+	w := &bytes.Buffer{}
+	if _, err = fmt.Fprintln(w, "package main\n\nimport ("); err == nil {
+		for pkgimppath, _ := range allpkgimppaths {
+			if _, err = fmt.Fprintf(w, "\t_ %q\n", pkgimppath); err != nil {
+				return
+			}
+		}
+		if _, err = fmt.Fprintln(w, ")\n\nfunc main() { println(\"Looks like this compiled just fine!\") }"); err == nil {
+			err = ufs.WriteTextFile(filepath.Join(Flag.GoDirSrcPath, Proj.GoOut.PkgDirPath, "check-if-all-gonad-generated-packages-compile.go"), w.String())
+		}
+	}
+	return
 }

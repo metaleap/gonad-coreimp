@@ -189,7 +189,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 				gtd.EnumConstNames = nil
 			} else {
 				gtd.RefStruct = &GIrATypeRefStruct{}
-				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "kind", RefAlias: toGIrAEnumTypeName(td.Name)})
+				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "kindtag", RefAlias: toGIrAEnumTypeName(td.Name)})
 				for _, ctor := range td.Ctors {
 					for ia, ctorarg := range ctor.Args {
 						prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
@@ -216,13 +216,13 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
 					}}
 					method_iskind.mBody.Add(
-						ſRet(ſEq(ſDot(ſV("this"), "kind"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
+						ſRet(ſEq(ſDot(ſV("this"), "kindtag"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
 					gtd.Methods = append(gtd.Methods, method_iskind)
 
 					method_new := &GIrANamedTypeRef{mCtor: true, Name: gtd.Name + "As" + ctor.Name, RefFunc: &GIrATypeRefFunc{
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{Name: "this", RefAlias: gtd.Name}},
 					}}
-					method_new.mBody.Add(ſSet("this.kind", ſV(toGIrAEnumConstName(gtd.Name, ctor.Name))))
+					method_new.mBody.Add(ſSet("this.kindtag", ſV(toGIrAEnumConstName(gtd.Name, ctor.Name))))
 
 					if numargs := len(ctor.Args); numargs > 0 {
 						method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
@@ -297,6 +297,10 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	} else if tr.TypeApp != nil {
 		if tr.TypeApp.Left.TypeConstructor == "Prim.Record" {
 			return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right)
+		} else if tr.TypeApp.Left.TypeConstructor == "Prim.Array" {
+			array := &GIrATypeRefArray{Of: &GIrANamedTypeRef{}}
+			array.Of.setFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
+			return array
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" {
 			funtype := &GIrATypeRefFunc{}
 			funtype.Args = []*GIrANamedTypeRef{&GIrANamedTypeRef{}}
@@ -304,6 +308,8 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			funtype.Rets = []*GIrANamedTypeRef{&GIrANamedTypeRef{}}
 			funtype.Rets[0].setFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return funtype
+		} else {
+			// println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
 		}
 	}
 	return nil

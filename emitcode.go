@@ -291,6 +291,9 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		fmt.Fprint(w, codeEmitTypeRef(typerefresolver(gtd.RefAlias)))
 	} else if gtd.RefUnknown > 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
+	} else if gtd.RefArray != nil {
+		fmt.Fprint(w, "[]")
+		codeEmitTypeDecl(w, gtd.RefArray.Of, -1, typerefresolver)
 	} else if gtd.RefInterface != nil {
 		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
 			fmt.Fprint(w, "interface{}")
@@ -352,7 +355,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if argname := gtd.RefFunc.Args[i].Name; len(argname) > 0 {
 				fmt.Fprintf(w, "%s ", argname)
 			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], indlevel, typerefresolver)
+			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], indlevel+1, typerefresolver)
 		}
 		fmt.Fprint(w, ") ")
 		numrets := len(gtd.RefFunc.Rets)
@@ -366,7 +369,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if retname := gtd.RefFunc.Rets[i].Name; len(retname) > 0 {
 				fmt.Fprintf(w, "%s ", retname)
 			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], indlevel, typerefresolver)
+			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], indlevel+1, typerefresolver)
 		}
 		if numrets > 1 {
 			fmt.Fprint(w, ")")
