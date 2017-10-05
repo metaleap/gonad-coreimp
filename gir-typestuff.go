@@ -144,10 +144,23 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		for _, tcm := range tc.Members {
 			ifm := &GIrANamedTypeRef{Name: tcm.Name}
 			ifm.setFrom(me.toGIrATypeRef(mdict, tdict, tcm.Ref))
-			gif.Methods = append(gif.Methods, ifm)
-			if ifm.RefFunc == nil && ifm.RefInterface == nil {
-				println(tc.Name + "." + ifm.Name)
+			if ifm.RefFunc == nil {
+				if ifm.RefInterface != nil {
+					ifm.RefFunc = &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{}},
+					}
+					ifm.RefFunc.Rets[0].setFrom(ifm.RefInterface)
+					ifm.RefInterface = nil
+				} else if len(ifm.RefAlias) > 0 {
+					ifm.RefFunc = &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: ifm.RefAlias}},
+					}
+					ifm.RefAlias = ""
+				} else {
+					panic(me.mod.srcFilePath + ": " + tc.Name + "." + ifm.Name + ": strangely unrecognized or missing typevar-typeclass relation, please report!")
+				}
 			}
+			gif.Methods = append(gif.Methods, ifm)
 		}
 		tgif := &GIrANamedTypeRef{Name: tc.Name, Export: true}
 		tgif.setFrom(gif)

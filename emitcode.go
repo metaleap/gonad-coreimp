@@ -308,7 +308,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			for _, ifmethod := range gtd.RefInterface.Methods {
 				fmt.Fprint(&buf, ifmethod.Name)
 				if ifmethod.RefFunc == nil {
-					fmt.Printf("OKAY %s\t%s\n%v\n\n", gtd.Name, ifmethod.Name, ifmethod)
+					panic(gtd.Name + "." + ifmethod.Name + ": unexpected interface-method (not a func), please report!")
 				} else {
 					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Args, indlevel+1, typerefresolver, false)
 					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Rets, indlevel+1, typerefresolver, true)
