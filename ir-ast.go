@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/metaleap/go-util-slice"
@@ -62,7 +63,7 @@ func (me *GIrANamedTypeRef) setFrom(tref interface{}) {
 	case string:
 		me.RefAlias = tr
 	case nil:
-		me.RefAlias = "TodoTRefWasNil"
+		me.RefAlias = "interface{/*TodoTRefWasNil*/}"
 	default:
 		println(tref.(float32))
 	}
@@ -138,6 +139,7 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
+	sort.Sort(me.girM.Imports)
 	codeEmitModImps(writer, me.girM.Imports)
 	buf.WriteTo(writer)
 	return

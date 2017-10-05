@@ -9,7 +9,7 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports          []*GIrMPkgRef       `json:",omitempty"`
+	Imports          GIrMPkgRefs         `json:",omitempty"`
 	ExtTypeAliases   []GIrMNamedTypeRef  `json:",omitempty"`
 	ExtTypeClasses   []GIrMTypeClass     `json:",omitempty"`
 	ExtTypeDataDecls []GIrMTypeDataDecl  `json:",omitempty"`
@@ -21,6 +21,12 @@ type GonadIrMeta struct {
 	proj *BowerProject
 	save bool
 }
+
+type GIrMPkgRefs []*GIrMPkgRef
+
+func (me GIrMPkgRefs) Len() int           { return len(me) }
+func (me GIrMPkgRefs) Less(i, j int) bool { return me[i].P < me[j].P }
+func (me GIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
 
 type GIrMPkgRef struct {
 	N string
