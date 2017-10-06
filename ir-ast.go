@@ -16,6 +16,10 @@ const (
 	nsPrefixDefaultFfiPkg = "Ps2GoFFI."
 )
 
+var (
+	sanitizer = strings.NewReplacer("'", "_")
+)
+
 type GIrANamedTypeRefs []*GIrANamedTypeRef
 
 func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
@@ -164,6 +168,12 @@ type GonadIrAst struct {
 }
 
 func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
+	// ci := me.mod.coreimp
+	// for _, cia := range ci.Body {
+	// 	if cia.IsVariableIntroduction() {
+	// 		cia.goval = me.girM.GoValDefByPsName(cia.VariableIntroduction)
+	// 	}
+	// }
 
 	if err == nil {
 	}
@@ -258,10 +268,10 @@ func (me *GonadIrMeta) sanitizeSymbolForGo(name string, forexport bool) string {
 			name = "_µ_" + name
 		} else {
 			switch name {
-			case "case", "break", "default", "func", "interface", "select", "defer", "go", "map", "struct", "chan", "else", "goto", "package", "switch", "const", "fallthrough", "if", "range", "type", "continue", "for", "import", "return", "var":
-				return "__µ__" + name
+			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
+				return "_ĸ_" + name
 			}
 		}
 	}
-	return name
+	return sanitizer.Replace(name)
 }

@@ -17,7 +17,7 @@ const (
 
 func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 	tabs := strings.Repeat("\t", indent)
-	switch ast.Ast_tag {
+	switch ast.AstTag {
 	case "StringLiteral":
 		fmt.Fprintf(w, "%q", ast.StringLiteral)
 	case "BooleanLiteral":
@@ -39,32 +39,32 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 	case "While":
 		fmt.Fprintf(w, "%sfor ", tabs)
 		codeEmitCoreImp(w, indent, ast.While)
-		codeEmitCoreImp(w, indent, ast.Ast_body)
+		codeEmitCoreImp(w, indent, ast.AstBody)
 	case "For":
 		fmt.Fprintf(w, "%sfor %s ; ", tabs, ast.For)
-		codeEmitCoreImp(w, indent, ast.Ast_for1)
+		codeEmitCoreImp(w, indent, ast.AstFor1)
 		fmt.Fprint(w, " ; ")
-		codeEmitCoreImp(w, indent, ast.Ast_for2)
+		codeEmitCoreImp(w, indent, ast.AstFor2)
 		fmt.Fprint(w, " ")
-		codeEmitCoreImp(w, indent, ast.Ast_body)
+		codeEmitCoreImp(w, indent, ast.AstBody)
 	case "ForIn":
 		fmt.Fprintf(w, "%sfor _, %s := range ", tabs, ast.ForIn)
-		codeEmitCoreImp(w, indent, ast.Ast_for1)
-		codeEmitCoreImp(w, indent, ast.Ast_body)
+		codeEmitCoreImp(w, indent, ast.AstFor1)
+		codeEmitCoreImp(w, indent, ast.AstBody)
 	case "IfElse":
 		fmt.Fprintf(w, "%sif ", tabs)
 		codeEmitCoreImp(w, indent, ast.IfElse)
 		fmt.Fprint(w, " ")
-		codeEmitCoreImp(w, indent, ast.Ast_ifThen)
-		if ast.Ast_ifElse != nil {
+		codeEmitCoreImp(w, indent, ast.AstThen)
+		if ast.AstElse != nil {
 			fmt.Fprint(w, " else ")
-			codeEmitCoreImp(w, indent, ast.Ast_ifElse)
+			codeEmitCoreImp(w, indent, ast.AstElse)
 		}
 		fmt.Fprint(w, "\n")
 	case "App":
 		codeEmitCoreImp(w, indent, ast.App)
 		fmt.Fprint(w, "(")
-		for i, expr := range ast.Ast_appArgs {
+		for i, expr := range ast.AstApplArgs {
 			if i > 0 {
 				fmt.Fprint(w, ",")
 			}
@@ -73,17 +73,17 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		fmt.Fprint(w, ")")
 	case "Function":
 		fmt.Fprintf(w, "func %s(", ast.Function)
-		for i, argname := range ast.Ast_funcParams {
+		for i, argname := range ast.AstFuncParams {
 			if i > 0 {
 				fmt.Fprint(w, ",")
 			}
 			fmt.Fprint(w, argname)
 		}
 		fmt.Fprint(w, ") ")
-		codeEmitCoreImp(w, indent, ast.Ast_body)
+		codeEmitCoreImp(w, indent, ast.AstBody)
 	case "Unary":
 		fmt.Fprint(w, "(")
-		switch ast.Ast_op {
+		switch ast.AstOp {
 		case "Negate", "-":
 			fmt.Fprint(w, "-")
 		case "Not", "!":
@@ -93,15 +93,15 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		case "BitwiseNot", "^":
 			fmt.Fprint(w, "^")
 		default:
-			fmt.Fprintf(w, "?%s?", ast.Ast_op)
-			panic("unrecognized unary op '" + ast.Ast_op + "', please report!")
+			fmt.Fprintf(w, "?%s?", ast.AstOp)
+			panic("unrecognized unary op '" + ast.AstOp + "', please report!")
 		}
 		codeEmitCoreImp(w, indent, ast.Unary)
 		fmt.Fprint(w, ")")
 	case "Binary":
 		fmt.Fprint(w, "(")
 		codeEmitCoreImp(w, indent, ast.Binary)
-		switch ast.Ast_op {
+		switch ast.AstOp {
 		case "Add", "+":
 			fmt.Fprint(w, " + ")
 		case "Subtract", "-":
@@ -141,16 +141,16 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		case "ZeroFillShiftRight", "&^":
 			fmt.Fprint(w, " &^ ")
 		default:
-			fmt.Fprintf(w, " ?%s? ", ast.Ast_op)
-			panic("unrecognized binary op '" + ast.Ast_op + "', please report!")
+			fmt.Fprintf(w, " ?%s? ", ast.AstOp)
+			panic("unrecognized binary op '" + ast.AstOp + "', please report!")
 		}
-		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+		codeEmitCoreImp(w, indent, ast.AstRight)
 		fmt.Fprint(w, ")")
 	case "VariableIntroduction":
 		fmt.Fprintf(w, "%svar %s", tabs, ast.VariableIntroduction)
-		if ast.Ast_rightHandSide != nil {
+		if ast.AstRight != nil {
 			fmt.Fprint(w, " = ")
-			codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+			codeEmitCoreImp(w, indent, ast.AstRight)
 		}
 		fmt.Fprint(w, "\n")
 	case "Comment":
@@ -163,8 +163,8 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 				}
 			}
 		}
-		if ast.Ast_decl != nil {
-			codeEmitCoreImp(w, indent, ast.Ast_decl)
+		if ast.AstCommentDecl != nil {
+			codeEmitCoreImp(w, indent, ast.AstCommentDecl)
 		}
 	case "ObjectLiteral":
 		fmt.Fprint(w, "{")
@@ -202,23 +202,23 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		fmt.Fprint(w, tabs)
 		codeEmitCoreImp(w, indent, ast.Assignment)
 		fmt.Fprint(w, " = ")
-		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+		codeEmitCoreImp(w, indent, ast.AstRight)
 		fmt.Fprint(w, "\n")
 	case "Accessor":
 		codeEmitCoreImp(w, indent, ast.Accessor)
-		fmt.Fprintf(w, ".%s", ast.Ast_rightHandSide.Var)
+		fmt.Fprintf(w, ".%s", ast.AstRight.Var)
 	case "Indexer":
 		codeEmitCoreImp(w, indent, ast.Indexer)
-		// if ast.Ast_rightHandSide.Ast_tag == "StringLiteral" {
+		// if ast.AstRight.AstTag == "StringLiteral" {
 		fmt.Fprint(w, "[")
-		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+		codeEmitCoreImp(w, indent, ast.AstRight)
 		fmt.Fprint(w, "]")
 	case "InstanceOf":
 		codeEmitCoreImp(w, indent, ast.InstanceOf)
 		fmt.Fprint(w, " is ")
-		codeEmitCoreImp(w, indent, ast.Ast_rightHandSide)
+		codeEmitCoreImp(w, indent, ast.AstRight)
 	default:
-		panic("CoreImp unhandled AST-tag, please report: " + ast.Ast_tag)
+		panic("CoreImp unhandled AST-tag, please report: " + ast.AstTag)
 	}
 }
 

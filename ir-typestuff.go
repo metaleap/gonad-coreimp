@@ -127,7 +127,7 @@ func findGoTypeByQName(qname string) *GIrANamedTypeRef {
 		if mod := FindModuleByQName(pname); mod == nil {
 			panic(fmt.Errorf("Unknown module qname %s", pname))
 		} else {
-			return mod.girMeta.GoTypeDefByName(tname)
+			return mod.girMeta.GoTypeDefByPsName(tname)
 		}
 	} else {
 		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")

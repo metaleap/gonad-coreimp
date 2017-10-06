@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 type CoreImp struct {
 	BuiltWith string      `json:"builtWith,omitempty"`
 	Imports   []string    `json:"imports,omitempty"`
@@ -24,18 +28,18 @@ func (me CoreImpAsts) Last() *CoreImpAst {
 }
 
 type CoreImpAst struct {
-	Ast_sourceSpan    *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
-	Ast_tag           string             `json:"tag,omitempty"`
-	Ast_body          *CoreImpAst        `json:"body,omitempty"`
-	Ast_rightHandSide *CoreImpAst        `json:"rhs,omitempty"`
-	Ast_decl          *CoreImpAst        `json:"decl,omitempty"`
-	Ast_appArgs       CoreImpAsts        `json:"args,omitempty"`
-	Ast_op            string             `json:"op,omitempty"`
-	Ast_funcParams    []string           `json:"params,omitempty"`
-	Ast_for1          *CoreImpAst        `json:"for1,omitempty"`
-	Ast_for2          *CoreImpAst        `json:"for2,omitempty"`
-	Ast_ifThen        *CoreImpAst        `json:"then,omitempty"`
-	Ast_ifElse        *CoreImpAst        `json:"else,omitempty"`
+	AstSourceSpan  *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
+	AstTag         string             `json:"tag,omitempty"`
+	AstBody        *CoreImpAst        `json:"body,omitempty"`
+	AstRight       *CoreImpAst        `json:"rhs,omitempty"`
+	AstCommentDecl *CoreImpAst        `json:"decl,omitempty"`
+	AstApplArgs    CoreImpAsts        `json:"args,omitempty"`
+	AstOp          string             `json:"op,omitempty"`
+	AstFuncParams  []string           `json:"params,omitempty"`
+	AstFor1        *CoreImpAst        `json:"for1,omitempty"`
+	AstFor2        *CoreImpAst        `json:"for2,omitempty"`
+	AstThen        *CoreImpAst        `json:"then,omitempty"`
+	AstElse        *CoreImpAst        `json:"else,omitempty"`
 
 	Function               string                   `json:",omitempty"`
 	StringLiteral          string                   `json:",omitempty"`
@@ -65,6 +69,31 @@ type CoreImpAst struct {
 	parent *CoreImpAst
 }
 
+func (me *CoreImpAst) IsFunction() bool               { return me.AstTag == "Function" }
+func (me *CoreImpAst) IsStringLiteral() bool          { return me.AstTag == "StringLiteral" }
+func (me *CoreImpAst) IsBooleanLiteral() bool         { return me.AstTag == "BooleanLiteral" }
+func (me *CoreImpAst) IsNumericLiteral_Integer() bool { return me.AstTag == "NumericLiteral_Integer" }
+func (me *CoreImpAst) IsNumericLiteral_Double() bool  { return me.AstTag == "NumericLiteral_Double" }
+func (me *CoreImpAst) IsBlock() bool                  { return me.AstTag == "Block" }
+func (me *CoreImpAst) IsVar() bool                    { return me.AstTag == "Var" }
+func (me *CoreImpAst) IsVariableIntroduction() bool   { return me.AstTag == "VariableIntroduction" }
+func (me *CoreImpAst) IsWhile() bool                  { return me.AstTag == "While" }
+func (me *CoreImpAst) IsApp() bool                    { return me.AstTag == "App" }
+func (me *CoreImpAst) IsUnary() bool                  { return me.AstTag == "Unary" }
+func (me *CoreImpAst) IsComment() bool                { return me.AstTag == "Comment" }
+func (me *CoreImpAst) IsBinary() bool                 { return me.AstTag == "Binary" }
+func (me *CoreImpAst) IsForIn() bool                  { return me.AstTag == "ForIn" }
+func (me *CoreImpAst) IsFor() bool                    { return me.AstTag == "For" }
+func (me *CoreImpAst) IsIfElse() bool                 { return me.AstTag == "IfElse" }
+func (me *CoreImpAst) IsObjectLiteral() bool          { return me.AstTag == "ObjectLiteral" }
+func (me *CoreImpAst) IsReturn() bool                 { return me.AstTag == "Return" }
+func (me *CoreImpAst) IsThrow() bool                  { return me.AstTag == "Throw" }
+func (me *CoreImpAst) IsArrayLiteral() bool           { return me.AstTag == "ArrayLiteral" }
+func (me *CoreImpAst) IsAssignment() bool             { return me.AstTag == "Assignment" }
+func (me *CoreImpAst) IsIndexer() bool                { return me.AstTag == "Indexer" }
+func (me *CoreImpAst) IsAccessor() bool               { return me.AstTag == "Accessor" }
+func (me *CoreImpAst) IsInstanceOf() bool             { return me.AstTag == "InstanceOf" }
+
 type CoreImpComment struct {
 	LineComment  string
 	BlockComment string
@@ -76,7 +105,7 @@ type CoreImpSourceSpan struct {
 	End   []int  `json:"end,omitempty"`
 }
 
-func (me *CoreImp) preProcessTopLevel() {
+func (me *CoreImp) preProcessTopLevel() error {
 	me.namedRequires = map[string]string{}
 	me.setParents(nil, me.Body...)
 	i := 0
@@ -86,27 +115,36 @@ func (me *CoreImp) preProcessTopLevel() {
 	}
 	for i = 0; i < len(me.Body); i++ {
 		a := me.Body[i]
-		if a.StringLiteral == "use strict" || (a.Assignment != nil && a.Assignment.Indexer != nil && a.Assignment.Indexer.Var == "module" && a.Assignment.Ast_rightHandSide != nil && a.Assignment.Ast_rightHandSide.StringLiteral == "exports") {
+		if a.StringLiteral == "use strict" {
+			//	"use strict"
 			ditch()
-		} else if a.Ast_tag == "Comment" && a.Ast_decl != nil {
-			me.Body = append(append(me.Body[:i], a.Ast_decl), me.Body[i:]...)
-			a.Ast_decl = nil
-			me.Body[i] = a
-		} else if a.Ast_tag == "VariableIntroduction" {
-			if a.Ast_rightHandSide != nil && a.Ast_rightHandSide.App != nil && a.Ast_rightHandSide.App.Var == "require" && len(a.Ast_rightHandSide.Ast_appArgs) == 1 {
+		} else if a.Assignment != nil && a.Assignment.Indexer != nil && a.Assignment.Indexer.Var == "module" && a.Assignment.AstRight != nil && a.Assignment.AstRight.StringLiteral == "exports" {
+			//	module.exports = ..
+			ditch()
+		} else if a.IsComment() {
+			if a.AstCommentDecl != nil {
+				decl := a.AstCommentDecl
+				a.AstCommentDecl = nil
+				putdeclnexttocomment := append(me.Body[:i+1], decl)
+				everythingelse := me.Body[i+1:]
+				me.Body = append(putdeclnexttocomment, everythingelse...)
+			}
+		} else if a.IsVariableIntroduction() {
+			if a.AstRight != nil && a.AstRight.App != nil && a.AstRight.App.Var == "require" && len(a.AstRight.AstApplArgs) == 1 {
 				// println("Dropped top-level require()" )
-				me.namedRequires[a.VariableIntroduction] = a.Ast_rightHandSide.Ast_appArgs[0].StringLiteral
+				me.namedRequires[a.VariableIntroduction] = a.AstRight.AstApplArgs[0].StringLiteral
 				ditch()
-			} else if a.Ast_rightHandSide != nil && a.Ast_rightHandSide.Ast_tag == "Function" {
+			} else if a.AstRight != nil && a.AstRight.AstTag == "Function" {
 				// turn top-level `var foo = func()` into `func foo()`
-				a.Ast_rightHandSide.Function = a.VariableIntroduction
-				a = a.Ast_rightHandSide
+				a.AstRight.Function = a.VariableIntroduction
+				a = a.AstRight
 				a.parent, me.Body[i] = nil, a
 			}
 		} else {
-			panic(a.Ast_tag)
+			return fmt.Errorf("Encountered unexpected top-level AST tag, please report: %s", a.AstTag)
 		}
 	}
+	return nil
 }
 
 func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
@@ -116,14 +154,14 @@ func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
 			me.setParents(a, a.App)
 			me.setParents(a, a.ArrayLiteral...)
 			me.setParents(a, a.Assignment)
-			me.setParents(a, a.Ast_appArgs...)
-			me.setParents(a, a.Ast_body)
-			me.setParents(a, a.Ast_decl)
-			me.setParents(a, a.Ast_for1)
-			me.setParents(a, a.Ast_for2)
-			me.setParents(a, a.Ast_ifElse)
-			me.setParents(a, a.Ast_ifThen)
-			me.setParents(a, a.Ast_rightHandSide)
+			me.setParents(a, a.AstApplArgs...)
+			me.setParents(a, a.AstBody)
+			me.setParents(a, a.AstCommentDecl)
+			me.setParents(a, a.AstFor1)
+			me.setParents(a, a.AstFor2)
+			me.setParents(a, a.AstElse)
+			me.setParents(a, a.AstThen)
+			me.setParents(a, a.AstRight)
 			me.setParents(a, a.Binary)
 			me.setParents(a, a.Block...)
 			me.setParents(a, a.IfElse)
@@ -144,7 +182,7 @@ func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
 }
 
 func ſDot(left *CoreImpAst, right string) *CoreImpAst {
-	return &CoreImpAst{Ast_tag: "Accessor", Accessor: left, Ast_rightHandSide: ſV(right)}
+	return &CoreImpAst{AstTag: "Accessor", Accessor: left, AstRight: ſV(right)}
 }
 
 func ſEq(left *CoreImpAst, right *CoreImpAst) *CoreImpAst {
@@ -152,28 +190,28 @@ func ſEq(left *CoreImpAst, right *CoreImpAst) *CoreImpAst {
 }
 
 func ſO1(op string, operand *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{Ast_op: op, Ast_tag: "Unary", Unary: operand}
+	return &CoreImpAst{AstOp: op, AstTag: "Unary", Unary: operand}
 }
 
 func ſO2(left *CoreImpAst, op string, right *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{Ast_op: op, Ast_tag: "Binary", Binary: left, Ast_rightHandSide: right}
+	return &CoreImpAst{AstOp: op, AstTag: "Binary", Binary: left, AstRight: right}
 }
 
 func ſRet(expr *CoreImpAst) *CoreImpAst {
 	if expr == nil {
-		return &CoreImpAst{Ast_tag: "ReturnNoResult"}
+		return &CoreImpAst{AstTag: "ReturnNoResult"}
 	}
-	return &CoreImpAst{Ast_tag: "Return", Return: expr}
+	return &CoreImpAst{AstTag: "Return", Return: expr}
 }
 
 func ſS(literal string) *CoreImpAst {
-	return &CoreImpAst{Ast_tag: "StringLiteral", StringLiteral: literal}
+	return &CoreImpAst{AstTag: "StringLiteral", StringLiteral: literal}
 }
 
 func ſSet(left string, right *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{Ast_tag: "Assignment", Assignment: ſV(left), Ast_rightHandSide: right}
+	return &CoreImpAst{AstTag: "Assignment", Assignment: ſV(left), AstRight: right}
 }
 
 func ſV(name string) *CoreImpAst {
-	return &CoreImpAst{Ast_tag: "Var", Var: name}
+	return &CoreImpAst{AstTag: "Var", Var: name}
 }

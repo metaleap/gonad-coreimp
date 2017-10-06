@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"strings"
 
 	"github.com/metaleap/go-util-fs"
 )
@@ -21,9 +22,13 @@ type GonadIrMeta struct {
 
 	imports []*ModuleInfo
 
-	mod  *ModuleInfo
-	proj *BowerProject
-	save bool
+	lookuptypesgo map[string]*GIrANamedTypeRef
+	lookuptypesps map[string]*GIrANamedTypeRef
+	lookupvalsgo  map[string]*GIrANamedTypeRef
+	lookupvalsps  map[string]*GIrANamedTypeRef
+	mod           *ModuleInfo
+	proj          *BowerProject
+	save          bool
 }
 
 type GIrMPkgRefs []*GIrMPkgRef
@@ -49,6 +54,15 @@ func qNameFromExt(subArrAt0andStrAt1 []interface{}) (qname string) {
 		qname += (s.(string) + ".")
 	}
 	qname += subArrAt0andStrAt1[1].(string)
+	return
+}
+
+func newLookupTablesFrom(refs GIrANamedTypeRefs) (lookupgo, lookupps map[string]*GIrANamedTypeRef) {
+	lookupgo, lookupps = make(map[string]*GIrANamedTypeRef, len(refs)), make(map[string]*GIrANamedTypeRef, len(refs))
+	for _, r := range refs {
+		lookupgo[r.NameGo] = r
+		lookupps[r.NamePs] = r
+	}
 	return
 }
 
@@ -211,7 +225,9 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
+	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
 	me.populateGoValDecls()
+	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
 
 	if err == nil {
 		for _, impmod := range me.imports {
@@ -224,12 +240,16 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 func (me *GonadIrMeta) PopulateFromLoaded() error {
 	me.imports = nil
 	for _, imp := range me.Imports {
-		if impmod := FindModuleByQName(imp.Q); impmod == nil {
-			return errors.New("Bad import " + imp.Q)
-		} else {
-			me.imports = append(me.imports, impmod)
+		if !strings.HasPrefix(imp.Q, nsPrefixDefaultFfiPkg) {
+			if impmod := FindModuleByQName(imp.Q); impmod == nil {
+				return errors.New("Bad import " + imp.Q)
+			} else {
+				me.imports = append(me.imports, impmod)
+			}
 		}
 	}
+	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
+	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
 	return nil
 }
 
@@ -242,7 +262,7 @@ func (me *GonadIrMeta) populateGoValDecls() {
 		gvd := &GIrANamedTypeRef{NamePs: evd.Name, NameGo: me.sanitizeSymbolForGo(evd.Name, true), Export: true}
 		for true {
 			_, funcexists := m[gvd.NameGo]
-			if gtd := me.GoTypeDefByName(gvd.NameGo); funcexists || gtd != nil {
+			if gtd := me.GoTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
 				gvd.NameGo += "_"
 			} else {
 				break
@@ -254,13 +274,24 @@ func (me *GonadIrMeta) populateGoValDecls() {
 	}
 }
 
-func (me *GonadIrMeta) GoTypeDefByName(bygoname string) *GIrANamedTypeRef {
-	for _, gtd := range me.GoTypeDefs {
-		if gtd.NameGo == bygoname {
-			return gtd
-		}
-	}
-	return nil
+func (me *GonadIrMeta) GoValDefByGoName(goname string) (gvd *GIrANamedTypeRef) {
+	gvd, _ = me.lookupvalsgo[goname]
+	return
+}
+
+func (me *GonadIrMeta) GoValDefByPsName(psname string) (gvd *GIrANamedTypeRef) {
+	gvd, _ = me.lookupvalsps[psname]
+	return
+}
+
+func (me *GonadIrMeta) GoTypeDefByGoName(goname string) (gtd *GIrANamedTypeRef) {
+	gtd, _ = me.lookuptypesgo[goname]
+	return
+}
+
+func (me *GonadIrMeta) GoTypeDefByPsName(psname string) (gtd *GIrANamedTypeRef) {
+	gtd, _ = me.lookuptypesgo[psname]
+	return
 }
 
 func (me *GonadIrMeta) WriteAsJsonTo(w io.Writer) error {
