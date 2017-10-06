@@ -102,11 +102,37 @@ type GIrATypeRefInterface struct {
 	Embeds  []string          `json:",omitempty"`
 	Methods GIrANamedTypeRefs `json:",omitempty"`
 
-	xtc *GIrMTypeClass
+	xtc              *GIrMTypeClass
+	inheritedMethods GIrANamedTypeRefs
 }
 
 func (me *GIrATypeRefInterface) Eq(cmp *GIrATypeRefInterface) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.Eq(cmp.Methods))
+}
+
+func (me *GIrATypeRefInterface) allMethods() (allmethods GIrANamedTypeRefs) {
+	allmethods = me.Methods
+	if (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
+		if len(me.inheritedMethods) == 0 {
+			m := map[string]*GIrANamedTypeRef{}
+			for _, embed := range me.Embeds {
+				if gtd := findGoTypeByQName(embed); gtd == nil || gtd.RefInterface == nil {
+					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report!", me.xtc.Name, embed))
+				} else {
+					for _, method := range gtd.RefInterface.allMethods() {
+						dupl, _ := m[method.NameGo]
+						if dupl == nil {
+							m[method.NameGo], me.inheritedMethods = method, append(me.inheritedMethods, method)
+						} else if !dupl.Eq(method) {
+							panic("Interface (generated from type-class " + me.xtc.Name + ") would inherit multiple (but different-signature) methods named " + method.NameGo)
+						}
+					}
+				}
+			}
+		}
+		allmethods = append(me.inheritedMethods, allmethods...)
+	}
+	return
 }
 
 type GIrATypeRefFunc struct {
@@ -167,7 +193,7 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	return
 }
 
-func (me *GonadIrAst) resolveGoTypeRef(tref string) (pname string, tname string) {
+func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string, tname string) {
 	i := strings.LastIndex(tref, ".")
 	if tname = tref[i+1:]; i > 0 {
 		pname = tref[:i]
@@ -195,12 +221,16 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string) (pname string, tname string)
 			pname = mod.pName
 			for _, imp := range me.girM.Imports {
 				if imp.Q == qn {
-					foundimport, imp.used = true, true
+					if foundimport = true; markused {
+						imp.used = true
+					}
 				}
 			}
 			if !foundimport {
 				imp := newModImp(mod)
-				imp.used, me.girM.imports, me.girM.Imports = true, append(me.girM.imports, mod), append(me.girM.Imports, imp)
+				if me.girM.imports, me.girM.Imports = append(me.girM.imports, mod), append(me.girM.Imports, imp); markused {
+					imp.used = true
+				}
 			}
 		}
 	}
@@ -211,7 +241,7 @@ func (me *GonadIrMeta) sanitizeSymbolForGo(name string, forexport bool) string {
 	if forexport {
 		name = strings.Title(name)
 	} else {
-		if unicode.IsUpper([]rune(name)[0]) {
+		if unicode.IsUpper([]rune(name[:1])[0]) {
 			name = "_µ_" + name
 		} else {
 			switch name {

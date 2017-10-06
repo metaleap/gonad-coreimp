@@ -119,6 +119,22 @@ func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname strin
 	}
 }
 
+func findGoTypeByQName(qname string) *GIrANamedTypeRef {
+	var pname, tname string
+	i := strings.LastIndex(qname, ".")
+	if tname = qname[i+1:]; i > 0 {
+		pname = qname[:i]
+		if mod := FindModuleByQName(pname); mod == nil {
+			panic(fmt.Errorf("Unknown module qname %s", pname))
+		} else {
+			return mod.girMeta.GoTypeDefByName(tname)
+		}
+	} else {
+		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")
+	}
+	return nil
+}
+
 func (me *GonadIrMeta) populateGoTypeDefs() {
 	mdict := map[string][]string{}
 	var tdict map[string][]string
@@ -299,7 +315,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: []*GIrANamedTypeRef{&GIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: me.sanitizeSymbolForGo(tr.RCons.Label, false)}}}
+		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: GIrANamedTypeRefs{&GIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: me.sanitizeSymbolForGo(tr.RCons.Label, false)}}}
 		rectype.Fields[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.RCons.Left))
 		if nextrow := me.toGIrATypeRef(mdict, tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*GIrATypeRefStruct).Fields...)
@@ -320,15 +336,15 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			}
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" {
 			funtype := &GIrATypeRefFunc{}
-			funtype.Args = []*GIrANamedTypeRef{&GIrANamedTypeRef{}}
+			funtype.Args = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
 			funtype.Args[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left.TypeApp.Right))
-			funtype.Rets = []*GIrANamedTypeRef{&GIrANamedTypeRef{}}
+			funtype.Rets = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
 			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return funtype
 		} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
 			println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
 		} else {
-			// println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
+			println(me.mod.srcFilePath + "\n\tTODO type-appl")
 		}
 	}
 	return nil

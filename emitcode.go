@@ -9,7 +9,11 @@ import (
 	"github.com/metaleap/go-util-str"
 )
 
-type goTypeRefResolver func(tref string) (pname string, tname string)
+type goTypeRefResolver func(tref string, markused bool) (pname string, tname string)
+
+const (
+	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
+)
 
 func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 	tabs := strings.Repeat("\t", indent)
@@ -289,7 +293,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}
 	if len(gtd.RefAlias) > 0 {
-		fmt.Fprint(w, codeEmitTypeRef(typerefresolver(gtd.RefAlias)))
+		fmt.Fprint(w, codeEmitTypeRef(typerefresolver(gtd.RefAlias, true)))
 	} else if gtd.RefUnknown > 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
@@ -307,12 +311,14 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 				tabind = strings.Repeat("\t", indlevel)
 			}
 			fmt.Fprint(w, "interface {\n")
-			for _, ifembed := range gtd.RefInterface.Embeds {
-				fmt.Fprint(w, tabind)
-				fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifembed)))
+			if areOverlappingInterfacesSupportedByGo {
+				for _, ifembed := range gtd.RefInterface.Embeds {
+					fmt.Fprint(w, tabind)
+					fmt.Fprintf(w, fmtembeds, codeEmitTypeRef(typerefresolver(ifembed, true)))
+				}
 			}
 			var buf bytes.Buffer
-			for _, ifmethod := range gtd.RefInterface.Methods {
+			for _, ifmethod := range gtd.RefInterface.allMethods() {
 				fmt.Fprint(&buf, ifmethod.NameGo)
 				if ifmethod.RefFunc == nil {
 					panic(gtd.NamePs + "." + ifmethod.NamePs + ": unexpected interface-method (not a func), please report!")

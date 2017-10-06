@@ -9,11 +9,11 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports          GIrMPkgRefs         `json:",omitempty"`
-	ExtTypeAliases   []GIrMNamedTypeRef  `json:",omitempty"`
-	ExtTypeClasses   []GIrMTypeClass     `json:",omitempty"`
-	ExtTypeDataDecls []GIrMTypeDataDecl  `json:",omitempty"`
-	GoTypeDefs       []*GIrANamedTypeRef `json:",omitempty"`
+	Imports          GIrMPkgRefs        `json:",omitempty"`
+	ExtTypeAliases   []GIrMNamedTypeRef `json:",omitempty"`
+	ExtTypeClasses   []GIrMTypeClass    `json:",omitempty"`
+	ExtTypeDataDecls []GIrMTypeDataDecl `json:",omitempty"`
+	GoTypeDefs       GIrANamedTypeRefs  `json:",omitempty"`
 
 	imports []*ModuleInfo
 
