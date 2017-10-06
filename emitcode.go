@@ -238,7 +238,7 @@ func codeEmitEnumConsts(buf io.Writer, enumconstnames []string, enumconsttype st
 }
 
 func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, typerefresolver goTypeRefResolver, isretargs bool) {
-	parens := (!isretargs) || len(methodargs) > 1 || (len(methodargs) == 1 && len(methodargs[0].Name) > 0)
+	parens := (!isretargs) || len(methodargs) > 1 || (len(methodargs) == 1 && len(methodargs[0].NameGo) > 0)
 	if parens {
 		fmt.Fprint(w, "(")
 	}
@@ -247,8 +247,8 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, t
 			if i > 0 {
 				fmt.Fprint(w, ", ")
 			}
-			if len(arg.Name) > 0 {
-				fmt.Fprintf(w, "%s ", arg.Name)
+			if len(arg.NameGo) > 0 {
+				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
 			codeEmitTypeDecl(w, arg, indlevel, typerefresolver)
 		}
@@ -286,7 +286,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	toplevel := indlevel == 0
 	fmtembeds := "\t%s\n"
 	if toplevel {
-		fmt.Fprintf(w, "type %s ", gtd.Name)
+		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}
 	if len(gtd.RefAlias) > 0 {
 		fmt.Fprint(w, codeEmitTypeRef(typerefresolver(gtd.RefAlias)))
@@ -313,9 +313,9 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			}
 			var buf bytes.Buffer
 			for _, ifmethod := range gtd.RefInterface.Methods {
-				fmt.Fprint(&buf, ifmethod.Name)
+				fmt.Fprint(&buf, ifmethod.NameGo)
 				if ifmethod.RefFunc == nil {
-					panic(gtd.Name + "." + ifmethod.Name + ": unexpected interface-method (not a func), please report!")
+					panic(gtd.NamePs + "." + ifmethod.NamePs + ": unexpected interface-method (not a func), please report!")
 				} else {
 					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Args, indlevel+1, typerefresolver, false)
 					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Rets, indlevel+1, typerefresolver, true)
@@ -338,7 +338,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		}
 		fnlen := 0
 		for _, structfield := range gtd.RefStruct.Fields {
-			if l := len(structfield.Name); l > fnlen {
+			if l := len(structfield.NameGo); l > fnlen {
 				fnlen = l
 			}
 		}
@@ -346,7 +346,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		for _, structfield := range gtd.RefStruct.Fields {
 			codeEmitTypeDecl(&buf, structfield, indlevel+1, typerefresolver)
 			fmt.Fprint(w, tabind)
-			fmt.Fprintf(w, fmtembeds, ustr.PadRight(structfield.Name, fnlen)+" "+buf.String())
+			fmt.Fprintf(w, fmtembeds, ustr.PadRight(structfield.NameGo, fnlen)+" "+buf.String())
 			buf.Reset()
 		}
 		fmt.Fprintf(w, "%s}", tabind)
@@ -360,7 +360,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if i > 0 {
 				fmt.Fprint(w, ", ")
 			}
-			if argname := gtd.RefFunc.Args[i].Name; len(argname) > 0 {
+			if argname := gtd.RefFunc.Args[i].NameGo; len(argname) > 0 {
 				fmt.Fprintf(w, "%s ", argname)
 			}
 			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], ilev, typerefresolver)
@@ -374,7 +374,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			if i > 0 {
 				fmt.Fprint(w, ", ")
 			}
-			if retname := gtd.RefFunc.Rets[i].Name; len(retname) > 0 {
+			if retname := gtd.RefFunc.Rets[i].NameGo; len(retname) > 0 {
 				fmt.Fprintf(w, "%s ", retname)
 			}
 			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], ilev, typerefresolver)
@@ -391,11 +391,11 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTypeRefResolver) {
 	for _, method := range tr.Methods {
 		if method.mCtor {
-			fmt.Fprintf(w, "func %s", method.Name)
+			fmt.Fprintf(w, "func %s", method.NameGo)
 		} else if tr.RefStruct.PassByPtr {
-			fmt.Fprintf(w, "func (this *%s) %s", tr.Name, method.Name)
+			fmt.Fprintf(w, "func (this *%s) %s", tr.NameGo, method.NameGo)
 		} else {
-			fmt.Fprintf(w, "func (this %s) %s", tr.Name, method.Name)
+			fmt.Fprintf(w, "func (this %s) %s", tr.NameGo, method.NameGo)
 		}
 		codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 		codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)

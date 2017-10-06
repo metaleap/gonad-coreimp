@@ -189,9 +189,9 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 	return nil
 }
 
-func (me *GonadIrMeta) GoTypeDefByName(name string) *GIrANamedTypeRef {
+func (me *GonadIrMeta) GoTypeDefByName(bygoname string) *GIrANamedTypeRef {
 	for _, gtd := range me.GoTypeDefs {
-		if gtd.Name == name {
+		if gtd.NameGo == bygoname {
 			return gtd
 		}
 	}

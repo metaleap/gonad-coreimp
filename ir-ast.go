@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/metaleap/go-util-slice"
 )
@@ -27,7 +28,8 @@ func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
 }
 
 type GIrANamedTypeRef struct {
-	Name string `json:",omitempty"`
+	NamePs string `json:",omitempty"`
+	NameGo string `json:",omitempty"`
 
 	RefAlias     string                `json:",omitempty"`
 	RefUnknown   int                   `json:",omitempty"`
@@ -151,7 +153,7 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	for _, gtd := range me.girM.GoTypeDefs {
 		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRef)
 		if len(gtd.EnumConstNames) > 0 {
-			enumtypename := toGIrAEnumTypeName(gtd.Name)
+			enumtypename := toGIrAEnumTypeName(gtd.NamePs)
 			codeEmitTypeAlias(buf, enumtypename, "int")
 			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
 			codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
@@ -203,4 +205,20 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string) (pname string, tname string)
 		}
 	}
 	return
+}
+
+func (me *GonadIrMeta) sanitizeSymbolForGo(name string, forexport bool) string {
+	if forexport {
+		name = strings.Title(name)
+	} else {
+		if unicode.IsUpper([]rune(name)[0]) {
+			name = "_µ_" + name
+		} else {
+			switch name {
+			case "case", "break", "default", "func", "interface", "select", "defer", "go", "map", "struct", "chan", "else", "goto", "package", "switch", "const", "fallthrough", "if", "range", "type", "continue", "for", "import", "return", "var":
+				return "__µ__" + name
+			}
+		}
+	}
+	return name
 }

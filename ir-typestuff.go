@@ -125,7 +125,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 
 	for _, ta := range me.ExtTypeAliases {
 		tdict = map[string][]string{}
-		gtd := &GIrANamedTypeRef{Name: ta.Name, Export: true}
+		gtd := &GIrANamedTypeRef{NamePs: ta.Name, NameGo: ta.Name, Export: true}
 		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ta.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
@@ -142,7 +142,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 			}
 		}
 		for _, tcm := range tc.Members {
-			ifm := &GIrANamedTypeRef{Name: tcm.Name}
+			ifm := &GIrANamedTypeRef{NamePs: tcm.Name, NameGo: me.sanitizeSymbolForGo(tcm.Name, true)}
 			ifm.setRefFrom(me.toGIrATypeRef(mdict, tdict, tcm.Ref))
 			if ifm.RefFunc == nil {
 				if ifm.RefInterface != nil {
@@ -157,12 +157,12 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					}
 					ifm.RefAlias = ""
 				} else {
-					panic(me.mod.srcFilePath + ": " + tc.Name + "." + ifm.Name + ": strangely unrecognized or missing typevar-typeclass relation, please report!")
+					panic(me.mod.srcFilePath + ": " + tc.Name + "." + ifm.NamePs + ": strangely unrecognized or missing typevar-typeclass relation, please report!")
 				}
 			}
 			gif.Methods = append(gif.Methods, ifm)
 		}
-		tgif := &GIrANamedTypeRef{Name: tc.Name, Export: true}
+		tgif := &GIrANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: true}
 		tgif.setRefFrom(gif)
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
@@ -172,7 +172,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
-			gtd, isnewtype := &GIrANamedTypeRef{Name: td.Name, RefAlias: toGIrAEnumTypeName(td.Name)}, false
+			gtd, isnewtype := &GIrANamedTypeRef{NamePs: td.Name, NameGo: td.Name, RefAlias: toGIrAEnumTypeName(td.Name)}, false
 			for _, ctor := range td.Ctors {
 				gtd.EnumConstNames = append(gtd.EnumConstNames, toGIrAEnumConstName(td.Name, ctor.Name))
 				if numargs := len(ctor.Args); numargs > 0 {
@@ -190,14 +190,13 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 			} else {
 				isselfref := false
 				gtd.RefStruct = &GIrATypeRefStruct{}
-				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{Name: "tag", RefAlias: toGIrAEnumTypeName(td.Name)})
+				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, &GIrANamedTypeRef{NameGo: "tag", RefAlias: toGIrAEnumTypeName(gtd.NamePs)})
 				for _, ctor := range td.Ctors {
 					for ia, ctorarg := range ctor.Args {
 						isselfrefarg := false
 						if ctorarg.TypeConstructor == (me.mod.qName + "." + td.Name) {
 							isselfref, isselfrefarg = true, true
 						}
-						prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
 						field := &GIrANamedTypeRef{}
 						if isselfrefarg {
 							field.RefPtr = &GIrATypeRefPtr{Of: &GIrANamedTypeRef{}}
@@ -206,15 +205,16 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 							field.setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
 						}
 						ctorarg.tmp_assoc = field
+						prefix, hasfieldherewithsametype := fmt.Sprintf("v%d_", ia), false
 						for _, f := range gtd.RefStruct.Fields {
-							if strings.HasPrefix(f.Name, prefix) && f.Eq(field) {
+							if strings.HasPrefix(f.NameGo, prefix) && f.Eq(field) {
 								hasfieldherewithsametype, ctorarg.tmp_assoc = true, f
-								f.Name = fmt.Sprintf("%s_%s", f.Name, ctor.Name)
+								f.NameGo = fmt.Sprintf("%s_%s", f.NameGo, ctor.Name)
 								break
 							}
 						}
 						if !hasfieldherewithsametype {
-							field.Name = fmt.Sprintf("%s%s", prefix, ctor.Name)
+							field.NameGo = fmt.Sprintf("%s%s", prefix, ctor.Name)
 							gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, field)
 						}
 					}
@@ -223,34 +223,34 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 			}
 			if !isnewtype {
 				for _, ctor := range td.Ctors {
-					method_iskind := &GIrANamedTypeRef{Name: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+					method_iskind := &GIrANamedTypeRef{NameGo: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
 					}}
 					method_iskind.mBody.Add(
-						ſRet(ſEq(ſDot(ſV("this"), "tag"), ſV(toGIrAEnumConstName(gtd.Name, ctor.Name)))))
+						ſRet(ſEq(ſDot(ſV("this"), "tag"), ſV(toGIrAEnumConstName(gtd.NamePs, ctor.Name)))))
 					gtd.Methods = append(gtd.Methods, method_iskind)
 
-					method_new := &GIrANamedTypeRef{mCtor: true, Name: "New" + gtd.Name + "As" + ctor.Name, RefFunc: &GIrATypeRefFunc{
-						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{Name: "this", RefAlias: gtd.Name}},
+					method_new := &GIrANamedTypeRef{mCtor: true, NameGo: "New" + gtd.NameGo + "As" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{NameGo: "this", RefAlias: gtd.NameGo}},
 					}}
-					method_new.mBody.Add(ſSet("this.tag", ſV(toGIrAEnumConstName(gtd.Name, ctor.Name))))
+					method_new.mBody.Add(ſSet("this.tag", ſV(toGIrAEnumConstName(gtd.NamePs, ctor.Name))))
 
 					if numargs := len(ctor.Args); numargs > 0 {
-						method_ctor := &GIrANamedTypeRef{Name: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
+						method_ctor := &GIrANamedTypeRef{NameGo: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
 						for i, ctorarg := range ctor.Args {
 							if ctorarg.tmp_assoc != nil {
-								retarg := &GIrANamedTypeRef{Name: fmt.Sprintf("v%v", i)}
+								retarg := &GIrANamedTypeRef{NameGo: fmt.Sprintf("v%v", i)}
 								retarg.setRefFrom(ctorarg.tmp_assoc)
 								method_new.RefFunc.Args = append(method_new.RefFunc.Args, retarg)
-								method_new.mBody.Add(ſSet("this."+ctorarg.tmp_assoc.Name, ſV(retarg.Name)))
+								method_new.mBody.Add(ſSet("this."+ctorarg.tmp_assoc.NameGo, ſV(retarg.NameGo)))
 								method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
 								method_ctor.mBody.Add(
-									ſSet(retarg.Name, ſDot(ſV("this"), fmt.Sprintf("%v", ctorarg.tmp_assoc.Name))))
+									ſSet(retarg.NameGo, ſDot(ſV("this"), fmt.Sprintf("%v", ctorarg.tmp_assoc.NameGo))))
 								if numargs > 1 {
-									method_ctorarg := &GIrANamedTypeRef{Name: fmt.Sprintf("%s%d", ctor.Name, i),
+									method_ctorarg := &GIrANamedTypeRef{NameGo: fmt.Sprintf("%s%d", ctor.Name, i),
 										RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{}}}}
 									method_ctorarg.RefFunc.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
-									method_ctorarg.mBody.Add(ſRet(ſDot(ſV("this"), ctorarg.tmp_assoc.Name)))
+									method_ctorarg.mBody.Add(ſRet(ſDot(ſV("this"), ctorarg.tmp_assoc.NameGo)))
 									gtd.Methods = append(gtd.Methods, method_ctorarg)
 								}
 							}
@@ -299,7 +299,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: []*GIrANamedTypeRef{&GIrANamedTypeRef{Name: tr.RCons.Label}}}
+		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: []*GIrANamedTypeRef{&GIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: me.sanitizeSymbolForGo(tr.RCons.Label, false)}}}
 		rectype.Fields[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.RCons.Left))
 		if nextrow := me.toGIrATypeRef(mdict, tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*GIrATypeRefStruct).Fields...)
