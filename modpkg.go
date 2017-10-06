@@ -33,6 +33,7 @@ type ModuleInfo struct {
 
 var (
 	slash2dot      = strings.NewReplacer("\\", ".", "/", ".")
+	dot2slash      = strings.NewReplacer(".", "/")
 	dot2underscore = strings.NewReplacer(".", "_")
 )
 

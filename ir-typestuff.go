@@ -342,9 +342,9 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return funtype
 		} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
-			println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
+			// println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
 		} else {
-			println(me.mod.srcFilePath + "\n\tTODO type-appl")
+			// println(me.mod.srcFilePath + "\n\tTODO type-appl")
 		}
 	}
 	return nil

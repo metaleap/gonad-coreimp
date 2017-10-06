@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"path"
+
+	"github.com/metaleap/go-util-fs"
 )
 
 type GonadIrMeta struct {
@@ -118,6 +120,21 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 						}
 					}
 					me.ExtTypeDataDecls = append(me.ExtTypeDataDecls, datadecl)
+				}
+			} else if s_edTypeDeclarationKind, ok := d.EDType.DeclKind.(string); ok {
+				switch s_edTypeDeclarationKind {
+				case "TypeSynonym":
+				//	type-aliases handled separately in populateExtTypeAliases already, nothing to do here
+				case "ExternData":
+					if ufs.FileExists(me.mod.srcFilePath[:len(me.mod.srcFilePath)-len(".purs")] + ".go") {
+						//	type will be present to go build at compilation time --- the typical case
+					} else {
+						//	special case for official purescript core libs: alias to gonad's default ffi package
+						ta := GIrMNamedTypeRef{Name: d.EDType.Name, Ref: &GIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + d.EDType.Name}}
+						me.ExtTypeAliases = append(me.ExtTypeAliases, ta)
+					}
+				default:
+					panic(me.mod.extFilePath + ": unrecognized edTypeDeclarationKind value of '" + s_edTypeDeclarationKind + "', please report!")
 				}
 			}
 		}

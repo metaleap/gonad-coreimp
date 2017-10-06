@@ -12,6 +12,10 @@ import (
 	"github.com/metaleap/go-util-slice"
 )
 
+const (
+	nsPrefixDefaultFfiPkg = "Ps2GoFFI."
+)
+
 type GIrANamedTypeRefs []*GIrANamedTypeRef
 
 func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
@@ -120,8 +124,7 @@ func (me *GIrATypeRefInterface) allMethods() (allmethods GIrANamedTypeRefs) {
 					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report!", me.xtc.Name, embed))
 				} else {
 					for _, method := range gtd.RefInterface.allMethods() {
-						dupl, _ := m[method.NameGo]
-						if dupl == nil {
+						if dupl, _ := m[method.NameGo]; dupl == nil {
 							m[method.NameGo], me.inheritedMethods = method, append(me.inheritedMethods, method)
 						} else if !dupl.Eq(method) {
 							panic("Interface (generated from type-class " + me.xtc.Name + ") would inherit multiple (but different-signature) methods named " + method.NameGo)
@@ -214,11 +217,16 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 				panic("Unknown Prim type: " + tname)
 			}
 		} else {
-			foundimport, qn, mod := false, pname, FindModuleByQName(pname)
-			if mod == nil {
-				panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
+			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
+			var mod *ModuleInfo
+			if isffi {
+				pname = dot2underscore.Replace(pname)
+			} else {
+				if mod = FindModuleByQName(pname); mod == nil {
+					panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
+				}
+				pname = mod.pName
 			}
-			pname = mod.pName
 			for _, imp := range me.girM.Imports {
 				if imp.Q == qn {
 					if foundimport = true; markused {
@@ -227,7 +235,12 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 				}
 			}
 			if !foundimport {
-				imp := newModImp(mod)
+				var imp *GIrMPkgRef
+				if isffi {
+					imp = &GIrMPkgRef{P: "github.com/metaleap/gonad/" + dot2slash.Replace(qn), Q: qn, N: pname}
+				} else {
+					imp = newModImp(mod)
+				}
 				if me.girM.imports, me.girM.Imports = append(me.girM.imports, mod), append(me.girM.Imports, imp); markused {
 					imp.used = true
 				}
