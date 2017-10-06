@@ -15,8 +15,9 @@ type GonadIrMeta struct {
 	ExtTypeAliases   []GIrMNamedTypeRef `json:",omitempty"`
 	ExtTypeClasses   []GIrMTypeClass    `json:",omitempty"`
 	ExtTypeDataDecls []GIrMTypeDataDecl `json:",omitempty"`
-	// ExtValDefs       []GIrMValDef       `json:",omitempty"`
-	GoTypeDefs GIrANamedTypeRefs `json:",omitempty"`
+	ExtValDecls      []GIrMNamedTypeRef `json:",omitempty"`
+	GoTypeDefs       GIrANamedTypeRefs  `json:",omitempty"`
+	GoValDecls       GIrANamedTypeRefs  `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -101,7 +102,26 @@ func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef
 }
 
 func (me *GonadIrMeta) populateExtFuncsAndVals() {
-
+	for _, efdecl := range me.mod.ext.EfDecls {
+		if edval := efdecl.EDValue; edval != nil {
+			referstotypeclassmember := false
+			for _, etc := range me.ExtTypeClasses {
+				for _, etcm := range etc.Members {
+					if etcm.Name == edval.Name.Ident {
+						referstotypeclassmember = true
+						break
+					}
+				}
+				if referstotypeclassmember {
+					break
+				}
+			}
+			if !referstotypeclassmember {
+				tr := me.newTypeRefFromExtTc(edval.Type)
+				me.ExtValDecls = append(me.ExtValDecls, GIrMNamedTypeRef{Name: edval.Name.Ident, Ref: tr})
+			}
+		}
+	}
 }
 
 func (me *GonadIrMeta) populateExtTypeDataDecls() {
@@ -191,6 +211,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
+	me.populateGoValDecls()
 
 	if err == nil {
 		for _, impmod := range me.imports {
@@ -210,6 +231,27 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 		}
 	}
 	return nil
+}
+
+func (me *GonadIrMeta) populateGoValDecls() {
+	mdict, m := map[string][]string{}, map[string]bool{}
+	var tdict map[string][]string
+
+	for _, evd := range me.ExtValDecls {
+		tdict = map[string][]string{}
+		gvd := &GIrANamedTypeRef{NamePs: evd.Name, NameGo: me.sanitizeSymbolForGo(evd.Name, true), Export: true}
+		for true {
+			_, funcexists := m[gvd.NameGo]
+			if gtd := me.GoTypeDefByName(gvd.NameGo); funcexists || gtd != nil {
+				gvd.NameGo += "_"
+			} else {
+				break
+			}
+		}
+		m[gvd.NameGo] = true
+		gvd.setRefFrom(me.toGIrATypeRef(mdict, tdict, evd.Ref))
+		me.GoValDecls = append(me.GoValDecls, gvd)
+	}
 }
 
 func (me *GonadIrMeta) GoTypeDefByName(bygoname string) *GIrANamedTypeRef {

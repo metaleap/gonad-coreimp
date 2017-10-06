@@ -306,9 +306,10 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		return &GIrATypeRefInterface{Embeds: embeds}
 	} else if tr.ConstrainedType != nil {
 		if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
-			panic(fmt.Errorf("%s: unexpected type-class/type-var association %v, please report!", me.mod.srcFilePath, tr.ConstrainedType))
+			ensureIfaceForTvar(tdict, "", tr.ConstrainedType.Class) // TODO deal with this properly
+		} else {
+			ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
 		}
-		ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
 		return me.toGIrATypeRef(mdict, tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {
 		return me.toGIrATypeRef(mdict, tdict, tr.ForAll.Ref)
