@@ -328,12 +328,6 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			array := &GIrATypeRefArray{Of: &GIrANamedTypeRef{}}
 			array.Of.setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return array
-		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
-			if len(tr.TypeApp.Right.TypeVar) > 0 {
-				return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
-			} else {
-				panic(me.mod.srcFilePath + ": type-application of " + tr.TypeApp.Left.TypeConstructor + " to unrecognized right-hand side, please report! ")
-			}
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" {
 			funtype := &GIrATypeRefFunc{}
 			funtype.Args = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
@@ -341,10 +335,17 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			funtype.Rets = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
 			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return funtype
-		} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
-			// println(me.mod.srcFilePath + "\n\t" + tr.TypeApp.Left.TypeConstructor + "\t" + tr.TypeApp.Right.TypeConstructor)
+		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
+			if len(tr.TypeApp.Right.TypeVar) > 0 {
+				//	Maybe a
+			} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
+				//	Maybe Int
+			} else {
+				//	I'll deal with it when it occurs
+				panic(me.mod.srcFilePath + ": type-application of " + tr.TypeApp.Left.TypeConstructor + " to unrecognized right-hand side, please report! ")
+			}
 		} else {
-			// println(me.mod.srcFilePath + "\n\tTODO type-appl")
+			//	Nested stuff ie. (Either foo) bar
 		}
 	}
 	return nil

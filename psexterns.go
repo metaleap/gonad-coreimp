@@ -47,15 +47,22 @@ type PsExtDecl struct {
 	EDClass           *PsExtTypeClass        `json:",omitempty"`
 	EDType            *PsExtType             `json:",omitempty"`
 	EDTypeSynonym     *PsExtTypeAlias        `json:",omitempty"`
-	EDValue           map[string]interface{} `json:",omitempty"`
+	EDValue           *PsExtVal              `json:",omitempty"`
 	EDInstance        map[string]interface{} `json:",omitempty"`
 	EDDataConstructor map[string]interface{} `json:",omitempty"`
 }
 
+type PsExtVal struct {
+	Name struct {
+		Ident string `json:",omitempty"`
+	} `json:"edValueName"`
+	Type TaggedContents `json:"edValueType"`
+}
+
 type PsExtType struct {
-	Name     string          `json:"edTypeName,omitempty"`
-	Kind     *TaggedContents `json:"edTypeKind,omitempty"`
-	DeclKind interface{}     `json:"edTypeDeclarationKind,omitempty"`
+	Name     string         `json:"edTypeName,omitempty"`
+	Kind     TaggedContents `json:"edTypeKind,omitempty"`
+	DeclKind interface{}    `json:"edTypeDeclarationKind,omitempty"`
 }
 
 type PsExtTypeAlias struct {

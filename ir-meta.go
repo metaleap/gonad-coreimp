@@ -15,7 +15,8 @@ type GonadIrMeta struct {
 	ExtTypeAliases   []GIrMNamedTypeRef `json:",omitempty"`
 	ExtTypeClasses   []GIrMTypeClass    `json:",omitempty"`
 	ExtTypeDataDecls []GIrMTypeDataDecl `json:",omitempty"`
-	GoTypeDefs       GIrANamedTypeRefs  `json:",omitempty"`
+	// ExtValDefs       []GIrMValDef       `json:",omitempty"`
+	GoTypeDefs GIrANamedTypeRefs `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -97,6 +98,10 @@ func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef
 		fmt.Printf("\n%s?!\n\t%v\n", tc.Tag, tc.Contents)
 	}
 	return
+}
+
+func (me *GonadIrMeta) populateExtFuncsAndVals() {
+
 }
 
 func (me *GonadIrMeta) populateExtTypeDataDecls() {
@@ -184,6 +189,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeAliases()
 	me.populateExtTypeClasses()
 	me.populateExtTypeDataDecls()
+	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
 
 	if err == nil {
