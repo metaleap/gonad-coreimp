@@ -337,9 +337,11 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			return funtype
 		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
 			if len(tr.TypeApp.Right.TypeVar) > 0 {
-				//	Maybe a
+				//	`Maybe a`. for now:
+				return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
 			} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
-				//	Maybe Int
+				//	`Maybe Int`. for now
+				return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
 			} else {
 				//	I'll deal with it when it occurs
 				panic(me.mod.srcFilePath + ": type-application of " + tr.TypeApp.Left.TypeConstructor + " to unrecognized right-hand side, please report! ")
