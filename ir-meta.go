@@ -45,6 +45,113 @@ type GIrMPkgRef struct {
 	used bool
 }
 
+type GIrMNamedTypeRef struct {
+	Name string       `json:"tnn"`
+	Ref  *GIrMTypeRef `json:"tnr,omitempty"`
+}
+
+type GIrMTypeClass struct {
+	Name        string               `json:"tcn"`
+	Constraints []*GIrMTypeRefConstr `json:"tcc,omitempty"`
+	TypeArgs    []string             `json:"tca,omitempty"`
+	Members     []GIrMNamedTypeRef   `json:"tcm,omitempty"`
+}
+
+type GIrMTypeDataDecl struct {
+	Name  string              `json:"tdn"`
+	Ctors []*GIrMTypeDataCtor `json:"tdc,omitempty"`
+	Args  []string            `json:"tda,omitempty"`
+}
+
+type GIrMTypeDataCtor struct {
+	Name string       `json:"tdcn"`
+	Args GIrMTypeRefs `json:"tdca,omitempty"`
+
+	gtd *GIrANamedTypeRef
+}
+
+type GIrMTypeRefs []*GIrMTypeRef
+
+type GIrMTypeRef struct {
+	TypeConstructor string             `json:"tc,omitempty"`
+	TypeVar         string             `json:"tv,omitempty"`
+	REmpty          bool               `json:"re,omitempty"`
+	TUnknown        int                `json:"tu,omitempty"`
+	TypeApp         *GIrMTypeRefAppl   `json:"ta,omitempty"`
+	ConstrainedType *GIrMTypeRefConstr `json:"ct,omitempty"`
+	RCons           *GIrMTypeRefRow    `json:"rc,omitempty"`
+	ForAll          *GIrMTypeRefExist  `json:"fa,omitempty"`
+	Skolem          *GIrMTypeRefSkolem `json:"sk,omitempty"`
+
+	tmp_assoc *GIrANamedTypeRef
+}
+
+func (me *GIrMTypeRef) Eq(cmp *GIrMTypeRef) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.TypeConstructor == cmp.TypeConstructor && me.TypeVar == cmp.TypeVar && me.REmpty == cmp.REmpty && me.TUnknown == cmp.TUnknown && me.TypeApp.Eq(cmp.TypeApp) && me.ConstrainedType.Eq(cmp.ConstrainedType) && me.RCons.Eq(cmp.RCons) && me.ForAll.Eq(cmp.ForAll) && me.Skolem.Eq(cmp.Skolem))
+}
+
+func (me GIrMTypeRefs) Eq(cmp GIrMTypeRefs) bool {
+	if len(me) != len(cmp) {
+		return false
+	}
+	for i, _ := range me {
+		if !me[i].Eq(cmp[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+type GIrMTypeRefAppl struct {
+	Left  *GIrMTypeRef `json:"t1,omitempty"`
+	Right *GIrMTypeRef `json:"t2,omitempty"`
+}
+
+func (me *GIrMTypeRefAppl) Eq(cmp *GIrMTypeRefAppl) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Left.Eq(cmp.Left) && me.Right.Eq(cmp.Right))
+}
+
+type GIrMTypeRefRow struct {
+	Label string       `json:"rl,omitempty"`
+	Left  *GIrMTypeRef `json:"r1,omitempty"`
+	Right *GIrMTypeRef `json:"r2,omitempty"`
+}
+
+func (me *GIrMTypeRefRow) Eq(cmp *GIrMTypeRefRow) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Label == cmp.Label && me.Left.Eq(cmp.Left) && me.Right.Eq(cmp.Right))
+}
+
+type GIrMTypeRefConstr struct {
+	Class string       `json:"cc,omitempty"`
+	Data  interface{}  `json:"cd,omitempty"` // when needed: Data = [[Text]] Bool
+	Args  GIrMTypeRefs `json:"ca,omitempty"`
+	Ref   *GIrMTypeRef `json:"cr,omitempty"`
+}
+
+func (me *GIrMTypeRefConstr) Eq(cmp *GIrMTypeRefConstr) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Data == cmp.Data && me.Ref.Eq(cmp.Ref) && me.Args.Eq(cmp.Args))
+}
+
+type GIrMTypeRefExist struct {
+	Name        string       `json:"en,omitempty"`
+	Ref         *GIrMTypeRef `json:"er,omitempty"`
+	SkolemScope *int         `json:"es,omitempty"`
+}
+
+func (me *GIrMTypeRefExist) Eq(cmp *GIrMTypeRefExist) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Ref.Eq(cmp.Ref) && me.SkolemScope == cmp.SkolemScope)
+}
+
+type GIrMTypeRefSkolem struct {
+	Name  string `json:"sn,omitempty"`
+	Value int    `json:"sv,omitempty"`
+	Scope int    `json:"ss,omitempty"`
+}
+
+func (me *GIrMTypeRefSkolem) Eq(cmp *GIrMTypeRefSkolem) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
+}
+
 func newModImp(impmod *ModuleInfo) *GIrMPkgRef {
 	return &GIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
 }
@@ -155,7 +262,7 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 							for _, ctorarg := range ctorarr[1].([]interface{}) {
 								ctor.Args = append(ctor.Args, me.newTypeRefFromExtTc(newTaggedContents(ctorarg.(map[string]interface{}))))
 							}
-							datadecl.Ctors = append(datadecl.Ctors, ctor)
+							datadecl.Ctors = append(datadecl.Ctors, &ctor)
 						}
 					}
 					me.ExtTypeDataDecls = append(me.ExtTypeDataDecls, datadecl)

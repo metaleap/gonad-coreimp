@@ -50,9 +50,12 @@ type GIrANamedTypeRef struct {
 	EnumConstNames []string          `json:",omitempty"`
 	Methods        GIrANamedTypeRefs `json:",omitempty"`
 	Export         bool              `json:",omitempty"`
+	WasTypeFunc    bool              `json:",omitempty"`
 
-	mCtor bool
-	mBody GIrABlock `json:",omitempty"`
+	mCtor   bool
+	mNoThis bool
+	mBody   GIrABlock
+	ctor    *GIrMTypeDataCtor
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
@@ -61,7 +64,7 @@ func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
 
 func (me *GIrANamedTypeRef) setBothNamesFromPsName(psname string) {
 	me.NamePs = psname
-	me.NameGo = sanitizeSymbolForGo(psname, me.Export)
+	me.NameGo = sanitizeSymbolForGo(psname, me.Export || me.WasTypeFunc)
 }
 
 func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
@@ -221,8 +224,8 @@ type GIrAComments struct {
 }
 
 type GIrAOp1 struct {
-	Op1   string `json:",omitempty"`
-	Right GIrA   `json:",omitempty"`
+	Op1 string `json:",omitempty"`
+	Of  GIrA   `json:",omitempty"`
 }
 
 type GIrAOp2 struct {
@@ -232,8 +235,8 @@ type GIrAOp2 struct {
 }
 
 type GIrASet struct {
-	Left  GIrA `json:",omitempty"`
-	Right GIrA `json:",omitempty"`
+	SetLeft GIrA `json:",omitempty"`
+	ToRight GIrA `json:",omitempty"`
 }
 
 type GIrAFor struct {
@@ -256,11 +259,12 @@ type GIrACall struct {
 }
 
 type GIrALitObj struct {
-	ObjPairs []GIrAVar `json:",omitempty"`
+	GIrANamedTypeRef `json:",omitempty"`
+	ObjPairs         []GIrAVar `json:",omitempty"`
 }
 
 type GIrANil struct {
-	Nil struct{} `json:",omitempty"`
+	Nil interface{}
 }
 
 type GIrARet struct {
@@ -316,8 +320,8 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 			enumtypename := toGIrAEnumTypeName(gtd.NamePs)
 			codeEmitTypeAlias(buf, enumtypename, "int")
 			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
-			codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 		}
+		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
@@ -381,11 +385,11 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 	return
 }
 
-func sanitizeSymbolForGo(name string, forexport bool) string {
+func sanitizeSymbolForGo(name string, upper bool) string {
 	if len(name) == 0 {
 		return name
 	}
-	if forexport {
+	if upper {
 		name = strings.ToUpper(name[:1]) + name[1:]
 	} else {
 		if unicode.IsUpper([]rune(name[:1])[0]) {
@@ -411,7 +415,7 @@ func ªEq(left GIrA, right GIrA) GIrAOp2 {
 }
 
 func ªO1(op string, operand GIrA) GIrAOp1 {
-	return GIrAOp1{Op1: op, Right: operand}
+	return GIrAOp1{Op1: op, Of: operand}
 }
 
 func ªO2(left GIrA, op string, right GIrA) GIrAOp2 {
@@ -422,12 +426,16 @@ func ªRet(retarg GIrA) GIrARet {
 	return GIrARet{RetArg: retarg}
 }
 
+func ªB(literal bool) GIrALitBool {
+	return GIrALitBool{LitBool: literal}
+}
+
 func ªS(literal string) GIrALitStr {
 	return GIrALitStr{LitStr: literal}
 }
 
 func ªSet(left string, right GIrA) GIrASet {
-	return GIrASet{Left: ªV(left), Right: right}
+	return GIrASet{SetLeft: ªV(left), ToRight: right}
 }
 
 func ªV(name string) GIrAVar {

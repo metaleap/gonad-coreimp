@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"unicode"
 )
 
 type CoreImp struct {
@@ -12,6 +13,7 @@ type CoreImp struct {
 	Body      CoreImpAsts `json:"body,omitempty"`
 
 	namedRequires map[string]string
+	mod           *ModuleInfo
 }
 
 type CoreImpAsts []*CoreImpAst
@@ -56,6 +58,7 @@ type CoreImpAst struct {
 	InstanceOf             *CoreImpAst              `json:",omitempty"`
 
 	parent *CoreImpAst
+	root   *CoreImp
 }
 
 func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
@@ -67,74 +70,77 @@ func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
 	}
 }
 
-func (cia *CoreImpAst) ciAstToGIrAst() (a GIrA) {
-	// istopleveldecl := cia.parent == nil
-	switch cia.AstTag {
+func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
+	istopleveldecl := me.parent == nil
+	switch me.AstTag {
 	case "StringLiteral":
-		a = GIrALitStr{LitStr: cia.StringLiteral}
+		a = GIrALitStr{LitStr: me.StringLiteral}
 	case "BooleanLiteral":
-		a = GIrALitBool{LitBool: cia.BooleanLiteral}
+		a = GIrALitBool{LitBool: me.BooleanLiteral}
 	case "NumericLiteral_Double":
-		a = GIrALitDouble{LitDouble: cia.NumericLiteral_Double}
+		a = GIrALitDouble{LitDouble: me.NumericLiteral_Double}
 	case "NumericLiteral_Integer":
-		a = GIrALitInt{LitInt: cia.NumericLiteral_Integer}
+		a = GIrALitInt{LitInt: me.NumericLiteral_Integer}
 	case "Var":
 		v := GIrAVar{}
-		v.setBothNamesFromPsName(cia.Var)
+		v.setBothNamesFromPsName(me.Var)
 		a = v
 	case "Block":
 		b := GIrABlock{}
-		for _, c := range cia.Block {
+		for _, c := range me.Block {
 			b.Body = append(b.Body, c.ciAstToGIrAst())
 		}
 		a = b
 	case "While":
 		f := GIrAFor{}
-		f.ForCond = cia.While.ciAstToGIrAst()
-		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		f.ForCond = me.While.ciAstToGIrAst()
+		me.AstBody.astForceIntoBlock(&f.GIrABlock)
 		a = f
 	case "ForIn":
 		f := GIrAFor{}
 		f.ForRange = GIrAVar{}
-		f.ForRange.setBothNamesFromPsName(cia.ForIn)
-		f.ForRange.VarVal = cia.AstFor1.ciAstToGIrAst()
-		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		f.ForRange.setBothNamesFromPsName(me.ForIn)
+		f.ForRange.VarVal = me.AstFor1.ciAstToGIrAst()
+		me.AstBody.astForceIntoBlock(&f.GIrABlock)
 		a = f
 	case "For":
 		f, fv := GIrAFor{}, GIrAVar{}
-		fv.setBothNamesFromPsName(cia.For)
+		fv.setBothNamesFromPsName(me.For)
 		f.ForInit = []GIrASet{{
-			Left: fv, Right: cia.AstFor1.ciAstToGIrAst()}}
-		f.ForCond = GIrAOp2{Left: fv, Op2: "<", Right: cia.AstFor2.ciAstToGIrAst()}
-		f.ForStep = []GIrASet{{Left: fv, Right: GIrAOp2{Left: fv, Op2: "+", Right: GIrALitInt{LitInt: 1}}}}
-		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+			SetLeft: fv, ToRight: me.AstFor1.ciAstToGIrAst()}}
+		f.ForCond = GIrAOp2{Left: fv, Op2: "<", Right: me.AstFor2.ciAstToGIrAst()}
+		f.ForStep = []GIrASet{{SetLeft: fv, ToRight: GIrAOp2{Left: fv, Op2: "+", Right: GIrALitInt{LitInt: 1}}}}
+		me.AstBody.astForceIntoBlock(&f.GIrABlock)
 		a = f
 	case "IfElse":
-		i := GIrAIf{If: cia.IfElse.ciAstToGIrAst()}
-		cia.AstThen.astForceIntoBlock(&i.Then)
-		if cia.AstElse != nil {
-			cia.AstElse.astForceIntoBlock(&i.Else)
+		i := GIrAIf{If: me.IfElse.ciAstToGIrAst()}
+		me.AstThen.astForceIntoBlock(&i.Then)
+		if me.AstElse != nil {
+			me.AstElse.astForceIntoBlock(&i.Else)
 		}
 		a = i
 	case "App":
-		c := GIrACall{Callee: cia.App.ciAstToGIrAst()}
-		for _, arg := range cia.AstApplArgs {
+		c := GIrACall{Callee: me.App.ciAstToGIrAst()}
+		for _, arg := range me.AstApplArgs {
 			c.CallArgs = append(c.CallArgs, arg.ciAstToGIrAst())
 		}
 		a = c
 	case "Function":
 		f := GIrAFunc{}
-		f.setBothNamesFromPsName(cia.Function)
+		if len(me.Function) > 0 && unicode.IsUpper([]rune(me.Function[:1])[0]) {
+			f.WasTypeFunc = true
+		}
+		f.setBothNamesFromPsName(me.Function)
 		f.RefFunc = &GIrATypeRefFunc{}
-		for _, fpn := range cia.AstFuncParams {
+		for _, fpn := range me.AstFuncParams {
 			arg := &GIrANamedTypeRef{}
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
-		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		me.AstBody.astForceIntoBlock(&f.GIrABlock)
 		a = f
 	case "Unary":
-		o := GIrAOp1{Op1: cia.AstOp, Right: cia.Unary.ciAstToGIrAst()}
+		o := GIrAOp1{Op1: me.AstOp, Of: me.Unary.ciAstToGIrAst()}
 		switch o.Op1 {
 		case "Negate":
 			o.Op1 = "-"
@@ -152,7 +158,7 @@ func (cia *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = o
 	case "Binary":
-		o := GIrAOp2{Op2: cia.AstOp, Left: cia.Binary.ciAstToGIrAst(), Right: cia.AstRight.ciAstToGIrAst()}
+		o := GIrAOp2{Op2: me.AstOp, Left: me.Binary.ciAstToGIrAst(), Right: me.AstRight.ciAstToGIrAst()}
 		switch o.Op2 {
 		case "Add":
 			o.Op2 = "+"
@@ -199,25 +205,32 @@ func (cia *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = o
 	case "VariableIntroduction":
 		c := GIrAVar{}
-		c.setBothNamesFromPsName(cia.VariableIntroduction)
-		if cia.AstRight != nil {
-			c.VarVal = cia.AstRight.ciAstToGIrAst()
+
+		if istopleveldecl {
+			if gvd := me.root.mod.girMeta.GoValDefByPsName(me.VariableIntroduction); gvd != nil {
+				c.Export = true
+			}
+		}
+
+		c.setBothNamesFromPsName(me.VariableIntroduction)
+		if me.AstRight != nil {
+			c.VarVal = me.AstRight.ciAstToGIrAst()
 		}
 		a = c
 	case "Comment":
 		c := GIrAComments{}
-		for _, comment := range cia.Comment {
+		for _, comment := range me.Comment {
 			if comment != nil {
 				c.Comments = append(c.Comments, *comment)
 			}
 		}
-		if cia.AstCommentDecl != nil {
-			c.CommentsDecl = cia.AstCommentDecl.ciAstToGIrAst()
+		if me.AstCommentDecl != nil {
+			c.CommentsDecl = me.AstCommentDecl.ciAstToGIrAst()
 		}
 		a = c
 	case "ObjectLiteral":
 		o := GIrALitObj{}
-		for _, namevaluepair := range cia.ObjectLiteral {
+		for _, namevaluepair := range me.ObjectLiteral {
 			for onekey, oneval := range namevaluepair {
 				v := GIrAVar{VarVal: oneval.ciAstToGIrAst()}
 				v.setBothNamesFromPsName(onekey)
@@ -230,30 +243,30 @@ func (cia *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		r := GIrARet{}
 		a = r
 	case "Return":
-		r := GIrARet{RetArg: cia.Return.ciAstToGIrAst()}
+		r := GIrARet{RetArg: me.Return.ciAstToGIrAst()}
 		a = r
 	case "Throw":
-		r := GIrAPanic{PanicArg: cia.Throw.ciAstToGIrAst()}
+		r := GIrAPanic{PanicArg: me.Throw.ciAstToGIrAst()}
 		a = r
 	case "ArrayLiteral":
 		l := GIrALitArr{}
-		for _, v := range cia.ArrayLiteral {
+		for _, v := range me.ArrayLiteral {
 			l.ArrVals = append(l.ArrVals, v.ciAstToGIrAst())
 		}
 		a = l
 	case "Assignment":
-		o := GIrASet{Left: cia.Assignment.ciAstToGIrAst(), Right: cia.AstRight.ciAstToGIrAst()}
+		o := GIrASet{SetLeft: me.Assignment.ciAstToGIrAst(), ToRight: me.AstRight.ciAstToGIrAst()}
 		a = o
 	case "Indexer":
-		if cia.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			a = GIrADot{DotLeft: cia.Indexer.ciAstToGIrAst(), DotRight: cia.AstRight.ciAstToGIrAst()}
+		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
+			a = GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: me.AstRight.ciAstToGIrAst()}
 		} else {
-			a = GIrAIndex{IdxLeft: cia.Indexer.ciAstToGIrAst(), IdxRight: cia.AstRight.ciAstToGIrAst()}
+			a = GIrAIndex{IdxLeft: me.Indexer.ciAstToGIrAst(), IdxRight: me.AstRight.ciAstToGIrAst()}
 		}
 	case "InstanceOf":
-		a = GIrAIsType{ExprToTest: cia.InstanceOf.ciAstToGIrAst(), TypeToTest: cia.AstRight.ciAstToGIrAst()}
+		a = GIrAIsType{ExprToTest: me.InstanceOf.ciAstToGIrAst(), TypeToTest: me.AstRight.ciAstToGIrAst()}
 	default:
-		panic(fmt.Errorf("Just below %s: unrecognized CoreImp AST-tag, please report: %s", cia.parent, cia.AstTag))
+		panic(fmt.Errorf("Just below %v: unrecognized CoreImp AST-tag, please report: %s", me.parent, me.AstTag))
 	}
 	return
 }
@@ -312,8 +325,12 @@ func (me *CoreImp) preProcessTopLevel() error {
 }
 
 func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
+	if parent != nil {
+		parent.root = me
+	}
 	for _, a := range asts {
 		if a != nil {
+			a.root = me
 			a.parent = parent
 			me.setParents(a, a.App)
 			me.setParents(a, a.ArrayLiteral...)
