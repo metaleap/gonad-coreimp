@@ -162,18 +162,204 @@ func (me *GIrATypeRefStruct) Eq(cmp *GIrATypeRefStruct) bool {
 }
 
 type GonadIrAst struct {
+	GIrABlock `json:",omitempty"`
+
 	mod  *ModuleInfo
 	proj *BowerProject
 	girM *GonadIrMeta
 }
 
+type GIrA interface{}
+
+type GIrAConst struct {
+	GIrANamedTypeRef `json:",omitempty"`
+	Literal          GIrA `json:",omitempty"`
+}
+
+type GIrAVar struct {
+	GIrANamedTypeRef `json:",omitempty"`
+	Initial          GIrA `json:",omitempty"`
+}
+
+type GIrAFunc struct {
+	GIrANamedTypeRef `json:",omitempty"`
+	Params           []string `json:",omitempty"`
+	GIrABlock        `json:",omitempty"`
+}
+
+type GIrALitStr string
+
+type GIrALitBool bool
+
+type GIrALitDouble float64
+
+type GIrALitInt int
+
+type GIrABlock struct {
+	Body []GIrA `json:",omitempty"`
+}
+
+type GIrAComments struct {
+	All  []CoreImpComment `json:",omitempty"`
+	Decl GIrA             `json:",omitempty"`
+}
+
+type GIrAOp1 struct {
+	Op    string `json:",omitempty"`
+	Right GIrA   `json:",omitempty"`
+}
+
+type GIrAOp2 struct {
+	Left  GIrA   `json:",omitempty"`
+	Op    string `json:",omitempty"`
+	Right GIrA   `json:",omitempty"`
+}
+
+type GIrAFor struct {
+	GIrABlock `json:",omitempty"`
+	Cond      GIrA      `json:",omitempty"`
+	OnInit    []GIrAOp2 `json:",omitempty"`
+	OnStepped []GIrAOp2 `json:",omitempty"`
+	RangeVar  GIrAVar   `json:",omitempty"`
+	RangeOver GIrA      `json:",omitempty"`
+}
+
+type GIrAIf struct {
+	Cond GIrA      `json:",omitempty"`
+	Then GIrABlock `json:",omitempty"`
+	Else GIrABlock `json:",omitempty"`
+}
+
+type GIrACall struct {
+	Func GIrA   `json:",omitempty"`
+	Args []GIrA `json:",omitempty"`
+}
+
+type GIrAObjLit struct {
+	Pairs []GIrAVar `json:",omitempty"`
+}
+
+func (me *GonadIrAst) astForceIntoBlock(cia *CoreImpAst, into *GIrABlock) {
+	switch body := me.astFromCoreImp(cia).(type) {
+	case GIrABlock:
+		*into = body
+	default:
+		into.Body = append(into.Body, body)
+	}
+
+}
+
+func (me *GonadIrAst) astFromCoreImp(cia *CoreImpAst) (a GIrA) {
+	switch cia.AstTag {
+	case "StringLiteral":
+		a = GIrALitStr(cia.StringLiteral)
+	case "BooleanLiteral":
+		a = GIrALitBool(cia.BooleanLiteral)
+	case "NumericLiteral_Double":
+		a = GIrALitDouble(cia.NumericLiteral_Double)
+	case "NumericLiteral_Integer":
+		a = GIrALitInt(cia.NumericLiteral_Integer)
+	case "Var":
+		v := GIrAVar{}
+		v.NamePs = cia.Var
+		a = v
+	case "Block":
+		b := GIrABlock{}
+		for _, c := range cia.Block {
+			b.Body = append(b.Body, me.astFromCoreImp(c))
+		}
+		a = b
+	case "While":
+		f := GIrAFor{}
+		f.Cond = me.astFromCoreImp(cia.While)
+		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
+		a = f
+	case "ForIn":
+		f := GIrAFor{}
+		f.RangeVar = GIrAVar{}
+		f.RangeVar.NamePs = cia.ForIn
+		f.RangeOver = me.astFromCoreImp(cia.AstFor1)
+		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
+		a = f
+	case "For":
+		f, v := GIrAFor{}, GIrAVar{}
+		v.NamePs, f.OnInit = cia.For, []GIrAOp2{{
+			Left: v, Op: "=", Right: me.astFromCoreImp(cia.AstFor1)}}
+		f.Cond = GIrAOp2{Left: v, Op: "<", Right: me.astFromCoreImp(cia.AstFor2)}
+		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
+		a = f
+	case "IfElse":
+		i := GIrAIf{Cond: me.astFromCoreImp(cia.IfElse)}
+		me.astForceIntoBlock(cia.AstThen, &i.Then)
+		if cia.AstElse != nil {
+			me.astForceIntoBlock(cia.AstElse, &i.Else)
+		}
+		a = i
+	case "App":
+		c := GIrACall{Func: me.astFromCoreImp(cia.App)}
+		for _, arg := range cia.AstApplArgs {
+			c.Args = append(c.Args, me.astFromCoreImp(arg))
+		}
+		a = c
+	case "Function":
+		f := GIrAFunc{Params: cia.AstFuncParams}
+		f.NamePs = cia.Function
+		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
+		a = f
+	case "Unary":
+		o := GIrAOp1{Op: cia.AstOp, Right: me.astFromCoreImp(cia.Unary)}
+		a = o
+	case "Binary":
+		o := GIrAOp2{Op: cia.AstOp, Left: me.astFromCoreImp(cia.Binary), Right: me.astFromCoreImp(cia.AstRight)}
+		a = o
+	case "VariableIntroduction":
+		c := GIrAVar{}
+		c.NamePs = cia.VariableIntroduction
+		if cia.AstRight != nil {
+			c.Initial = me.astFromCoreImp(cia.AstRight)
+		}
+		a = c
+	case "Comment":
+		c := GIrAComments{}
+		for _, comment := range cia.Comment {
+			if comment != nil {
+				c.All = append(c.All, *comment)
+			}
+		}
+		if cia.AstCommentDecl != nil {
+			c.Decl = me.astFromCoreImp(cia.AstCommentDecl)
+		}
+		a = c
+	case "ObjectLiteral":
+		o := GIrAObjLit{}
+		for _, namevaluepair := range cia.ObjectLiteral {
+			for onekey, oneval := range namevaluepair {
+				v := GIrAVar{}
+				v.NamePs, v.Initial = onekey, me.astFromCoreImp(oneval)
+				o.Pairs = append(o.Pairs, v)
+				break
+			}
+		}
+		a = o
+	case "ReturnNoResult":
+	case "Return":
+	case "Throw":
+	case "ArrayLiteral":
+	case "Assignment":
+	case "Accessor":
+	case "Indexer":
+	case "InstanceOf":
+	default:
+		panic(fmt.Errorf("%s: unrecognized CoreImp AST-tag, please report: %s", me.mod.srcFilePath, cia.AstTag))
+	}
+	return
+}
+
 func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
-	// ci := me.mod.coreimp
-	// for _, cia := range ci.Body {
-	// 	if cia.IsVariableIntroduction() {
-	// 		cia.goval = me.girM.GoValDefByPsName(cia.VariableIntroduction)
-	// 	}
-	// }
+	ci := me.mod.coreimp
+	for _, cia := range ci.Body {
+		me.Body = append(me.Body, me.astFromCoreImp(cia))
+	}
 
 	if err == nil {
 	}
