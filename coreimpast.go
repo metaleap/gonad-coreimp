@@ -44,7 +44,7 @@ type CoreImpAst struct {
 	Function               string                   `json:",omitempty"`
 	StringLiteral          string                   `json:",omitempty"`
 	BooleanLiteral         bool                     `json:",omitempty"`
-	NumericLiteral_Integer int64                    `json:",omitempty"`
+	NumericLiteral_Integer int                      `json:",omitempty"`
 	NumericLiteral_Double  float64                  `json:",omitempty"`
 	Block                  CoreImpAsts              `json:",omitempty"`
 	Var                    string                   `json:",omitempty"`
@@ -95,8 +95,8 @@ func (me *CoreImpAst) IsAccessor() bool               { return me.AstTag == "Acc
 func (me *CoreImpAst) IsInstanceOf() bool             { return me.AstTag == "InstanceOf" }
 
 type CoreImpComment struct {
-	LineComment  string
-	BlockComment string
+	LineComment  string `json:",omitempty"`
+	BlockComment string `json:",omitempty"`
 }
 
 type CoreImpSourceSpan struct {
