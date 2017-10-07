@@ -16,17 +16,6 @@ type CoreImp struct {
 
 type CoreImpAsts []*CoreImpAst
 
-func (me *CoreImpAsts) Add(asts ...*CoreImpAst) {
-	(*me) = append(*me, asts...)
-}
-
-func (me CoreImpAsts) Last() *CoreImpAst {
-	if l := len(me); l > 0 {
-		return me[l-1]
-	}
-	return nil
-}
-
 type CoreImpAst struct {
 	AstSourceSpan  *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
 	AstTag         string             `json:"tag,omitempty"`
@@ -69,30 +58,205 @@ type CoreImpAst struct {
 	parent *CoreImpAst
 }
 
-func (me *CoreImpAst) IsFunction() bool               { return me.AstTag == "Function" }
-func (me *CoreImpAst) IsStringLiteral() bool          { return me.AstTag == "StringLiteral" }
-func (me *CoreImpAst) IsBooleanLiteral() bool         { return me.AstTag == "BooleanLiteral" }
-func (me *CoreImpAst) IsNumericLiteral_Integer() bool { return me.AstTag == "NumericLiteral_Integer" }
-func (me *CoreImpAst) IsNumericLiteral_Double() bool  { return me.AstTag == "NumericLiteral_Double" }
-func (me *CoreImpAst) IsBlock() bool                  { return me.AstTag == "Block" }
-func (me *CoreImpAst) IsVar() bool                    { return me.AstTag == "Var" }
-func (me *CoreImpAst) IsVariableIntroduction() bool   { return me.AstTag == "VariableIntroduction" }
-func (me *CoreImpAst) IsWhile() bool                  { return me.AstTag == "While" }
-func (me *CoreImpAst) IsApp() bool                    { return me.AstTag == "App" }
-func (me *CoreImpAst) IsUnary() bool                  { return me.AstTag == "Unary" }
-func (me *CoreImpAst) IsComment() bool                { return me.AstTag == "Comment" }
-func (me *CoreImpAst) IsBinary() bool                 { return me.AstTag == "Binary" }
-func (me *CoreImpAst) IsForIn() bool                  { return me.AstTag == "ForIn" }
-func (me *CoreImpAst) IsFor() bool                    { return me.AstTag == "For" }
-func (me *CoreImpAst) IsIfElse() bool                 { return me.AstTag == "IfElse" }
-func (me *CoreImpAst) IsObjectLiteral() bool          { return me.AstTag == "ObjectLiteral" }
-func (me *CoreImpAst) IsReturn() bool                 { return me.AstTag == "Return" }
-func (me *CoreImpAst) IsThrow() bool                  { return me.AstTag == "Throw" }
-func (me *CoreImpAst) IsArrayLiteral() bool           { return me.AstTag == "ArrayLiteral" }
-func (me *CoreImpAst) IsAssignment() bool             { return me.AstTag == "Assignment" }
-func (me *CoreImpAst) IsIndexer() bool                { return me.AstTag == "Indexer" }
-func (me *CoreImpAst) IsAccessor() bool               { return me.AstTag == "Accessor" }
-func (me *CoreImpAst) IsInstanceOf() bool             { return me.AstTag == "InstanceOf" }
+func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
+	switch body := me.ciAstToGIrAst().(type) {
+	case GIrABlock:
+		*into = body
+	default:
+		into.Body = append(into.Body, body)
+	}
+}
+
+func (cia *CoreImpAst) ciAstToGIrAst() (a GIrA) {
+	// istopleveldecl := cia.parent == nil
+	switch cia.AstTag {
+	case "StringLiteral":
+		a = GIrALitStr{LitStr: cia.StringLiteral}
+	case "BooleanLiteral":
+		a = GIrALitBool{LitBool: cia.BooleanLiteral}
+	case "NumericLiteral_Double":
+		a = GIrALitDouble{LitDouble: cia.NumericLiteral_Double}
+	case "NumericLiteral_Integer":
+		a = GIrALitInt{LitInt: cia.NumericLiteral_Integer}
+	case "Var":
+		v := GIrAVar{}
+		v.setBothNamesFromPsName(cia.Var)
+		a = v
+	case "Block":
+		b := GIrABlock{}
+		for _, c := range cia.Block {
+			b.Body = append(b.Body, c.ciAstToGIrAst())
+		}
+		a = b
+	case "While":
+		f := GIrAFor{}
+		f.ForCond = cia.While.ciAstToGIrAst()
+		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		a = f
+	case "ForIn":
+		f := GIrAFor{}
+		f.ForRange = GIrAVar{}
+		f.ForRange.setBothNamesFromPsName(cia.ForIn)
+		f.ForRange.VarVal = cia.AstFor1.ciAstToGIrAst()
+		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		a = f
+	case "For":
+		f, fv := GIrAFor{}, GIrAVar{}
+		fv.setBothNamesFromPsName(cia.For)
+		f.ForInit = []GIrASet{{
+			Left: fv, Right: cia.AstFor1.ciAstToGIrAst()}}
+		f.ForCond = GIrAOp2{Left: fv, Op2: "<", Right: cia.AstFor2.ciAstToGIrAst()}
+		f.ForStep = []GIrASet{{Left: fv, Right: GIrAOp2{Left: fv, Op2: "+", Right: GIrALitInt{LitInt: 1}}}}
+		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		a = f
+	case "IfElse":
+		i := GIrAIf{If: cia.IfElse.ciAstToGIrAst()}
+		cia.AstThen.astForceIntoBlock(&i.Then)
+		if cia.AstElse != nil {
+			cia.AstElse.astForceIntoBlock(&i.Else)
+		}
+		a = i
+	case "App":
+		c := GIrACall{Callee: cia.App.ciAstToGIrAst()}
+		for _, arg := range cia.AstApplArgs {
+			c.CallArgs = append(c.CallArgs, arg.ciAstToGIrAst())
+		}
+		a = c
+	case "Function":
+		f := GIrAFunc{}
+		f.setBothNamesFromPsName(cia.Function)
+		f.RefFunc = &GIrATypeRefFunc{}
+		for _, fpn := range cia.AstFuncParams {
+			arg := &GIrANamedTypeRef{}
+			arg.setBothNamesFromPsName(fpn)
+			f.RefFunc.Args = append(f.RefFunc.Args, arg)
+		}
+		cia.AstBody.astForceIntoBlock(&f.GIrABlock)
+		a = f
+	case "Unary":
+		o := GIrAOp1{Op1: cia.AstOp, Right: cia.Unary.ciAstToGIrAst()}
+		switch o.Op1 {
+		case "Negate":
+			o.Op1 = "-"
+		case "Not":
+			o.Op1 = "!"
+		case "Positive":
+			o.Op1 = "+"
+		case "BitwiseNot":
+			o.Op1 = "^"
+		default:
+			if o.Op1 != "New" {
+				panic("unrecognized unary op '" + o.Op1 + "', please report!")
+			}
+			o.Op1 = "?" + o.Op1 + "?"
+		}
+		a = o
+	case "Binary":
+		o := GIrAOp2{Op2: cia.AstOp, Left: cia.Binary.ciAstToGIrAst(), Right: cia.AstRight.ciAstToGIrAst()}
+		switch o.Op2 {
+		case "Add":
+			o.Op2 = "+"
+		case "Subtract":
+			o.Op2 = "-"
+		case "Multiply":
+			o.Op2 = "*"
+		case "Divide":
+			o.Op2 = "/"
+		case "Modulus":
+			o.Op2 = "%"
+		case "EqualTo":
+			o.Op2 = "=="
+		case "NotEqualTo":
+			o.Op2 = "!="
+		case "LessThan":
+			o.Op2 = "<"
+		case "LessThanOrEqualTo":
+			o.Op2 = "<="
+		case "GreaterThan":
+			o.Op2 = ">"
+		case "GreaterThanOrEqualTo":
+			o.Op2 = ">="
+		case "And":
+			o.Op2 = "&&"
+		case "Or":
+			o.Op2 = "||"
+		case "BitwiseAnd":
+			o.Op2 = "&"
+		case "BitwiseOr":
+			o.Op2 = "|"
+		case "BitwiseXor":
+			o.Op2 = "^"
+		case "ShiftLeft":
+			o.Op2 = "<<"
+		case "ShiftRight":
+			o.Op2 = ">>"
+		case "ZeroFillShiftRight":
+			o.Op2 = "&^"
+		default:
+			o.Op2 = "?" + o.Op2 + "?"
+			panic("unrecognized binary op '" + o.Op2 + "', please report!")
+		}
+		a = o
+	case "VariableIntroduction":
+		c := GIrAVar{}
+		c.setBothNamesFromPsName(cia.VariableIntroduction)
+		if cia.AstRight != nil {
+			c.VarVal = cia.AstRight.ciAstToGIrAst()
+		}
+		a = c
+	case "Comment":
+		c := GIrAComments{}
+		for _, comment := range cia.Comment {
+			if comment != nil {
+				c.Comments = append(c.Comments, *comment)
+			}
+		}
+		if cia.AstCommentDecl != nil {
+			c.CommentsDecl = cia.AstCommentDecl.ciAstToGIrAst()
+		}
+		a = c
+	case "ObjectLiteral":
+		o := GIrALitObj{}
+		for _, namevaluepair := range cia.ObjectLiteral {
+			for onekey, oneval := range namevaluepair {
+				v := GIrAVar{VarVal: oneval.ciAstToGIrAst()}
+				v.setBothNamesFromPsName(onekey)
+				o.ObjPairs = append(o.ObjPairs, v)
+				break
+			}
+		}
+		a = o
+	case "ReturnNoResult":
+		r := GIrARet{}
+		a = r
+	case "Return":
+		r := GIrARet{RetArg: cia.Return.ciAstToGIrAst()}
+		a = r
+	case "Throw":
+		r := GIrAPanic{PanicArg: cia.Throw.ciAstToGIrAst()}
+		a = r
+	case "ArrayLiteral":
+		l := GIrALitArr{}
+		for _, v := range cia.ArrayLiteral {
+			l.ArrVals = append(l.ArrVals, v.ciAstToGIrAst())
+		}
+		a = l
+	case "Assignment":
+		o := GIrASet{Left: cia.Assignment.ciAstToGIrAst(), Right: cia.AstRight.ciAstToGIrAst()}
+		a = o
+	case "Indexer":
+		if cia.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
+			a = GIrADot{DotLeft: cia.Indexer.ciAstToGIrAst(), DotRight: cia.AstRight.ciAstToGIrAst()}
+		} else {
+			a = GIrAIndex{IdxLeft: cia.Indexer.ciAstToGIrAst(), IdxRight: cia.AstRight.ciAstToGIrAst()}
+		}
+	case "InstanceOf":
+		a = GIrAIsType{ExprToTest: cia.InstanceOf.ciAstToGIrAst(), TypeToTest: cia.AstRight.ciAstToGIrAst()}
+	default:
+		panic(fmt.Errorf("Just below %s: unrecognized CoreImp AST-tag, please report: %s", cia.parent, cia.AstTag))
+	}
+	return
+}
 
 type CoreImpComment struct {
 	LineComment  string `json:",omitempty"`
@@ -121,7 +285,7 @@ func (me *CoreImp) preProcessTopLevel() error {
 		} else if a.Assignment != nil && a.Assignment.Indexer != nil && a.Assignment.Indexer.Var == "module" && a.Assignment.AstRight != nil && a.Assignment.AstRight.StringLiteral == "exports" {
 			//	module.exports = ..
 			ditch()
-		} else if a.IsComment() {
+		} else if a.AstTag == "Comment" {
 			if a.AstCommentDecl != nil {
 				decl := a.AstCommentDecl
 				a.AstCommentDecl = nil
@@ -129,7 +293,7 @@ func (me *CoreImp) preProcessTopLevel() error {
 				everythingelse := me.Body[i+1:]
 				me.Body = append(putdeclnexttocomment, everythingelse...)
 			}
-		} else if a.IsVariableIntroduction() {
+		} else if a.AstTag == "VariableIntroduction" {
 			if a.AstRight != nil && a.AstRight.App != nil && a.AstRight.App.Var == "require" && len(a.AstRight.AstApplArgs) == 1 {
 				// println("Dropped top-level require()" )
 				me.namedRequires[a.VariableIntroduction] = a.AstRight.AstApplArgs[0].StringLiteral
@@ -179,39 +343,4 @@ func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
 			}
 		}
 	}
-}
-
-func ſDot(left *CoreImpAst, right string) *CoreImpAst {
-	return &CoreImpAst{AstTag: "Accessor", Accessor: left, AstRight: ſV(right)}
-}
-
-func ſEq(left *CoreImpAst, right *CoreImpAst) *CoreImpAst {
-	return ſO2(left, "==", right)
-}
-
-func ſO1(op string, operand *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{AstOp: op, AstTag: "Unary", Unary: operand}
-}
-
-func ſO2(left *CoreImpAst, op string, right *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{AstOp: op, AstTag: "Binary", Binary: left, AstRight: right}
-}
-
-func ſRet(expr *CoreImpAst) *CoreImpAst {
-	if expr == nil {
-		return &CoreImpAst{AstTag: "ReturnNoResult"}
-	}
-	return &CoreImpAst{AstTag: "Return", Return: expr}
-}
-
-func ſS(literal string) *CoreImpAst {
-	return &CoreImpAst{AstTag: "StringLiteral", StringLiteral: literal}
-}
-
-func ſSet(left string, right *CoreImpAst) *CoreImpAst {
-	return &CoreImpAst{AstTag: "Assignment", Assignment: ſV(left), AstRight: right}
-}
-
-func ſV(name string) *CoreImpAst {
-	return &CoreImpAst{AstTag: "Var", Var: name}
 }

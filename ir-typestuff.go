@@ -158,7 +158,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 			}
 		}
 		for _, tcm := range tc.Members {
-			ifm := &GIrANamedTypeRef{NamePs: tcm.Name, NameGo: me.sanitizeSymbolForGo(tcm.Name, true)}
+			ifm := &GIrANamedTypeRef{NamePs: tcm.Name, NameGo: sanitizeSymbolForGo(tcm.Name, true)}
 			ifm.setRefFrom(me.toGIrATypeRef(mdict, tdict, tcm.Ref))
 			if ifm.RefFunc == nil {
 				if ifm.RefInterface != nil {
@@ -243,13 +243,13 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
 					}}
 					method_iskind.mBody.Add(
-						ſRet(ſEq(ſDot(ſV("this"), "tag"), ſV(toGIrAEnumConstName(gtd.NamePs, ctor.Name)))))
+						ªRet(ªEq(ªDot(ªV("this"), "tag"), ªV(toGIrAEnumConstName(gtd.NamePs, ctor.Name)))))
 					gtd.Methods = append(gtd.Methods, method_iskind)
 
 					method_new := &GIrANamedTypeRef{mCtor: true, NameGo: "New" + gtd.NameGo + "As" + ctor.Name, RefFunc: &GIrATypeRefFunc{
 						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{NameGo: "this", RefAlias: gtd.NameGo}},
 					}}
-					method_new.mBody.Add(ſSet("this.tag", ſV(toGIrAEnumConstName(gtd.NamePs, ctor.Name))))
+					method_new.mBody.Add(ªSet("this.tag", ªV(toGIrAEnumConstName(gtd.NamePs, ctor.Name))))
 
 					if numargs := len(ctor.Args); numargs > 0 {
 						method_ctor := &GIrANamedTypeRef{NameGo: ctor.Name, RefFunc: &GIrATypeRefFunc{}}
@@ -258,23 +258,23 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 								retarg := &GIrANamedTypeRef{NameGo: fmt.Sprintf("v%v", i)}
 								retarg.setRefFrom(ctorarg.tmp_assoc)
 								method_new.RefFunc.Args = append(method_new.RefFunc.Args, retarg)
-								method_new.mBody.Add(ſSet("this."+ctorarg.tmp_assoc.NameGo, ſV(retarg.NameGo)))
+								method_new.mBody.Add(ªSet("this."+ctorarg.tmp_assoc.NameGo, ªV(retarg.NameGo)))
 								method_ctor.RefFunc.Rets = append(method_ctor.RefFunc.Rets, retarg)
 								method_ctor.mBody.Add(
-									ſSet(retarg.NameGo, ſDot(ſV("this"), fmt.Sprintf("%v", ctorarg.tmp_assoc.NameGo))))
+									ªSet(retarg.NameGo, ªDot(ªV("this"), fmt.Sprintf("%v", ctorarg.tmp_assoc.NameGo))))
 								if numargs > 1 {
 									method_ctorarg := &GIrANamedTypeRef{NameGo: fmt.Sprintf("%s%d", ctor.Name, i),
 										RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{}}}}
 									method_ctorarg.RefFunc.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
-									method_ctorarg.mBody.Add(ſRet(ſDot(ſV("this"), ctorarg.tmp_assoc.NameGo)))
+									method_ctorarg.mBody.Add(ªRet(ªDot(ªV("this"), ctorarg.tmp_assoc.NameGo)))
 									gtd.Methods = append(gtd.Methods, method_ctorarg)
 								}
 							}
 						}
-						method_ctor.mBody.Add(ſRet(nil))
+						method_ctor.mBody.Add(ªRet(nil))
 						gtd.Methods = append(gtd.Methods, method_ctor)
 					}
-					method_new.mBody.Add(ſRet(nil))
+					method_new.mBody.Add(ªRet(nil))
 					gtd.Methods = append(gtd.Methods, method_new)
 				}
 			}
@@ -316,7 +316,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: GIrANamedTypeRefs{&GIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: me.sanitizeSymbolForGo(tr.RCons.Label, false)}}}
+		rectype := &GIrATypeRefStruct{PassByPtr: true, Fields: GIrANamedTypeRefs{&GIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: sanitizeSymbolForGo(tr.RCons.Label, false)}}}
 		rectype.Fields[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.RCons.Left))
 		if nextrow := me.toGIrATypeRef(mdict, tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*GIrATypeRefStruct).Fields...)

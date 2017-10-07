@@ -17,10 +17,10 @@ const (
 )
 
 var (
-	sanitizer = strings.NewReplacer("'", "ŧ", "$", "ł")
+	sanitizer = strings.NewReplacer("'", "ª", "$", "º")
 )
 
-type GIrANamedTypeRefs []*GIrANamedTyþeRef
+type GIrANamedTypeRefs []*GIrANamedTypeRef
 
 func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
 	if l := len(me); l != len(cmp) {
@@ -52,11 +52,16 @@ type GIrANamedTypeRef struct {
 	Export         bool              `json:",omitempty"`
 
 	mCtor bool
-	mBody CoreImpAsts
+	mBody GIrABlock `json:",omitempty"`
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray) && me.RefPtr.Eq(cmp.RefPtr))
+}
+
+func (me *GIrANamedTypeRef) setBothNamesFromPsName(psname string) {
+	me.NamePs = psname
+	me.NameGo = sanitizeSymbolForGo(psname, me.Export)
 }
 
 func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
@@ -182,9 +187,8 @@ type GIrAVar struct {
 }
 
 type GIrAFunc struct {
-	FuncSig        GIrANamedTypeRef `json:",omitempty"`
-	FuncParamNames []string         `json:",omitempty"`
-	GIrABlock      `json:",omitempty"`
+	GIrANamedTypeRef `json:",omitempty"`
+	GIrABlock        `json:",omitempty"`
 }
 
 type GIrALitStr struct {
@@ -207,6 +211,10 @@ type GIrABlock struct {
 	Body []GIrA `json:",omitempty"`
 }
 
+func (me *GIrABlock) Add(asts ...GIrA) {
+	me.Body = append(me.Body, asts...)
+}
+
 type GIrAComments struct {
 	Comments     []CoreImpComment `json:",omitempty"`
 	CommentsDecl GIrA             `json:",omitempty"`
@@ -223,11 +231,16 @@ type GIrAOp2 struct {
 	Right GIrA   `json:",omitempty"`
 }
 
+type GIrASet struct {
+	Left  GIrA `json:",omitempty"`
+	Right GIrA `json:",omitempty"`
+}
+
 type GIrAFor struct {
 	GIrABlock `json:",omitempty"`
 	ForCond   GIrA      `json:",omitempty"`
-	ForInit   []GIrAOp2 `json:",omitempty"`
-	ForStep   []GIrAOp2 `json:",omitempty"`
+	ForInit   []GIrASet `json:",omitempty"`
+	ForStep   []GIrASet `json:",omitempty"`
 	ForRange  GIrAVar   `json:",omitempty"`
 }
 
@@ -277,145 +290,10 @@ type GIrAIsType struct {
 	TypeToTest GIrA `json:",omitempty"`
 }
 
-func (me *GonadIrAst) astForceIntoBlock(cia *CoreImpAst, into *GIrABlock) {
-	switch body := me.astFromCoreImp(cia).(type) {
-	case GIrABlock:
-		*into = body
-	default:
-		into.Body = append(into.Body, body)
-	}
-
-}
-
-func (me *GonadIrAst) astFromCoreImp(cia *CoreImpAst) (a GIrA) {
-	switch cia.AstTag {
-	case "StringLiteral":
-		a = GIrALitStr{LitStr: cia.StringLiteral}
-	case "BooleanLiteral":
-		a = GIrALitBool{LitBool: cia.BooleanLiteral}
-	case "NumericLiteral_Double":
-		a = GIrALitDouble{LitDouble: cia.NumericLiteral_Double}
-	case "NumericLiteral_Integer":
-		a = GIrALitInt{LitInt: cia.NumericLiteral_Integer}
-	case "Var":
-		v := GIrAVar{}
-		v.NamePs = cia.Var
-		a = v
-	case "Block":
-		b := GIrABlock{}
-		for _, c := range cia.Block {
-			b.Body = append(b.Body, me.astFromCoreImp(c))
-		}
-		a = b
-	case "While":
-		f := GIrAFor{}
-		f.ForCond = me.astFromCoreImp(cia.While)
-		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
-		a = f
-	case "ForIn":
-		f := GIrAFor{}
-		f.ForRange = GIrAVar{}
-		f.ForRange.NamePs = cia.ForIn
-		f.ForRange.VarVal = me.astFromCoreImp(cia.AstFor1)
-		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
-		a = f
-	case "For":
-		f, v := GIrAFor{}, GIrAVar{}
-		v.NamePs, f.ForInit = cia.For, []GIrAOp2{{
-			Left: v, Op2: "=", Right: me.astFromCoreImp(cia.AstFor1)}}
-		f.ForCond = GIrAOp2{Left: v, Op2: "<", Right: me.astFromCoreImp(cia.AstFor2)}
-		f.ForStep = []GIrAOp2{GIrAOp2{Left: v, Op2: "=", Right: GIrAOp2{Left: v, Op2: "+", Right: GIrALitInt{LitInt: 1}}}}
-		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
-		a = f
-	case "IfElse":
-		i := GIrAIf{If: me.astFromCoreImp(cia.IfElse)}
-		me.astForceIntoBlock(cia.AstThen, &i.Then)
-		if cia.AstElse != nil {
-			me.astForceIntoBlock(cia.AstElse, &i.Else)
-		}
-		a = i
-	case "App":
-		c := GIrACall{Callee: me.astFromCoreImp(cia.App)}
-		for _, arg := range cia.AstApplArgs {
-			c.CallArgs = append(c.CallArgs, me.astFromCoreImp(arg))
-		}
-		a = c
-	case "Function":
-		f := GIrAFunc{FuncParamNames: cia.AstFuncParams}
-		f.FuncSig.NamePs = cia.Function
-		me.astForceIntoBlock(cia.AstBody, &f.GIrABlock)
-		a = f
-	case "Unary":
-		o := GIrAOp1{Op1: cia.AstOp, Right: me.astFromCoreImp(cia.Unary)}
-		a = o
-	case "Binary":
-		o := GIrAOp2{Op2: cia.AstOp, Left: me.astFromCoreImp(cia.Binary), Right: me.astFromCoreImp(cia.AstRight)}
-		a = o
-	case "VariableIntroduction":
-		c := GIrAVar{}
-		c.NamePs = cia.VariableIntroduction
-		if cia.AstRight != nil {
-			c.VarVal = me.astFromCoreImp(cia.AstRight)
-		}
-		a = c
-	case "Comment":
-		c := GIrAComments{}
-		for _, comment := range cia.Comment {
-			if comment != nil {
-				c.Comments = append(c.Comments, *comment)
-			}
-		}
-		if cia.AstCommentDecl != nil {
-			c.CommentsDecl = me.astFromCoreImp(cia.AstCommentDecl)
-		}
-		a = c
-	case "ObjectLiteral":
-		o := GIrALitObj{}
-		for _, namevaluepair := range cia.ObjectLiteral {
-			for onekey, oneval := range namevaluepair {
-				v := GIrAVar{}
-				v.NamePs, v.VarVal = onekey, me.astFromCoreImp(oneval)
-				o.ObjPairs = append(o.ObjPairs, v)
-				break
-			}
-		}
-		a = o
-	case "ReturnNoResult":
-		r := GIrARet{}
-		a = r
-	case "Return":
-		r := GIrARet{RetArg: me.astFromCoreImp(cia.Return)}
-		a = r
-	case "Throw":
-		r := GIrAPanic{PanicArg: me.astFromCoreImp(cia.Throw)}
-		a = r
-	case "ArrayLiteral":
-		l := GIrALitArr{}
-		for _, v := range cia.ArrayLiteral {
-			l.ArrVals = append(l.ArrVals, me.astFromCoreImp(v))
-		}
-		a = l
-	case "Assignment":
-		o := GIrAOp2{Op2: "=", Left: me.astFromCoreImp(cia.Assignment), Right: me.astFromCoreImp(cia.AstRight)}
-		a = o
-	case "Indexer":
-		if cia.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			a = GIrADot{DotLeft: me.astFromCoreImp(cia.Indexer), DotRight: me.astFromCoreImp(cia.AstRight)}
-		} else {
-			a = GIrAIndex{IdxLeft: me.astFromCoreImp(cia.Indexer), IdxRight: me.astFromCoreImp(cia.AstRight)}
-		}
-	case "InstanceOf":
-		a = GIrAIsType{ExprToTest: me.astFromCoreImp(cia.InstanceOf), TypeToTest: me.astFromCoreImp(cia.AstRight)}
-	default:
-		panic(fmt.Errorf("%s: unrecognized CoreImp AST-tag, please report: %s", me.mod.srcFilePath, cia.AstTag))
-	}
-	return
-}
-
 func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 	ci := me.mod.coreimp
 	for _, cia := range ci.Body {
-		me.Body = append(me.Body, me.astFromCoreImp(cia))
+		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
 
 	if err == nil {
@@ -503,19 +381,55 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 	return
 }
 
-func (me *GonadIrMeta) sanitizeSymbolForGo(name string, forexport bool) string {
+func sanitizeSymbolForGo(name string, forexport bool) string {
+	if len(name) == 0 {
+		return name
+	}
 	if forexport {
-		name = strings.Title(name)
+		name = strings.ToUpper(name[:1]) + name[1:]
 	} else {
 		if unicode.IsUpper([]rune(name[:1])[0]) {
 			name = "_µ_" + name
 		} else {
 			switch name {
-			// case "append", "false", "iota", "nil", "true": // we'll allow them for now
+			case "append", "false", "iota", "nil", "true":
+				return "_" + name
 			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
 				return "_ĸ_" + name
 			}
 		}
 	}
 	return sanitizer.Replace(name)
+}
+
+func ªDot(left GIrA, right string) GIrADot {
+	return GIrADot{DotLeft: left, DotRight: ªV(right)}
+}
+
+func ªEq(left GIrA, right GIrA) GIrAOp2 {
+	return GIrAOp2{Op2: "==", Left: left, Right: right}
+}
+
+func ªO1(op string, operand GIrA) GIrAOp1 {
+	return GIrAOp1{Op1: op, Right: operand}
+}
+
+func ªO2(left GIrA, op string, right GIrA) GIrAOp2 {
+	return GIrAOp2{Op2: op, Left: left, Right: right}
+}
+
+func ªRet(retarg GIrA) GIrARet {
+	return GIrARet{RetArg: retarg}
+}
+
+func ªS(literal string) GIrALitStr {
+	return GIrALitStr{LitStr: literal}
+}
+
+func ªSet(left string, right GIrA) GIrASet {
+	return GIrASet{Left: ªV(left), Right: right}
+}
+
+func ªV(name string) GIrAVar {
+	return GIrAVar{GIrANamedTypeRef: GIrANamedTypeRef{NameGo: name}}
 }

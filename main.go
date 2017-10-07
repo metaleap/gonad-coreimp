@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -156,7 +157,13 @@ func main() {
 func writeTestMainGo() (err error) {
 	w := &bytes.Buffer{}
 	if _, err = fmt.Fprintln(w, "package main\n\nimport ("); err == nil {
+		//	we sort them to avoid useless diffs
+		pkgimppaths := sort.StringSlice{}
 		for pkgimppath, _ := range allpkgimppaths {
+			pkgimppaths = append(pkgimppaths, pkgimppath)
+		}
+		sort.Strings(pkgimppaths)
+		for _, pkgimppath := range pkgimppaths {
 			if _, err = fmt.Fprintf(w, "\t_ %q\n", pkgimppath); err != nil {
 				return
 			}

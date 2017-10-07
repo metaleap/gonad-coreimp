@@ -15,93 +15,140 @@ const (
 	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
 )
 
-func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
+func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	tabs := strings.Repeat("\t", indent)
-	switch ast.AstTag {
-	case "StringLiteral":
-		fmt.Fprintf(w, "%q", ast.StringLiteral)
-	case "BooleanLiteral":
-		fmt.Fprintf(w, "%t", ast.BooleanLiteral)
-	case "NumericLiteral_Double":
-		fmt.Fprintf(w, "%f", ast.NumericLiteral_Double)
-	case "NumericLiteral_Integer":
-		fmt.Fprintf(w, "%d", ast.NumericLiteral_Integer)
-	case "Var":
-		fmt.Fprintf(w, "%s", ast.Var)
-	case "Block":
+	switch a := ast.(type) {
+	case GIrALitStr:
+		fmt.Fprintf(w, "%q", a.LitStr)
+	case GIrALitBool:
+		fmt.Fprintf(w, "%t", a.LitBool)
+	case GIrALitDouble:
+		fmt.Fprintf(w, "%f", a.LitDouble)
+	case GIrALitInt:
+		fmt.Fprintf(w, "%d", a.LitInt)
+	case GIrAConst:
+		fmt.Fprintf(w, "%sconst %s", tabs, a.NameGo)
+		fmt.Fprint(w, " = ")
+		codeEmitAst(w, indent, a.ConstVal, trr)
+		fmt.Fprint(w, "\n")
+	case GIrAVar:
+		if a.VarVal != nil {
+			fmt.Fprintf(w, "%svar %s", tabs, a.NameGo)
+			fmt.Fprint(w, " = ")
+			codeEmitAst(w, indent, a.VarVal, trr)
+			fmt.Fprint(w, "\n")
+		} else {
+			fmt.Fprintf(w, "%s", a.NameGo)
+		}
+	case GIrABlock:
 		fmt.Fprint(w, "{\n")
 		indent++
-		for _, expr := range ast.Block {
-			codeEmitCoreImp(w, indent, expr)
+		for _, expr := range a.Body {
+			codeEmitAst(w, indent, expr, trr)
 		}
 		fmt.Fprintf(w, "%s}", tabs)
 		indent--
-	case "While":
-		fmt.Fprintf(w, "%sfor ", tabs)
-		codeEmitCoreImp(w, indent, ast.While)
-		codeEmitCoreImp(w, indent, ast.AstBody)
-	case "For":
-		fmt.Fprintf(w, "%sfor %s ; ", tabs, ast.For)
-		codeEmitCoreImp(w, indent, ast.AstFor1)
-		fmt.Fprint(w, " ; ")
-		codeEmitCoreImp(w, indent, ast.AstFor2)
-		fmt.Fprint(w, " ")
-		codeEmitCoreImp(w, indent, ast.AstBody)
-	case "ForIn":
-		fmt.Fprintf(w, "%sfor _, %s := range ", tabs, ast.ForIn)
-		codeEmitCoreImp(w, indent, ast.AstFor1)
-		codeEmitCoreImp(w, indent, ast.AstBody)
-	case "IfElse":
+	case GIrAIf:
 		fmt.Fprintf(w, "%sif ", tabs)
-		codeEmitCoreImp(w, indent, ast.IfElse)
+		codeEmitAst(w, indent, a.If, trr)
 		fmt.Fprint(w, " ")
-		codeEmitCoreImp(w, indent, ast.AstThen)
-		if ast.AstElse != nil {
+		codeEmitAst(w, indent, a.Then, trr)
+		if len(a.Else.Body) > 0 {
 			fmt.Fprint(w, " else ")
-			codeEmitCoreImp(w, indent, ast.AstElse)
+			codeEmitAst(w, indent, a.Else, trr)
 		}
 		fmt.Fprint(w, "\n")
-	case "App":
-		codeEmitCoreImp(w, indent, ast.App)
+	case GIrACall:
+		codeEmitAst(w, indent, a.Callee, trr)
 		fmt.Fprint(w, "(")
-		for i, expr := range ast.AstApplArgs {
+		for i, expr := range a.CallArgs {
 			if i > 0 {
 				fmt.Fprint(w, ",")
 			}
-			codeEmitCoreImp(w, indent, expr)
+			codeEmitAst(w, indent, expr, trr)
 		}
 		fmt.Fprint(w, ")")
-	case "Function":
-		fmt.Fprintf(w, "func %s(", ast.Function)
-		for i, argname := range ast.AstFuncParams {
-			if i > 0 {
-				fmt.Fprint(w, ",")
+	case GIrAFunc:
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, -1, trr)
+		// fmt.Fprintf(w, "func %s(", a.NameGo)
+		// for i, arg := range a.RefFunc.Args {
+		// 	if i > 0 {
+		// 		fmt.Fprint(w, ",")
+		// 	}
+		// 	fmt.Fprint(w, arg.NameGo)
+		// }
+		// fmt.Fprint(w, ") ")
+		codeEmitAsts(w, indent, &a.GIrABlock, trr)
+	case GIrAComments:
+		for _, c := range a.Comments {
+			if len(c.BlockComment) > 0 {
+				fmt.Fprintf(w, "/*%s*/", c.BlockComment)
+			} else {
+				fmt.Fprintf(w, "%s//%s\n", tabs, c.LineComment)
 			}
-			fmt.Fprint(w, argname)
 		}
-		fmt.Fprint(w, ") ")
-		codeEmitCoreImp(w, indent, ast.AstBody)
-	case "Unary":
-		fmt.Fprint(w, "(")
-		switch ast.AstOp {
-		case "Negate", "-":
-			fmt.Fprint(w, "-")
-		case "Not", "!":
-			fmt.Fprint(w, "!")
-		case "Positive", "+":
-			fmt.Fprint(w, "+")
-		case "BitwiseNot", "^":
-			fmt.Fprint(w, "^")
-		default:
-			fmt.Fprintf(w, "?%s?", ast.AstOp)
-			panic("unrecognized unary op '" + ast.AstOp + "', please report!")
+		if a.CommentsDecl != nil {
+			codeEmitAst(w, indent, a.CommentsDecl, trr)
 		}
-		codeEmitCoreImp(w, indent, ast.Unary)
+	case GIrALitObj:
+		fmt.Fprint(w, "{")
+		for i, namevaluepair := range a.ObjPairs {
+			if i > 0 {
+				fmt.Fprint(w, ", ")
+			}
+			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
+			codeEmitAst(w, indent, namevaluepair.VarVal, trr)
+			break
+		}
+		fmt.Fprint(w, "}")
+	case GIrARet:
+		if a.RetArg == nil {
+			fmt.Fprintf(w, "%sreturn\n", tabs)
+		} else {
+			fmt.Fprintf(w, "%sreturn ", tabs)
+			codeEmitAst(w, indent, a.RetArg, trr)
+			fmt.Fprint(w, "\n")
+		}
+	case GIrAPanic:
+		fmt.Fprintf(w, "%spanic(", tabs)
+		codeEmitAst(w, indent, a.PanicArg, trr)
+		fmt.Fprint(w, ")\n")
+	case GIrALitArr:
+		fmt.Fprint(w, "[]ARRAY{")
+		for i, expr := range a.ArrVals {
+			if i > 0 {
+				fmt.Fprint(w, ", ")
+			}
+			codeEmitAst(w, indent, expr, trr)
+		}
+		fmt.Fprint(w, "}")
+	case GIrADot:
+		codeEmitAst(w, indent, a.DotLeft, trr)
+		fmt.Fprint(w, ".")
+		codeEmitAst(w, indent, a.DotRight, trr)
+	case GIrAIndex:
+		codeEmitAst(w, indent, a.IdxLeft, trr)
+		fmt.Fprint(w, "[")
+		codeEmitAst(w, indent, a.IdxRight, trr)
+		fmt.Fprint(w, "]")
+	case GIrAIsType:
+		codeEmitAst(w, indent, a.ExprToTest, trr)
+		fmt.Fprint(w, " __IS__ ")
+		codeEmitAst(w, indent, a.TypeToTest, trr)
+	case GIrASet:
+		fmt.Fprint(w, tabs)
+		codeEmitAst(w, indent, a.Left, trr)
+		fmt.Fprint(w, " = ")
+		codeEmitAst(w, indent, a.Right, trr)
+		fmt.Fprint(w, "\n")
+	case GIrAOp1:
+		fmt.Fprintf(w, "(%s", a.Op1)
+		codeEmitAst(w, indent, a.Right, trr)
 		fmt.Fprint(w, ")")
-	case "Binary":
+	case GIrAOp2:
 		fmt.Fprint(w, "(")
-		codeEmitCoreImp(w, indent, ast.Binary)
-		switch ast.AstOp {
+		codeEmitAst(w, indent, a.Left, trr)
+		switch a.Op2 {
 		case "Add", "+":
 			fmt.Fprint(w, " + ")
 		case "Subtract", "-":
@@ -141,90 +188,63 @@ func codeEmitCoreImp(w io.Writer, indent int, ast *CoreImpAst) {
 		case "ZeroFillShiftRight", "&^":
 			fmt.Fprint(w, " &^ ")
 		default:
-			fmt.Fprintf(w, " ?%s? ", ast.AstOp)
-			panic("unrecognized binary op '" + ast.AstOp + "', please report!")
+			fmt.Fprintf(w, " ?%s? ", a.Op2)
+			panic("unrecognized binary op '" + a.Op2 + "', please report!")
 		}
-		codeEmitCoreImp(w, indent, ast.AstRight)
+		codeEmitAst(w, indent, a.Right, trr)
 		fmt.Fprint(w, ")")
-	case "VariableIntroduction":
-		fmt.Fprintf(w, "%svar %s", tabs, ast.VariableIntroduction)
-		if ast.AstRight != nil {
-			fmt.Fprint(w, " = ")
-			codeEmitCoreImp(w, indent, ast.AstRight)
-		}
-		fmt.Fprint(w, "\n")
-	case "Comment":
-		for _, c := range ast.Comment {
-			if c != nil {
-				if len(c.BlockComment) > 0 {
-					fmt.Fprintf(w, "/*%s*/", c.BlockComment)
-				} else {
-					fmt.Fprintf(w, "%s//%s\n", tabs, c.LineComment)
+	case GIrANil:
+		fmt.Fprint(w, "nil")
+	case GIrAFor:
+		if len(a.ForRange.NameGo) > 0 && a.ForRange.VarVal != nil {
+			fmt.Fprintf(w, "%sfor _, %s := range ", tabs, a.ForRange.NameGo)
+			codeEmitAst(w, indent, a.ForRange.VarVal, trr)
+			codeEmitAsts(w, indent, &a.GIrABlock, trr)
+		} else if len(a.ForInit) > 0 || len(a.ForStep) > 0 {
+			fmt.Fprint(w, "for ")
+			for i, finit := range a.ForInit {
+				if i > 0 {
+					fmt.Fprint(w, ", ")
 				}
+				codeEmitAst(w, indent, finit.Left, trr)
 			}
-		}
-		if ast.AstCommentDecl != nil {
-			codeEmitCoreImp(w, indent, ast.AstCommentDecl)
-		}
-	case "ObjectLiteral":
-		fmt.Fprint(w, "{")
-		for i, namevaluepair := range ast.ObjectLiteral {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
+			fmt.Fprint(w, " = ")
+			for i, finit := range a.ForInit {
+				if i > 0 {
+					fmt.Fprint(w, ", ")
+				}
+				codeEmitAst(w, indent, finit.Right, trr)
 			}
-			for onekey, oneval := range namevaluepair {
-				fmt.Fprintf(w, "%s: ", onekey)
-				codeEmitCoreImp(w, indent, oneval)
-				break
+			fmt.Fprint(w, "; ")
+			codeEmitAst(w, indent, a.ForCond, trr)
+			fmt.Fprint(w, "; ")
+			for i, fstep := range a.ForStep {
+				if i > 0 {
+					fmt.Fprint(w, ", ")
+				}
+				codeEmitAst(w, indent, fstep.Left, trr)
 			}
-		}
-		fmt.Fprint(w, "}")
-	case "ReturnNoResult":
-		fmt.Fprintf(w, "%sreturn\n", tabs)
-	case "Return":
-		fmt.Fprintf(w, "%sreturn ", tabs)
-		codeEmitCoreImp(w, indent, ast.Return)
-		fmt.Fprint(w, "\n")
-	case "Throw":
-		fmt.Fprintf(w, "%spanic(", tabs)
-		codeEmitCoreImp(w, indent, ast.Throw)
-		fmt.Fprint(w, ")\n")
-	case "ArrayLiteral":
-		fmt.Fprint(w, "[]ARRAY{")
-		for i, expr := range ast.ArrayLiteral {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
+			fmt.Fprint(w, " = ")
+			for i, fstep := range a.ForStep {
+				if i > 0 {
+					fmt.Fprint(w, ", ")
+				}
+				codeEmitAst(w, indent, fstep.Right, trr)
 			}
-			codeEmitCoreImp(w, indent, expr)
+			codeEmitAsts(w, indent, &a.GIrABlock, trr)
+		} else {
+			fmt.Fprintf(w, "%sfor ", tabs)
+			codeEmitAst(w, indent, a.ForCond, trr)
+			codeEmitAsts(w, indent, &a.GIrABlock, trr)
 		}
-		fmt.Fprint(w, "}")
-	case "Assignment":
-		fmt.Fprint(w, tabs)
-		codeEmitCoreImp(w, indent, ast.Assignment)
-		fmt.Fprint(w, " = ")
-		codeEmitCoreImp(w, indent, ast.AstRight)
-		fmt.Fprint(w, "\n")
-	case "Accessor":
-		codeEmitCoreImp(w, indent, ast.Accessor)
-		fmt.Fprintf(w, ".%s", ast.AstRight.Var)
-	case "Indexer":
-		codeEmitCoreImp(w, indent, ast.Indexer)
-		// if ast.AstRight.AstTag == "StringLiteral" {
-		fmt.Fprint(w, "[")
-		codeEmitCoreImp(w, indent, ast.AstRight)
-		fmt.Fprint(w, "]")
-	case "InstanceOf":
-		codeEmitCoreImp(w, indent, ast.InstanceOf)
-		fmt.Fprint(w, " is ")
-		codeEmitCoreImp(w, indent, ast.AstRight)
 	default:
-		panic("CoreImp unhandled AST-tag, please report: " + ast.AstTag)
+		panic(fmt.Errorf("Unhandled AST: %v", ast))
 	}
 }
 
-func codeEmitCoreImps(w io.Writer, indent int, body CoreImpAsts) {
-	for _, ast := range body {
-		codeEmitCoreImp(w, indent, ast)
+func codeEmitAsts(w io.Writer, indent int, asts *GIrABlock, trr goTypeRefResolver) {
+	for _, ast := range asts.Body {
+		codeEmitAst(w, indent, ast, trr)
 	}
 }
 
@@ -406,7 +426,7 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 		codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 		codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
 		fmt.Fprint(w, "{\n")
-		codeEmitCoreImps(w, 1, method.mBody)
+		codeEmitAsts(w, 1, &method.mBody, typerefresolver)
 		fmt.Fprintln(w, "}\n")
 	}
 }

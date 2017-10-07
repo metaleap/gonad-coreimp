@@ -259,7 +259,7 @@ func (me *GonadIrMeta) populateGoValDecls() {
 
 	for _, evd := range me.ExtValDecls {
 		tdict = map[string][]string{}
-		gvd := &GIrANamedTypeRef{NamePs: evd.Name, NameGo: me.sanitizeSymbolForGo(evd.Name, true), Export: true}
+		gvd := &GIrANamedTypeRef{NamePs: evd.Name, NameGo: sanitizeSymbolForGo(evd.Name, true), Export: true}
 		for true {
 			_, funcexists := m[gvd.NameGo]
 			if gtd := me.GoTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
