@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	sanitizer = strings.NewReplacer("'", "ª", "$", "º")
+	sanitizer = strings.NewReplacer("$", "ˇ")
 )
 
 type GIrANamedTypeRefs []*GIrANamedTypeRef
@@ -304,6 +304,7 @@ type GIrAPanic struct {
 }
 
 type GIrALitArr struct {
+	GIrANamedTypeRef
 	ArrVals []GIrA `json:",omitempty"`
 }
 
@@ -327,15 +328,26 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 	for _, cia := range ci.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
-	for _, ast := range me.Body {
+	for i, ast := range me.Body {
 		if v, ok := ast.(GIrAVar); ok {
 			if vc, ok := v.VarVal.(gIrAConst); ok && vc.isConstable() {
-				println("can const: " + v.NameGo)
+				c := GIrAConst{GIrANamedTypeRef: v.GIrANamedTypeRef}
+				c.ConstVal = v.VarVal
+				me.Body[i] = c
 			}
 		}
 	}
 
 	if err == nil {
+	}
+	return
+}
+
+func (me *GonadIrAst) topLevelDefs(ok func(GIrA) bool) (defs []GIrA) {
+	for _, ast := range me.Body {
+		if ok(ast) {
+			defs = append(defs, ast)
+		}
 	}
 	return
 }
@@ -359,15 +371,14 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 	}
 
-	for _, ast := range me.Body {
-		if v, ok := ast.(GIrAVar); ok && !v.WasTypeFunc {
-			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
-		}
-	}
-	for _, ast := range me.Body {
-		if f, ok := ast.(GIrAFunc); ok && !f.WasTypeFunc {
-			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
-		}
+	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAConst); return ok && !c.WasTypeFunc })
+	toplevelvars := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAVar); return ok && !c.WasTypeFunc })
+	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAFunc); return ok && !c.WasTypeFunc })
+	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRef)
+	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRef)
+	for _, ast := range toplevelfuncs {
+		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		fmt.Fprint(buf, "\n\n")
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
@@ -439,13 +450,13 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		name = strings.ToUpper(name[:1]) + name[1:]
 	} else {
 		if unicode.IsUpper([]rune(name[:1])[0]) {
-			name = "_µ_" + name
+			name = "µˇ" + name
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
-				return "_" + name
+				return "ˇ" + name
 			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "_ĸ_" + name
+				return "ˇĸˇ" + name
 			}
 		}
 	}

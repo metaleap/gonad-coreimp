@@ -27,11 +27,17 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	case GIrALitBool:
 		fmt.Fprintf(w, "%t", a.LitBool)
 	case GIrALitDouble:
-		fmt.Fprintf(w, "%f", a.LitDouble)
+		s := fmt.Sprintf("%f", a.LitDouble)
+		for strings.HasSuffix(s, "0") {
+			s = s[:len(s)-1]
+		}
+		fmt.Fprint(w, s)
 	case GIrALitInt:
 		fmt.Fprintf(w, "%d", a.LitInt)
 	case GIrALitArr:
-		fmt.Fprint(w, "[]ARRAY{")
+		fmt.Fprint(w, "[]")
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
+		fmt.Fprint(w, "{")
 		for i, expr := range a.ArrVals {
 			if i > 0 {
 				fmt.Fprint(w, ", ")
@@ -247,17 +253,55 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	}
 }
 
-func codeEmitEnumConsts(buf io.Writer, enumconstnames []string, enumconsttype string) {
-	fmt.Fprint(buf, "const (\n")
-	fmt.Fprintf(buf, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
-	for i, enumconstname := range enumconstnames {
-		fmt.Fprintf(buf, "\t%s", enumconstname)
-		if i == 0 {
-			fmt.Fprintf(buf, " %s = iota", enumconsttype)
+func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr goTypeRefResolver) {
+	if l := len(asts); l > 11 {
+		codeEmitAst(w, indent, asts[0], trr)
+	} else if l >= 1 {
+		if consts {
+			fmt.Fprint(w, "const (\n")
+		} else {
+			fmt.Fprint(w, "var (\n")
 		}
-		fmt.Fprint(buf, "\n")
+		maxlen, name := 0, ""
+		for _, a := range asts {
+			if consts {
+				name = a.(GIrAConst).NameGo
+			} else {
+				name = a.(GIrAVar).NameGo
+			}
+			if l := len(name); l > maxlen {
+				maxlen = l
+			}
+			if ustr.HasAny(name, "ª", "ĸ", "µ", "º", "ˇ", "ø") {
+				maxlen -= 1
+			}
+		}
+		var val GIrA
+		for _, a := range asts {
+			if consts {
+				c := a.(GIrAConst)
+				val, name = c.ConstVal, c.NameGo
+			} else {
+				v := a.(GIrAVar)
+				val, name = v.VarVal, v.NameGo
+			}
+			codeEmitAst(w, indent+1, ªSet(ustr.PadRight(name, maxlen), val), trr)
+		}
+		fmt.Fprint(w, ")\n\n")
 	}
-	fmt.Fprint(buf, ")\n\n")
+}
+
+func codeEmitEnumConsts(w io.Writer, enumconstnames []string, enumconsttype string) {
+	fmt.Fprint(w, "const (\n")
+	fmt.Fprintf(w, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
+	for i, enumconstname := range enumconstnames {
+		fmt.Fprintf(w, "\t%s", enumconstname)
+		if i == 0 {
+			fmt.Fprintf(w, " %s = iota", enumconsttype)
+		}
+		fmt.Fprint(w, "\n")
+	}
+	fmt.Fprint(w, ")\n\n")
 }
 
 func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, typerefresolver goTypeRefResolver, isretargs bool) {
@@ -284,26 +328,26 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, t
 	}
 }
 
-func codeEmitModImps(writer io.Writer, modimps []*GIrMPkgRef) {
+func codeEmitModImps(w io.Writer, modimps []*GIrMPkgRef) {
 	if len(modimps) > 0 {
-		fmt.Fprint(writer, "import (\n")
+		fmt.Fprint(w, "import (\n")
 		for _, modimp := range modimps {
 			if modimp.used {
-				fmt.Fprintf(writer, "\t%s %q\n", modimp.N, modimp.P)
+				fmt.Fprintf(w, "\t%s %q\n", modimp.N, modimp.P)
 			} else {
-				fmt.Fprintf(writer, "\t// %s %q\n", modimp.N, modimp.P)
+				fmt.Fprintf(w, "\t// %s %q\n", modimp.N, modimp.P)
 			}
 		}
-		fmt.Fprint(writer, ")\n\n")
+		fmt.Fprint(w, ")\n\n")
 	}
 }
 
-func codeEmitPkgDecl(writer io.Writer, pname string) {
-	fmt.Fprintf(writer, "package %s\n\n", pname)
+func codeEmitPkgDecl(w io.Writer, pname string) {
+	fmt.Fprintf(w, "package %s\n\n", pname)
 }
 
-func codeEmitTypeAlias(buf io.Writer, tname string, ttype string) {
-	fmt.Fprintf(buf, "type %s %s\n\n", tname, ttype)
+func codeEmitTypeAlias(w io.Writer, tname string, ttype string) {
+	fmt.Fprintf(w, "type %s %s\n\n", tname, ttype)
 }
 
 func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
@@ -417,6 +461,8 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		if numrets > 1 {
 			fmt.Fprint(w, ")")
 		}
+	} else {
+		fmt.Fprint(w, "TUNKNOWN")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")
