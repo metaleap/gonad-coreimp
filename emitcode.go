@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -29,6 +30,26 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprintf(w, "%f", a.LitDouble)
 	case GIrALitInt:
 		fmt.Fprintf(w, "%d", a.LitInt)
+	case GIrALitArr:
+		fmt.Fprint(w, "[]ARRAY{")
+		for i, expr := range a.ArrVals {
+			if i > 0 {
+				fmt.Fprint(w, ", ")
+			}
+			codeEmitAst(w, indent, expr, trr)
+		}
+		fmt.Fprint(w, "}")
+	case GIrALitObj:
+		fmt.Fprint(w, "{")
+		for i, namevaluepair := range a.ObjPairs {
+			if i > 0 {
+				fmt.Fprint(w, ", ")
+			}
+			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
+			codeEmitAst(w, indent, namevaluepair.VarVal, trr)
+			break
+		}
+		fmt.Fprint(w, "}")
 	case GIrAConst:
 		fmt.Fprintf(w, "%sconst %s", tabs, a.NameGo)
 		fmt.Fprint(w, " = ")
@@ -46,7 +67,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	case GIrABlock:
 		if len(a.Body) == 1 {
 			fmt.Fprint(w, "{ ")
-			codeEmitAst(w, indent, a.Body[0], trr)
+			codeEmitAst(w, -1, a.Body[0], trr)
 			fmt.Fprint(w, " }")
 		} else {
 			fmt.Fprint(w, "{\n")
@@ -79,7 +100,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, ")")
 	case GIrAFunc:
 		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
-		codeEmitAsts(w, indent, &a.GIrABlock, trr)
+		codeEmitAst(w, indent, a.FuncImpl, trr)
 	case GIrAComments:
 		for _, c := range a.Comments {
 			if len(c.BlockComment) > 0 {
@@ -91,40 +112,20 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		if a.CommentsDecl != nil {
 			codeEmitAst(w, indent, a.CommentsDecl, trr)
 		}
-	case GIrALitObj:
-		fmt.Fprint(w, "{")
-		for i, namevaluepair := range a.ObjPairs {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
-			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
-			codeEmitAst(w, indent, namevaluepair.VarVal, trr)
-			break
-		}
-		fmt.Fprint(w, "}")
 	case GIrARet:
 		if a.RetArg == nil {
-			fmt.Fprintf(w, "%sreturn\n", tabs)
+			fmt.Fprintf(w, "%sreturn", tabs)
 		} else {
 			fmt.Fprintf(w, "%sreturn ", tabs)
 			codeEmitAst(w, indent, a.RetArg, trr)
-			if indent >= 0 {
-				fmt.Fprint(w, "\n")
-			}
+		}
+		if indent >= 0 {
+			fmt.Fprint(w, "\n")
 		}
 	case GIrAPanic:
 		fmt.Fprintf(w, "%spanic(", tabs)
 		codeEmitAst(w, indent, a.PanicArg, trr)
 		fmt.Fprint(w, ")\n")
-	case GIrALitArr:
-		fmt.Fprint(w, "[]ARRAY{")
-		for i, expr := range a.ArrVals {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
-			codeEmitAst(w, indent, expr, trr)
-		}
-		fmt.Fprint(w, "}")
 	case GIrADot:
 		codeEmitAst(w, indent, a.DotLeft, trr)
 		fmt.Fprint(w, ".")
@@ -202,7 +203,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		if len(a.ForRange.NameGo) > 0 && a.ForRange.VarVal != nil {
 			fmt.Fprintf(w, "%sfor _, %s := range ", tabs, a.ForRange.NameGo)
 			codeEmitAst(w, indent, a.ForRange.VarVal, trr)
-			codeEmitAsts(w, indent, &a.GIrABlock, trr)
+			codeEmitAst(w, indent, a.GIrABlock, trr)
 		} else if len(a.ForInit) > 0 || len(a.ForStep) > 0 {
 			fmt.Fprint(w, "for ")
 			for i, finit := range a.ForInit {
@@ -234,20 +235,15 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 				}
 				codeEmitAst(w, indent, fstep.ToRight, trr)
 			}
-			codeEmitAsts(w, indent, &a.GIrABlock, trr)
+			codeEmitAst(w, indent, a.GIrABlock, trr)
 		} else {
 			fmt.Fprintf(w, "%sfor ", tabs)
 			codeEmitAst(w, indent, a.ForCond, trr)
-			codeEmitAsts(w, indent, &a.GIrABlock, trr)
+			codeEmitAst(w, indent, a.GIrABlock, trr)
 		}
 	default:
-		panic(fmt.Errorf("Unhandled AST: %v", ast))
-	}
-}
-
-func codeEmitAsts(w io.Writer, indent int, asts *GIrABlock, trr goTypeRefResolver) {
-	for _, ast := range asts.Body {
-		codeEmitAst(w, indent, ast, trr)
+		b, _ := json.Marshal(&ast)
+		fmt.Fprintf(w, "/*****%v*****/", string(b))
 	}
 }
 
@@ -281,8 +277,9 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, t
 		}
 	}
 	if parens {
-		fmt.Fprint(w, ") ")
-	} else if len(methodargs) > 0 {
+		fmt.Fprint(w, ")")
+	}
+	if !isretargs {
 		fmt.Fprint(w, " ")
 	}
 }
@@ -312,7 +309,8 @@ func codeEmitTypeAlias(buf io.Writer, tname string, ttype string) {
 func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
-	if toplevel {
+	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.mBody != nil
+	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}
 	if len(gtd.RefAlias) > 0 {
@@ -388,7 +386,11 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		if ilev == 0 {
 			ilev += 1
 		}
-		fmt.Fprint(w, "func(")
+		fmt.Fprint(w, "func")
+		if isfuncwithbodynotjustsig && len(gtd.NameGo) > 0 {
+			fmt.Fprintf(w, " %s", gtd.NameGo)
+		}
+		fmt.Fprint(w, "(")
 		for i, l := 0, len(gtd.RefFunc.Args); i < l; i++ {
 			if i > 0 {
 				fmt.Fprint(w, ", ")
@@ -416,7 +418,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, ")")
 		}
 	}
-	if toplevel {
+	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")
 	}
 }
@@ -437,10 +439,10 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 			}
 			codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 			codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
-			codeEmitAst(w, -1, method.mBody, typerefresolver)
-			fmt.Fprint(w, "\n")
+			fmt.Fprint(w, " ")
+			codeEmitAst(w, -1, *method.mBody, typerefresolver)
+			fmt.Fprint(w, "\n\n")
 		}
-		fmt.Fprint(w, "\n")
 	}
 }
 

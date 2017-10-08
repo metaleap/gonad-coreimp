@@ -125,10 +125,30 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			c.CallArgs = append(c.CallArgs, arg.ciAstToGIrAst())
 		}
 		a = c
+	case "VariableIntroduction":
+		c := GIrAVar{}
+		if istopleveldecl {
+			if unicode.IsUpper([]rune(me.VariableIntroduction[:1])[0]) {
+				c.WasTypeFunc = true
+			}
+			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.VariableIntroduction); gvd != nil {
+				c.Export = true
+			}
+		}
+		c.setBothNamesFromPsName(me.VariableIntroduction)
+		if me.AstRight != nil {
+			c.VarVal = me.AstRight.ciAstToGIrAst()
+		}
+		a = c
 	case "Function":
 		f := GIrAFunc{}
-		if len(me.Function) > 0 && unicode.IsUpper([]rune(me.Function[:1])[0]) {
-			f.WasTypeFunc = true
+		if istopleveldecl && len(me.Function) > 0 {
+			if unicode.IsUpper([]rune(me.Function[:1])[0]) {
+				f.WasTypeFunc = true
+			}
+			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Function); gvd != nil {
+				f.Export = true
+			}
 		}
 		f.setBothNamesFromPsName(me.Function)
 		f.RefFunc = &GIrATypeRefFunc{}
@@ -137,7 +157,8 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
-		me.AstBody.astForceIntoBlock(&f.GIrABlock)
+		me.AstBody.astForceIntoBlock(&f.FuncImpl)
+		f.mBody = &f.FuncImpl
 		a = f
 	case "Unary":
 		o := GIrAOp1{Op1: me.AstOp, Of: me.Unary.ciAstToGIrAst()}
@@ -203,20 +224,6 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			panic("unrecognized binary op '" + o.Op2 + "', please report!")
 		}
 		a = o
-	case "VariableIntroduction":
-		c := GIrAVar{}
-
-		if istopleveldecl {
-			if gvd := me.root.mod.girMeta.GoValDefByPsName(me.VariableIntroduction); gvd != nil {
-				c.Export = true
-			}
-		}
-
-		c.setBothNamesFromPsName(me.VariableIntroduction)
-		if me.AstRight != nil {
-			c.VarVal = me.AstRight.ciAstToGIrAst()
-		}
-		a = c
 	case "Comment":
 		c := GIrAComments{}
 		for _, comment := range me.Comment {
@@ -259,7 +266,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			a = GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: me.AstRight.ciAstToGIrAst()}
+			a = GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: ªV(me.AstRight.StringLiteral)}
 		} else {
 			a = GIrAIndex{IdxLeft: me.Indexer.ciAstToGIrAst(), IdxRight: me.AstRight.ciAstToGIrAst()}
 		}

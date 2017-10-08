@@ -381,12 +381,12 @@ func (me *GonadIrMeta) populateGoValDecls() {
 	}
 }
 
-func (me *GonadIrMeta) GoValDefByGoName(goname string) (gvd *GIrANamedTypeRef) {
+func (me *GonadIrMeta) GoValDeclByGoName(goname string) (gvd *GIrANamedTypeRef) {
 	gvd, _ = me.lookupvalsgo[goname]
 	return
 }
 
-func (me *GonadIrMeta) GoValDefByPsName(psname string) (gvd *GIrANamedTypeRef) {
+func (me *GonadIrMeta) GoValDeclByPsName(psname string) (gvd *GIrANamedTypeRef) {
 	gvd, _ = me.lookupvalsps[psname]
 	return
 }

@@ -128,7 +128,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 				for _, ctor := range td.Ctors {
 					for _, method := range gid.RefInterface.Methods {
 						mcopy := *method
-						mcopy.mNoThis = true
+						mcopy.mBody, mcopy.mNoThis = &GIrABlock{}, true
 						if strings.HasPrefix(method.NameGo, "Is") {
 							mcopy.mBody.Add(ªRet(ªB(method.ctor == ctor)))
 						} else if strings.HasPrefix(method.NameGo, "As") {

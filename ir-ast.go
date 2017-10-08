@@ -54,7 +54,7 @@ type GIrANamedTypeRef struct {
 
 	mCtor   bool
 	mNoThis bool
-	mBody   GIrABlock
+	mBody   *GIrABlock
 	ctor    *GIrMTypeDataCtor
 }
 
@@ -179,6 +179,10 @@ type GonadIrAst struct {
 
 type GIrA interface{}
 
+type gIrAConst interface {
+	isConstable() bool
+}
+
 type GIrAConst struct {
 	GIrANamedTypeRef `json:",omitempty"`
 	ConstVal         GIrA `json:",omitempty"`
@@ -191,24 +195,32 @@ type GIrAVar struct {
 
 type GIrAFunc struct {
 	GIrANamedTypeRef `json:",omitempty"`
-	GIrABlock        `json:",omitempty"`
+	FuncImpl         GIrABlock `json:",omitempty"`
 }
 
 type GIrALitStr struct {
 	LitStr string
 }
 
+func (_ GIrALitStr) isConstable() bool { return true }
+
 type GIrALitBool struct {
 	LitBool bool
 }
+
+func (_ GIrALitBool) isConstable() bool { return true }
 
 type GIrALitDouble struct {
 	LitDouble float64
 }
 
+func (_ GIrALitDouble) isConstable() bool { return true }
+
 type GIrALitInt struct {
 	LitInt int
 }
+
+func (_ GIrALitInt) isConstable() bool { return true }
 
 type GIrABlock struct {
 	Body []GIrA `json:",omitempty"`
@@ -228,10 +240,26 @@ type GIrAOp1 struct {
 	Of  GIrA   `json:",omitempty"`
 }
 
+func (me GIrAOp1) isConstable() bool {
+	if c, ok := me.Of.(gIrAConst); ok {
+		return c.isConstable()
+	}
+	return false
+}
+
 type GIrAOp2 struct {
 	Left  GIrA   `json:",omitempty"`
 	Op2   string `json:",omitempty"`
 	Right GIrA   `json:",omitempty"`
+}
+
+func (me GIrAOp2) isConstable() bool {
+	if c, ok := me.Left.(gIrAConst); ok && c.isConstable() {
+		if c, ok := me.Right.(gIrAConst); ok {
+			return c.isConstable()
+		}
+	}
+	return false
 }
 
 type GIrASet struct {
@@ -299,6 +327,13 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 	for _, cia := range ci.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
+	for _, ast := range me.Body {
+		if v, ok := ast.(GIrAVar); ok {
+			if vc, ok := v.VarVal.(gIrAConst); ok && vc.isConstable() {
+				println("can const: " + v.NameGo)
+			}
+		}
+	}
 
 	if err == nil {
 	}
@@ -322,6 +357,17 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
 		}
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
+	}
+
+	for _, ast := range me.Body {
+		if v, ok := ast.(GIrAVar); ok && !v.WasTypeFunc {
+			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		}
+	}
+	for _, ast := range me.Body {
+		if f, ok := ast.(GIrAFunc); ok && !f.WasTypeFunc {
+			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		}
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
