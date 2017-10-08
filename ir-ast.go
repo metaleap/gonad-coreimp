@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	sanitizer = strings.NewReplacer("$", "ˇ")
+	sanitizer = strings.NewReplacer("'", "ˇ", "$", "Ø")
 )
 
 type GIrANamedTypeRefs []*GIrANamedTypeRef
@@ -177,9 +177,12 @@ type GonadIrAst struct {
 	girM *GonadIrMeta
 }
 
-type GIrA interface{}
+type GIrA interface {
+	subAsts() []GIrA
+}
 
 type gIrAConst interface {
+	GIrA
 	isConstable() bool
 }
 
@@ -188,43 +191,55 @@ type GIrAConst struct {
 	ConstVal         GIrA `json:",omitempty"`
 }
 
+func (me *GIrAConst) subAsts() []GIrA { return []GIrA{me.ConstVal} }
+
 type GIrAVar struct {
 	GIrANamedTypeRef `json:",omitempty"`
 	VarVal           GIrA `json:",omitempty"`
 }
 
+func (me *GIrAVar) subAsts() []GIrA { return []GIrA{me.VarVal} }
+
 type GIrAFunc struct {
 	GIrANamedTypeRef `json:",omitempty"`
-	FuncImpl         GIrABlock `json:",omitempty"`
+	FuncImpl         *GIrABlock `json:",omitempty"`
 }
+
+func (me *GIrAFunc) subAsts() []GIrA { return []GIrA{me.FuncImpl} }
 
 type GIrALitStr struct {
 	LitStr string
 }
 
 func (_ GIrALitStr) isConstable() bool { return true }
+func (me *GIrALitStr) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitBool struct {
 	LitBool bool
 }
 
 func (_ GIrALitBool) isConstable() bool { return true }
+func (me *GIrALitBool) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitDouble struct {
 	LitDouble float64
 }
 
 func (_ GIrALitDouble) isConstable() bool { return true }
+func (me *GIrALitDouble) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitInt struct {
 	LitInt int
 }
 
 func (_ GIrALitInt) isConstable() bool { return true }
+func (me *GIrALitInt) subAsts() []GIrA { return []GIrA{} }
 
 type GIrABlock struct {
 	Body []GIrA `json:",omitempty"`
 }
+
+func (me *GIrABlock) subAsts() []GIrA { return me.Body }
 
 func (me *GIrABlock) Add(asts ...GIrA) {
 	me.Body = append(me.Body, asts...)
@@ -235,10 +250,14 @@ type GIrAComments struct {
 	CommentsDecl GIrA             `json:",omitempty"`
 }
 
+func (me *GIrAComments) subAsts() []GIrA { return []GIrA{me.CommentsDecl} }
+
 type GIrAOp1 struct {
 	Op1 string `json:",omitempty"`
 	Of  GIrA   `json:",omitempty"`
 }
+
+func (me *GIrAOp1) subAsts() []GIrA { return []GIrA{me.Of} }
 
 func (me GIrAOp1) isConstable() bool {
 	if c, ok := me.Of.(gIrAConst); ok {
@@ -252,6 +271,8 @@ type GIrAOp2 struct {
 	Op2   string `json:",omitempty"`
 	Right GIrA   `json:",omitempty"`
 }
+
+func (me *GIrAOp2) subAsts() []GIrA { return []GIrA{me.Left, me.Right} }
 
 func (me GIrAOp2) isConstable() bool {
 	if c, ok := me.Left.(gIrAConst); ok && c.isConstable() {
@@ -267,89 +288,165 @@ type GIrASet struct {
 	ToRight GIrA `json:",omitempty"`
 }
 
+func (me *GIrASet) subAsts() []GIrA { return []GIrA{me.SetLeft, me.ToRight} }
+
 type GIrAFor struct {
-	GIrABlock `json:",omitempty"`
-	ForCond   GIrA      `json:",omitempty"`
-	ForInit   []GIrASet `json:",omitempty"`
-	ForStep   []GIrASet `json:",omitempty"`
-	ForRange  GIrAVar   `json:",omitempty"`
+	ForDo    *GIrABlock `json:",omitempty"`
+	ForCond  GIrA       `json:",omitempty"`
+	ForInit  []*GIrASet `json:",omitempty"`
+	ForStep  []*GIrASet `json:",omitempty"`
+	ForRange *GIrAVar   `json:",omitempty"`
+}
+
+func (me *GIrAFor) subAsts() (all []GIrA) {
+	all = append(all, me.ForDo, me.ForCond, me.ForRange)
+	for _, fi := range me.ForInit {
+		all = append(all, fi)
+	}
+	for _, fs := range me.ForStep {
+		all = append(all, fs)
+	}
+	return
 }
 
 type GIrAIf struct {
-	If   GIrA      `json:",omitempty"`
-	Then GIrABlock `json:",omitempty"`
-	Else GIrABlock `json:",omitempty"`
+	If   GIrA       `json:",omitempty"`
+	Then *GIrABlock `json:",omitempty"`
+	Else *GIrABlock `json:",omitempty"`
 }
+
+func (me *GIrAIf) subAsts() []GIrA { return []GIrA{me.If, me.Then, me.Else} }
 
 type GIrACall struct {
 	Callee   GIrA   `json:",omitempty"`
 	CallArgs []GIrA `json:",omitempty"`
 }
 
+func (me *GIrACall) subAsts() []GIrA { return append(me.CallArgs, me.Callee) }
+
 type GIrALitObj struct {
 	GIrANamedTypeRef `json:",omitempty"`
-	ObjPairs         []GIrAVar `json:",omitempty"`
+	ObjFields        []*GIrALitObjField `json:",omitempty"`
 }
+
+func (me *GIrALitObj) subAsts() (all []GIrA) {
+	for _, of := range me.ObjFields {
+		all = append(all, of)
+	}
+	return
+}
+
+type GIrALitObjField struct {
+	GIrANamedTypeRef `json:",omitempty"`
+	FieldVal         GIrA `json:",omitempty"`
+}
+
+func (me *GIrALitObjField) subAsts() []GIrA { return []GIrA{me.FieldVal} }
 
 type GIrANil struct {
 	Nil interface{}
 }
 
+func (me *GIrANil) subAsts() []GIrA { return []GIrA{} }
+
 type GIrARet struct {
 	RetArg GIrA `json:",omitempty"`
 }
 
+func (me *GIrARet) subAsts() []GIrA { return []GIrA{me.RetArg} }
+
 type GIrAPanic struct {
 	PanicArg GIrA `json:",omitempty"`
 }
+
+func (me *GIrAPanic) subAsts() []GIrA { return []GIrA{me.PanicArg} }
 
 type GIrALitArr struct {
 	GIrANamedTypeRef
 	ArrVals []GIrA `json:",omitempty"`
 }
 
+func (me *GIrALitArr) subAsts() []GIrA { return me.ArrVals }
+
 type GIrAIndex struct {
 	IdxLeft  GIrA `json:",omitempty"`
 	IdxRight GIrA `json:",omitempty"`
 }
+
+func (me *GIrAIndex) subAsts() []GIrA { return []GIrA{me.IdxLeft, me.IdxRight} }
 
 type GIrADot struct {
 	DotLeft  GIrA `json:",omitempty"`
 	DotRight GIrA `json:",omitempty"`
 }
 
+func (me *GIrADot) subAsts() []GIrA { return []GIrA{me.DotLeft, me.DotRight} }
+
 type GIrAIsType struct {
 	ExprToTest GIrA `json:",omitempty"`
 	TypeToTest GIrA `json:",omitempty"`
 }
 
+func (me *GIrAIsType) subAsts() []GIrA { return []GIrA{me.ExprToTest, me.TypeToTest} }
+
 func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
-	ci := me.mod.coreimp
-	for _, cia := range ci.Body {
+	//	transform coreimp.json AST into our own leaner Go-focused AST format
+	for _, cia := range me.mod.coreimp.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
-	for i, ast := range me.Body {
-		if v, ok := ast.(GIrAVar); ok {
-			if vc, ok := v.VarVal.(gIrAConst); ok && vc.isConstable() {
-				c := GIrAConst{GIrANamedTypeRef: v.GIrANamedTypeRef}
+	//	turn var=literal's into consts
+	me.Walk(func(ast GIrA) GIrA {
+		if v, _ := ast.(*GIrAVar); v != nil {
+			if vc, _ := v.VarVal.(gIrAConst); vc != nil && vc.isConstable() {
+				c := &GIrAConst{GIrANamedTypeRef: v.GIrANamedTypeRef}
 				c.ConstVal = v.VarVal
-				me.Body[i] = c
+				return c
+			}
+		}
+		return ast
+	})
+
+	//	detect unexported data-type constructors
+	// newxtypedatadecl := GIrMTypeDataDecl{}
+	for i := 0; i < len(me.Body); i++ {
+		if av, ok := me.Body[i].(*GIrAVar); ok && av.WasTypeFunc {
+			if me.girM.GoTypeDefByPsName(av.NamePs) == nil {
+
+				// funcimpl := av.VarVal.(GIrACall).Callee.(GIrAFunc).FuncImpl.Body
 			}
 		}
 	}
+	// for _, gtd := range me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}) {
+	// 	println(gtd.NameGo)
+	// }
+	return
+}
 
-	if err == nil {
+func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
+	for _, ast := range me.Body {
+		if okay(ast) {
+			defs = append(defs, ast)
+		} else if c, ok := ast.(*GIrAComments); ok {
+			var c2 *GIrAComments
+			for ok {
+				if c2, ok = c.CommentsDecl.(*GIrAComments); ok {
+					c = c2
+				}
+			}
+			if okay(c.CommentsDecl) {
+				defs = append(defs, ast)
+			}
+		}
 	}
 	return
 }
 
-func (me *GonadIrAst) topLevelDefs(ok func(GIrA) bool) (defs []GIrA) {
-	for _, ast := range me.Body {
-		if ok(ast) {
-			defs = append(defs, ast)
+func (me *GonadIrAst) Walk(on func(GIrA) GIrA) {
+	for i, a := range me.Body {
+		if a != nil {
+			me.Body[i] = walk(a, on)
 		}
 	}
-	return
 }
 
 func (me *GonadIrAst) WriteAsJsonTo(w io.Writer) error {
@@ -371,14 +468,23 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 	}
 
-	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAConst); return ok && !c.WasTypeFunc })
-	toplevelvars := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAVar); return ok && !c.WasTypeFunc })
-	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(GIrAFunc); return ok && !c.WasTypeFunc })
+	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAConst); return ok /*&& !c.WasTypeFunc*/ })
+	toplevelvars := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && !c.WasTypeFunc })
+	toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
+	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
+
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRef)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRef)
-	for _, ast := range toplevelfuncs {
-		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
-		fmt.Fprint(buf, "\n\n")
+
+	if false {
+		for _, ast := range toplevelctorfuncs {
+			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+			fmt.Fprint(buf, "\n\n")
+		}
+		for _, ast := range toplevelfuncs {
+			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+			fmt.Fprint(buf, "\n\n")
+		}
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
@@ -463,38 +569,128 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 	return sanitizer.Replace(name)
 }
 
-func ªDot(left GIrA, right string) GIrADot {
-	return GIrADot{DotLeft: left, DotRight: ªV(right)}
+func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
+	if ast != nil {
+		switch a := ast.(type) {
+		case *GIrABlock:
+			if a != nil {
+				for i, _ := range a.Body {
+					a.Body[i] = walk(a.Body[i], on)
+				}
+			}
+		case *GIrACall:
+			a.Callee = walk(a.Callee, on)
+			for i, _ := range a.CallArgs {
+				a.CallArgs[i] = walk(a.CallArgs[i], on)
+			}
+		case *GIrAComments:
+			a.CommentsDecl = walk(a.CommentsDecl, on)
+		case *GIrAConst:
+			a.ConstVal = walk(a.ConstVal, on)
+		case *GIrADot:
+			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
+		case *GIrAFor:
+			a.ForCond = walk(a.ForCond, on)
+			if tmp, ok := walk(a.ForRange, on).(*GIrAVar); ok && tmp != nil {
+				a.ForRange = tmp
+			}
+			if tmp, ok := walk(a.ForDo, on).(*GIrABlock); ok && tmp != nil {
+				a.ForDo = tmp
+			}
+			for i, fi := range a.ForInit {
+				if tmp, ok := walk(fi, on).(*GIrASet); ok && tmp != nil {
+					a.ForInit[i] = tmp
+				}
+			}
+			for i, fs := range a.ForStep {
+				if tmp, ok := walk(fs, on).(*GIrASet); ok && tmp != nil {
+					a.ForStep[i] = tmp
+				}
+			}
+		case *GIrAFunc:
+			if tmp, ok := walk(a.FuncImpl, on).(*GIrABlock); ok && tmp != nil {
+				a.FuncImpl = tmp
+			}
+		case *GIrAIf:
+			a.If = walk(a.If, on)
+			if tmp, ok := walk(a.Then, on).(*GIrABlock); ok && tmp != nil {
+				a.Then = tmp
+			}
+			if tmp, ok := walk(a.Else, on).(*GIrABlock); ok && tmp != nil {
+				a.Else = tmp
+			}
+		case *GIrAIndex:
+			a.IdxLeft, a.IdxRight = walk(a.IdxLeft, on), walk(a.IdxRight, on)
+		case *GIrAOp1:
+			a.Of = walk(a.Of, on)
+		case *GIrAOp2:
+			a.Left, a.Right = walk(a.Left, on), walk(a.Right, on)
+		case *GIrAPanic:
+			a.PanicArg = walk(a.PanicArg, on)
+		case *GIrARet:
+			a.RetArg = walk(a.RetArg, on)
+		case *GIrASet:
+			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
+		case *GIrAVar:
+			if a != nil {
+				a.VarVal = walk(a.VarVal, on)
+			}
+		case *GIrAIsType:
+			a.ExprToTest, a.TypeToTest = walk(a.ExprToTest, on), walk(a.TypeToTest, on)
+		case *GIrALitArr:
+			for i, av := range a.ArrVals {
+				a.ArrVals[i] = walk(av, on)
+			}
+		case *GIrALitObj:
+			for i, av := range a.ObjFields {
+				if tmp, ok := walk(av, on).(*GIrALitObjField); ok && tmp != nil {
+					a.ObjFields[i] = tmp
+				}
+			}
+		case *GIrALitObjField:
+			a.FieldVal = walk(a.FieldVal, on)
+		case *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
+		default:
+			fmt.Printf("%v", ast)
+			panic("WALK not handling a GIrA type")
+		}
+		ast = on(ast)
+	}
+	return ast
 }
 
-func ªEq(left GIrA, right GIrA) GIrAOp2 {
-	return GIrAOp2{Op2: "==", Left: left, Right: right}
+func ªDot(left GIrA, right string) *GIrADot {
+	return &GIrADot{DotLeft: left, DotRight: ªV(right)}
 }
 
-func ªO1(op string, operand GIrA) GIrAOp1 {
-	return GIrAOp1{Op1: op, Of: operand}
+func ªEq(left GIrA, right GIrA) *GIrAOp2 {
+	return &GIrAOp2{Op2: "==", Left: left, Right: right}
 }
 
-func ªO2(left GIrA, op string, right GIrA) GIrAOp2 {
-	return GIrAOp2{Op2: op, Left: left, Right: right}
+func ªO1(op string, operand GIrA) *GIrAOp1 {
+	return &GIrAOp1{Op1: op, Of: operand}
 }
 
-func ªRet(retarg GIrA) GIrARet {
-	return GIrARet{RetArg: retarg}
+func ªO2(left GIrA, op string, right GIrA) *GIrAOp2 {
+	return &GIrAOp2{Op2: op, Left: left, Right: right}
 }
 
-func ªB(literal bool) GIrALitBool {
-	return GIrALitBool{LitBool: literal}
+func ªRet(retarg GIrA) *GIrARet {
+	return &GIrARet{RetArg: retarg}
 }
 
-func ªS(literal string) GIrALitStr {
-	return GIrALitStr{LitStr: literal}
+func ªB(literal bool) *GIrALitBool {
+	return &GIrALitBool{LitBool: literal}
 }
 
-func ªSet(left string, right GIrA) GIrASet {
-	return GIrASet{SetLeft: ªV(left), ToRight: right}
+func ªS(literal string) *GIrALitStr {
+	return &GIrALitStr{LitStr: literal}
 }
 
-func ªV(name string) GIrAVar {
-	return GIrAVar{GIrANamedTypeRef: GIrANamedTypeRef{NameGo: name}}
+func ªSet(left string, right GIrA) *GIrASet {
+	return &GIrASet{SetLeft: ªV(left), ToRight: right}
+}
+
+func ªV(name string) *GIrAVar {
+	return &GIrAVar{GIrANamedTypeRef: GIrANamedTypeRef{NameGo: name}}
 }

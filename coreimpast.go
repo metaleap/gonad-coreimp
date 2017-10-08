@@ -2,7 +2,12 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
+)
+
+var (
+	strunprimer = strings.NewReplacer("$prime", "'")
 )
 
 type CoreImp struct {
@@ -17,6 +22,14 @@ type CoreImp struct {
 }
 
 type CoreImpAsts []*CoreImpAst
+
+func (me *CoreImpAsts) InsertAt(cia *CoreImpAst, at int) {
+	sl := *me
+	tail := append(CoreImpAsts{}, sl[at:]...)
+	prep := append(sl[:at], cia)
+	sl = append(prep, tail...)
+	*me = sl
+}
 
 type CoreImpAst struct {
 	AstSourceSpan  *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
@@ -63,70 +76,79 @@ type CoreImpAst struct {
 
 func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
 	switch body := me.ciAstToGIrAst().(type) {
-	case GIrABlock:
-		*into = body
+	case *GIrABlock:
+		into.Body = body.Body
 	default:
 		into.Body = append(into.Body, body)
 	}
 }
 
 func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
-	istopleveldecl := me.parent == nil
+	istopleveldecl := (me.parent == nil)
+	if maybecomment := me.parent; maybecomment != nil {
+		for maybecomment.AstTag == "Comment" {
+			if maybecomment = maybecomment.parent; maybecomment == nil {
+				istopleveldecl = true
+				break
+			}
+		}
+	}
 	switch me.AstTag {
 	case "StringLiteral":
-		a = GIrALitStr{LitStr: me.StringLiteral}
+		a = &GIrALitStr{LitStr: me.StringLiteral}
 	case "BooleanLiteral":
-		a = GIrALitBool{LitBool: me.BooleanLiteral}
+		a = &GIrALitBool{LitBool: me.BooleanLiteral}
 	case "NumericLiteral_Double":
-		a = GIrALitDouble{LitDouble: me.NumericLiteral_Double}
+		a = &GIrALitDouble{LitDouble: me.NumericLiteral_Double}
 	case "NumericLiteral_Integer":
-		a = GIrALitInt{LitInt: me.NumericLiteral_Integer}
+		a = &GIrALitInt{LitInt: me.NumericLiteral_Integer}
 	case "Var":
-		v := GIrAVar{}
+		v := &GIrAVar{}
 		v.setBothNamesFromPsName(me.Var)
 		a = v
 	case "Block":
-		b := GIrABlock{}
+		b := &GIrABlock{}
 		for _, c := range me.Block {
 			b.Body = append(b.Body, c.ciAstToGIrAst())
 		}
 		a = b
 	case "While":
-		f := GIrAFor{}
+		f := &GIrAFor{ForDo: &GIrABlock{}}
 		f.ForCond = me.While.ciAstToGIrAst()
-		me.AstBody.astForceIntoBlock(&f.GIrABlock)
+		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "ForIn":
-		f := GIrAFor{}
-		f.ForRange = GIrAVar{}
+		f := &GIrAFor{ForDo: &GIrABlock{}}
+		f.ForRange = &GIrAVar{}
 		f.ForRange.setBothNamesFromPsName(me.ForIn)
 		f.ForRange.VarVal = me.AstFor1.ciAstToGIrAst()
-		me.AstBody.astForceIntoBlock(&f.GIrABlock)
+		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "For":
-		f, fv := GIrAFor{}, GIrAVar{}
+		f, fv := &GIrAFor{ForDo: &GIrABlock{}}, &GIrAVar{}
 		fv.setBothNamesFromPsName(me.For)
-		f.ForInit = []GIrASet{{
+		f.ForInit = []*GIrASet{&GIrASet{
 			SetLeft: fv, ToRight: me.AstFor1.ciAstToGIrAst()}}
-		f.ForCond = GIrAOp2{Left: fv, Op2: "<", Right: me.AstFor2.ciAstToGIrAst()}
-		f.ForStep = []GIrASet{{SetLeft: fv, ToRight: GIrAOp2{Left: fv, Op2: "+", Right: GIrALitInt{LitInt: 1}}}}
-		me.AstBody.astForceIntoBlock(&f.GIrABlock)
+		f.ForCond = &GIrAOp2{Left: fv, Op2: "<", Right: me.AstFor2.ciAstToGIrAst()}
+		f.ForStep = []*GIrASet{&GIrASet{SetLeft: fv, ToRight: &GIrAOp2{Left: fv, Op2: "+", Right: &GIrALitInt{LitInt: 1}}}}
+		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "IfElse":
-		i := GIrAIf{If: me.IfElse.ciAstToGIrAst()}
-		me.AstThen.astForceIntoBlock(&i.Then)
+		i := &GIrAIf{If: me.IfElse.ciAstToGIrAst(), Then: &GIrABlock{}}
+		me.AstThen.astForceIntoBlock(i.Then)
 		if me.AstElse != nil {
-			me.AstElse.astForceIntoBlock(&i.Else)
+			i.Else = &GIrABlock{}
+			me.AstElse.astForceIntoBlock(i.Else)
 		}
 		a = i
 	case "App":
-		c := GIrACall{Callee: me.App.ciAstToGIrAst()}
+		c := &GIrACall{Callee: me.App.ciAstToGIrAst()}
 		for _, arg := range me.AstApplArgs {
 			c.CallArgs = append(c.CallArgs, arg.ciAstToGIrAst())
 		}
 		a = c
 	case "VariableIntroduction":
-		c := GIrAVar{}
+		c := &GIrAVar{}
 		if istopleveldecl {
 			if unicode.IsUpper([]rune(me.VariableIntroduction[:1])[0]) {
 				c.WasTypeFunc = true
@@ -141,7 +163,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = c
 	case "Function":
-		f := GIrAFunc{}
+		f := &GIrAFunc{FuncImpl: &GIrABlock{}}
 		if istopleveldecl && len(me.Function) > 0 {
 			if unicode.IsUpper([]rune(me.Function[:1])[0]) {
 				f.WasTypeFunc = true
@@ -157,11 +179,11 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
-		me.AstBody.astForceIntoBlock(&f.FuncImpl)
-		f.mBody = &f.FuncImpl
+		me.AstBody.astForceIntoBlock(f.FuncImpl)
+		f.mBody = f.FuncImpl
 		a = f
 	case "Unary":
-		o := GIrAOp1{Op1: me.AstOp, Of: me.Unary.ciAstToGIrAst()}
+		o := &GIrAOp1{Op1: me.AstOp, Of: me.Unary.ciAstToGIrAst()}
 		switch o.Op1 {
 		case "Negate":
 			o.Op1 = "-"
@@ -171,15 +193,15 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			o.Op1 = "+"
 		case "BitwiseNot":
 			o.Op1 = "^"
+		case "New":
+			o.Op1 = "&"
 		default:
-			if o.Op1 != "New" {
-				panic("unrecognized unary op '" + o.Op1 + "', please report!")
-			}
+			panic("unrecognized unary op '" + o.Op1 + "', please report!")
 			o.Op1 = "?" + o.Op1 + "?"
 		}
 		a = o
 	case "Binary":
-		o := GIrAOp2{Op2: me.AstOp, Left: me.Binary.ciAstToGIrAst(), Right: me.AstRight.ciAstToGIrAst()}
+		o := &GIrAOp2{Op2: me.AstOp, Left: me.Binary.ciAstToGIrAst(), Right: me.AstRight.ciAstToGIrAst()}
 		switch o.Op2 {
 		case "Add":
 			o.Op2 = "+"
@@ -225,7 +247,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = o
 	case "Comment":
-		c := GIrAComments{}
+		c := &GIrAComments{}
 		for _, comment := range me.Comment {
 			if comment != nil {
 				c.Comments = append(c.Comments, *comment)
@@ -236,42 +258,42 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = c
 	case "ObjectLiteral":
-		o := GIrALitObj{}
+		o := &GIrALitObj{}
 		for _, namevaluepair := range me.ObjectLiteral {
 			for onekey, oneval := range namevaluepair {
-				v := GIrAVar{VarVal: oneval.ciAstToGIrAst()}
+				v := &GIrALitObjField{FieldVal: oneval.ciAstToGIrAst()}
 				v.setBothNamesFromPsName(onekey)
-				o.ObjPairs = append(o.ObjPairs, v)
+				o.ObjFields = append(o.ObjFields, v)
 				break
 			}
 		}
 		a = o
 	case "ReturnNoResult":
-		r := GIrARet{}
+		r := &GIrARet{}
 		a = r
 	case "Return":
-		r := GIrARet{RetArg: me.Return.ciAstToGIrAst()}
+		r := &GIrARet{RetArg: me.Return.ciAstToGIrAst()}
 		a = r
 	case "Throw":
-		r := GIrAPanic{PanicArg: me.Throw.ciAstToGIrAst()}
+		r := &GIrAPanic{PanicArg: me.Throw.ciAstToGIrAst()}
 		a = r
 	case "ArrayLiteral":
-		l := GIrALitArr{}
+		l := &GIrALitArr{}
 		for _, v := range me.ArrayLiteral {
 			l.ArrVals = append(l.ArrVals, v.ciAstToGIrAst())
 		}
 		a = l
 	case "Assignment":
-		o := GIrASet{SetLeft: me.Assignment.ciAstToGIrAst(), ToRight: me.AstRight.ciAstToGIrAst()}
+		o := &GIrASet{SetLeft: me.Assignment.ciAstToGIrAst(), ToRight: me.AstRight.ciAstToGIrAst()}
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			a = GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: ªV(me.AstRight.StringLiteral)}
+			a = &GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: ªV(me.AstRight.StringLiteral)}
 		} else {
-			a = GIrAIndex{IdxLeft: me.Indexer.ciAstToGIrAst(), IdxRight: me.AstRight.ciAstToGIrAst()}
+			a = &GIrAIndex{IdxLeft: me.Indexer.ciAstToGIrAst(), IdxRight: me.AstRight.ciAstToGIrAst()}
 		}
 	case "InstanceOf":
-		a = GIrAIsType{ExprToTest: me.InstanceOf.ciAstToGIrAst(), TypeToTest: me.AstRight.ciAstToGIrAst()}
+		a = &GIrAIsType{ExprToTest: me.InstanceOf.ciAstToGIrAst(), TypeToTest: me.AstRight.ciAstToGIrAst()}
 	default:
 		panic(fmt.Errorf("Just below %v: unrecognized CoreImp AST-tag, please report: %s", me.parent, me.AstTag))
 	}
@@ -291,7 +313,7 @@ type CoreImpSourceSpan struct {
 
 func (me *CoreImp) preProcessTopLevel() error {
 	me.namedRequires = map[string]string{}
-	me.setParents(nil, me.Body...)
+	me.preProcessAsts(nil, me.Body...)
 	i := 0
 	ditch := func() {
 		me.Body = append(me.Body[:i], me.Body[i+1:]...)
@@ -305,14 +327,6 @@ func (me *CoreImp) preProcessTopLevel() error {
 		} else if a.Assignment != nil && a.Assignment.Indexer != nil && a.Assignment.Indexer.Var == "module" && a.Assignment.AstRight != nil && a.Assignment.AstRight.StringLiteral == "exports" {
 			//	module.exports = ..
 			ditch()
-		} else if a.AstTag == "Comment" {
-			if a.AstCommentDecl != nil {
-				decl := a.AstCommentDecl
-				a.AstCommentDecl = nil
-				putdeclnexttocomment := append(me.Body[:i+1], decl)
-				everythingelse := me.Body[i+1:]
-				me.Body = append(putdeclnexttocomment, everythingelse...)
-			}
 		} else if a.AstTag == "VariableIntroduction" {
 			if a.AstRight != nil && a.AstRight.App != nil && a.AstRight.App.Var == "require" && len(a.AstRight.AstApplArgs) == 1 {
 				// println("Dropped top-level require()" )
@@ -324,45 +338,63 @@ func (me *CoreImp) preProcessTopLevel() error {
 				a = a.AstRight
 				a.parent, me.Body[i] = nil, a
 			}
-		} else {
+		} else if a.AstTag != "Function" && a.AstTag != "VariableIntroduction" && a.AstTag != "Comment" {
 			return fmt.Errorf("Encountered unexpected top-level AST tag, please report: %s", a.AstTag)
 		}
 	}
 	return nil
 }
 
-func (me *CoreImp) setParents(parent *CoreImpAst, asts ...*CoreImpAst) {
+func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) {
 	if parent != nil {
 		parent.root = me
 	}
 	for _, a := range asts {
 		if a != nil {
+			for _, sym := range []*string{&a.For, &a.ForIn, &a.Function, &a.Var, &a.VariableIntroduction} {
+				if len(*sym) > 0 {
+					*sym = strunprimer.Replace(*sym)
+				}
+			}
+			for i, mkv := range a.ObjectLiteral {
+				for onename, oneval := range mkv {
+					if nuname := strunprimer.Replace(onename); nuname != onename {
+						mkv = map[string]*CoreImpAst{}
+						mkv[nuname] = oneval
+						a.ObjectLiteral[i] = mkv
+					}
+				}
+			}
+			for i, afp := range a.AstFuncParams {
+				a.AstFuncParams[i] = strunprimer.Replace(afp)
+			}
+
 			a.root = me
 			a.parent = parent
-			me.setParents(a, a.App)
-			me.setParents(a, a.ArrayLiteral...)
-			me.setParents(a, a.Assignment)
-			me.setParents(a, a.AstApplArgs...)
-			me.setParents(a, a.AstBody)
-			me.setParents(a, a.AstCommentDecl)
-			me.setParents(a, a.AstFor1)
-			me.setParents(a, a.AstFor2)
-			me.setParents(a, a.AstElse)
-			me.setParents(a, a.AstThen)
-			me.setParents(a, a.AstRight)
-			me.setParents(a, a.Binary)
-			me.setParents(a, a.Block...)
-			me.setParents(a, a.IfElse)
-			me.setParents(a, a.Indexer)
-			me.setParents(a, a.Assignment)
-			me.setParents(a, a.InstanceOf)
-			me.setParents(a, a.Return)
-			me.setParents(a, a.Throw)
-			me.setParents(a, a.Unary)
-			me.setParents(a, a.While)
+			me.preProcessAsts(a, a.App)
+			me.preProcessAsts(a, a.ArrayLiteral...)
+			me.preProcessAsts(a, a.Assignment)
+			me.preProcessAsts(a, a.AstApplArgs...)
+			me.preProcessAsts(a, a.AstBody)
+			me.preProcessAsts(a, a.AstCommentDecl)
+			me.preProcessAsts(a, a.AstFor1)
+			me.preProcessAsts(a, a.AstFor2)
+			me.preProcessAsts(a, a.AstElse)
+			me.preProcessAsts(a, a.AstThen)
+			me.preProcessAsts(a, a.AstRight)
+			me.preProcessAsts(a, a.Binary)
+			me.preProcessAsts(a, a.Block...)
+			me.preProcessAsts(a, a.IfElse)
+			me.preProcessAsts(a, a.Indexer)
+			me.preProcessAsts(a, a.Assignment)
+			me.preProcessAsts(a, a.InstanceOf)
+			me.preProcessAsts(a, a.Return)
+			me.preProcessAsts(a, a.Throw)
+			me.preProcessAsts(a, a.Unary)
+			me.preProcessAsts(a, a.While)
 			for _, m := range a.ObjectLiteral {
 				for _, expr := range m {
-					me.setParents(a, expr)
+					me.preProcessAsts(a, expr)
 				}
 			}
 		}

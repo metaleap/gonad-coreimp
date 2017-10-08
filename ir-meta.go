@@ -397,7 +397,7 @@ func (me *GonadIrMeta) GoTypeDefByGoName(goname string) (gtd *GIrANamedTypeRef) 
 }
 
 func (me *GonadIrMeta) GoTypeDefByPsName(psname string) (gtd *GIrANamedTypeRef) {
-	gtd, _ = me.lookuptypesgo[psname]
+	gtd, _ = me.lookuptypesps[psname]
 	return
 }
 

@@ -78,7 +78,12 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
 
-	for _, td := range me.ExtTypeDataDecls {
+	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict)...)
+}
+
+func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, mdict map[string][]string) (gtds GIrANamedTypeRefs) {
+	var tdict map[string][]string
+	for _, td := range exttypedatadecls {
 		tdict = map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
@@ -97,7 +102,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					}
 				}
 			}
-			me.GoTypeDefs = append(me.GoTypeDefs, gid)
+			gtds = append(gtds, gid)
 			if isnewtype {
 				gid.RefInterface = nil
 				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
@@ -105,6 +110,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &GIrANamedTypeRef{Export: true, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
+					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
 						field := &GIrANamedTypeRef{}
 						field.setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
@@ -123,7 +129,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 							RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{method_ret}}}
 						gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_askind)
 					}
-					me.GoTypeDefs = append(me.GoTypeDefs, ctor.gtd)
+					gtds = append(gtds, ctor.gtd)
 				}
 				for _, ctor := range td.Ctors {
 					for _, method := range gid.RefInterface.Methods {
@@ -140,7 +146,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 									mcopy.mBody.Add(ªRet(ªO1("&", ªV("this"))))
 								}
 							} else {
-								mcopy.mBody.Add(ªRet(GIrANil{}))
+								mcopy.mBody.Add(ªRet(&GIrANil{}))
 							}
 						}
 						ctor.gtd.Methods = append(ctor.gtd.Methods, &mcopy)
@@ -149,6 +155,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 			}
 		}
 	}
+	return
 }
 
 func toGIrAEnumConstName(dataname string, ctorname string) string {
