@@ -50,10 +50,13 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
-		fmt.Fprint(w, "{")
+		// codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
+		fmt.Fprint(w, a.GIrANamedTypeRef.RefAlias+"{")
 		for i, namevaluepair := range a.ObjFields {
 			codeEmitCommaIf(w, i)
-			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
+			if len(namevaluepair.NameGo) > 0 {
+				fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
+			}
 			codeEmitAst(w, indent, namevaluepair.FieldVal, trr)
 		}
 		fmt.Fprint(w, "}")
@@ -362,6 +365,9 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.mBody != nil
+	if gtd.comment != nil {
+		codeEmitAst(w, indlevel, gtd.comment, typerefresolver)
+	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}

@@ -111,6 +111,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 					ctor.gtd = &GIrANamedTypeRef{Export: forexport, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
+					ctor.gtd.comment = ctor.comment
 					for ia, ctorarg := range ctor.Args {
 						field := &GIrANamedTypeRef{}
 						field.setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))

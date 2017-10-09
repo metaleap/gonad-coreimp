@@ -67,7 +67,8 @@ type GIrMTypeDataCtor struct {
 	Name string       `json:"tdcn"`
 	Args GIrMTypeRefs `json:"tdca,omitempty"`
 
-	gtd *GIrANamedTypeRef
+	gtd     *GIrANamedTypeRef
+	comment *GIrAComments
 }
 
 type GIrMTypeRefs []*GIrMTypeRef

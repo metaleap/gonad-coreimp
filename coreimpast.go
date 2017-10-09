@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/metaleap/go-util-str"
 )
 
 var (
@@ -104,6 +106,11 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = &GIrALitInt{LitInt: me.NumericLiteral_Integer}
 	case "Var":
 		v := &GIrAVar{}
+		if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Var); gvd != nil {
+			v.Export = true
+		} else if unicode.IsUpper(ustr.FirstRune(me.Var)) {
+			v.WasTypeFunc = true
+		}
 		v.setBothNamesFromPsName(me.Var)
 		a = v
 	case "Block":
@@ -148,24 +155,24 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = c
 	case "VariableIntroduction":
-		c := &GIrAVar{}
+		v := &GIrAVar{}
 		if istopleveldecl {
-			if unicode.IsUpper([]rune(me.VariableIntroduction[:1])[0]) {
-				c.WasTypeFunc = true
+			if unicode.IsUpper(ustr.FirstRune(me.VariableIntroduction)) {
+				v.WasTypeFunc = true
 			}
 			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.VariableIntroduction); gvd != nil {
-				c.Export = true
+				v.Export = true
 			}
 		}
-		c.setBothNamesFromPsName(me.VariableIntroduction)
+		v.setBothNamesFromPsName(me.VariableIntroduction)
 		if me.AstRight != nil {
-			c.VarVal = me.AstRight.ciAstToGIrAst()
+			v.VarVal = me.AstRight.ciAstToGIrAst()
 		}
-		a = c
+		a = v
 	case "Function":
 		f := &GIrAFunc{FuncImpl: &GIrABlock{}}
 		if istopleveldecl && len(me.Function) > 0 {
-			if unicode.IsUpper([]rune(me.Function[:1])[0]) {
+			if unicode.IsUpper(ustr.FirstRune(me.Function)) {
 				f.WasTypeFunc = true
 			}
 			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Function); gvd != nil {

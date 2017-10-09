@@ -10,10 +10,12 @@ import (
 	"unicode"
 
 	"github.com/metaleap/go-util-slice"
+	"github.com/metaleap/go-util-str"
 )
 
 const (
-	nsPrefixDefaultFfiPkg = "Ps2GoFFI."
+	nsPrefixDefaultFfiPkg  = "Ps2GoFFI."
+	saniUpperToLowerPrefix = "µˇ"
 )
 
 var (
@@ -56,6 +58,7 @@ type GIrANamedTypeRef struct {
 	mNoThis bool
 	mBody   *GIrABlock
 	ctor    *GIrMTypeDataCtor
+	comment *GIrAComments
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
@@ -181,7 +184,7 @@ type GIrA interface {
 	subAsts() []GIrA
 }
 
-type gIrAConst interface {
+type gIrAConstable interface {
 	GIrA
 	isConstable() bool
 }
@@ -260,7 +263,7 @@ type GIrAOp1 struct {
 func (me *GIrAOp1) subAsts() []GIrA { return []GIrA{me.Of} }
 
 func (me GIrAOp1) isConstable() bool {
-	if c, ok := me.Of.(gIrAConst); ok {
+	if c, ok := me.Of.(gIrAConstable); ok {
 		return c.isConstable()
 	}
 	return false
@@ -275,8 +278,8 @@ type GIrAOp2 struct {
 func (me *GIrAOp2) subAsts() []GIrA { return []GIrA{me.Left, me.Right} }
 
 func (me GIrAOp2) isConstable() bool {
-	if c, ok := me.Left.(gIrAConst); ok && c.isConstable() {
-		if c, ok := me.Right.(gIrAConst); ok {
+	if c, ok := me.Left.(gIrAConstable); ok && c.isConstable() {
+		if c, ok := me.Right.(gIrAConstable); ok {
 			return c.isConstable()
 		}
 	}
@@ -394,23 +397,13 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 	for _, cia := range me.mod.coreimp.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
-	//	turn var=literal's into consts
-	me.Walk(func(ast GIrA) GIrA {
-		if v, _ := ast.(*GIrAVar); v != nil {
-			if vc, _ := v.VarVal.(gIrAConst); vc != nil && vc.isConstable() {
-				c := &GIrAConst{GIrANamedTypeRef: v.GIrANamedTypeRef}
-				c.ConstVal = v.VarVal
-				return c
-			}
-		}
-		return ast
-	})
 
 	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
 	newxtypedatadecl := GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var av *GIrAVar
+	var ac *GIrAComments
 	for i := 0; i < len(me.Body); i++ {
-		if ac, _ := me.Body[i].(*GIrAComments); ac != nil && ac.CommentsDecl != nil {
+		if ac, _ = me.Body[i].(*GIrAComments); ac != nil && ac.CommentsDecl != nil {
 			for tmp, _ := ac.CommentsDecl.(*GIrAComments); tmp != nil; tmp, _ = ac.CommentsDecl.(*GIrAComments) {
 				ac = tmp
 			}
@@ -419,19 +412,24 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 			av, _ = me.Body[i].(*GIrAVar)
 		}
 		if av != nil && av.WasTypeFunc {
-			if foo, _ := av.VarVal.(*GIrAFunc); foo != nil {
+			if ac != nil {
+				ac.CommentsDecl = nil
+			}
+			if fn, _ := av.VarVal.(*GIrAFunc); fn != nil {
 				// TODO catches type-classes but not all
-				// fmt.Printf("%v\t%s\t%s\t%s\n", len(foo.RefFunc.Args), av.NameGo, av.NamePs, me.mod.srcFilePath)
+				// fmt.Printf("%v\t%s\t%s\t%s\n", len(fn.RefFunc.Args), av.NameGo, av.NamePs, me.mod.srcFilePath)
 				me.Body = append(me.Body[:i], me.Body[i+1:]...)
 				i--
 			} else {
 				fn := av.VarVal.(*GIrACall).Callee.(*GIrAFunc).FuncImpl.Body[0].(*GIrAFunc)
-				if me.girM.GoTypeDefByPsName(av.NamePs) == nil {
-					nuctor := &GIrMTypeDataCtor{Name: av.NamePs}
+				if gtd := me.girM.GoTypeDefByPsName(av.NamePs); gtd == nil {
+					nuctor := &GIrMTypeDataCtor{Name: av.NamePs, comment: ac}
 					for i := 0; i < len(fn.RefFunc.Args); i++ {
 						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{TypeConstructor: "T_Unknown"})
 					}
 					newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
+				} else {
+					gtd.comment = ac
 				}
 				me.Body = append(me.Body[:i], me.Body[i+1:]...)
 				i--
@@ -442,6 +440,58 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 		me.girM.GoTypeDefs = append(me.girM.GoTypeDefs, me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
 		me.girM.rebuildLookups()
 	}
+
+	//	now that we have these additional structs/interfaces, add private globals to represent all arg-less ctors
+	nuglobals := []GIrA{}
+	nuglobalsmap := map[string]string{}
+	for _, gtd := range me.girM.GoTypeDefs {
+		if gtd.RefInterface != nil {
+			for _, gtdm := range gtd.RefInterface.Methods {
+				if gtdm.ctor != nil && gtdm.ctor.gtd != nil && len(gtdm.ctor.Args) == 0 {
+					nuvar := ªV("º" + gtdm.ctor.Name)
+					nuvar.VarVal = ªObj(gtdm.ctor.gtd.NameGo)
+					nuglobalsmap[gtdm.ctor.Name] = nuvar.NameGo
+					nuglobals = append(nuglobals, nuvar)
+				}
+			}
+		}
+	}
+	me.Body = append(nuglobals, me.Body...)
+
+	me.Walk(func(ast GIrA) GIrA {
+		if d, _ := ast.(*GIrADot); d != nil {
+			//	find all CtorName.value references and change them to the above new vars
+			if dr, _ := d.DotRight.(*GIrAVar); dr != nil && dr.NameGo == "value" {
+				if dl, _ := d.DotLeft.(*GIrAVar); dl != nil {
+					if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
+						return ªV(nuglobalvarname)
+					}
+				}
+			}
+		} else if v, _ := ast.(*GIrAVar); v != nil {
+			//	turn var=literal's into consts
+			if vc, _ := v.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
+				return ªConst(&v.GIrANamedTypeRef, v.VarVal)
+			}
+		} else if o1, _ := ast.(*GIrAOp1); o1 != nil && o1.Op1 == "&" {
+			//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
+			if oc, _ := o1.Of.(*GIrACall); oc != nil {
+				if ocv, _ := oc.Callee.(*GIrAVar); ocv != nil {
+					if gtd := me.girM.GoTypeDefByPsName(ocv.NameGo); gtd != nil {
+						o := ªObj(gtd.NameGo)
+						for _, ctorarg := range oc.CallArgs {
+							o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
+						}
+						return o
+					} else if ocv.NamePs == "Error" && len(oc.CallArgs) == 1 {
+						// dot := &GIrADot{DotLeft: &GIrAVar{GIrANamedTypeRef: GIrMNamedTypeRef{Name: "errors"}}}
+					}
+				}
+			}
+		}
+		return ast
+	})
+
 	return
 }
 
@@ -577,10 +627,12 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		return name
 	}
 	if upper {
-		name = strings.ToUpper(name[:1]) + name[1:]
+		runes := []rune(name)
+		runes[0] = unicode.ToUpper(runes[0])
+		name = string(runes)
 	} else {
-		if unicode.IsUpper([]rune(name[:1])[0]) {
-			name = "µˇ" + name
+		if unicode.IsUpper(ustr.FirstRune(name)) {
+			name = saniUpperToLowerPrefix + name
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
@@ -683,6 +735,10 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 	return ast
 }
 
+func ªConst(tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
+	return &GIrAConst{ConstVal: val, GIrANamedTypeRef: *tref}
+}
+
 func ªDot(left GIrA, right string) *GIrADot {
 	return &GIrADot{DotLeft: left, DotRight: ªV(right)}
 }
@@ -697,6 +753,10 @@ func ªO1(op string, operand GIrA) *GIrAOp1 {
 
 func ªO2(left GIrA, op string, right GIrA) *GIrAOp2 {
 	return &GIrAOp2{Op2: op, Left: left, Right: right}
+}
+
+func ªObj(typerefalias string) *GIrALitObj {
+	return &GIrALitObj{GIrANamedTypeRef: GIrANamedTypeRef{RefAlias: typerefalias}}
 }
 
 func ªRet(retarg GIrA) *GIrARet {
