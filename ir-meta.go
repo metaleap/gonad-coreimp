@@ -57,6 +57,15 @@ type GIrMTypeClass struct {
 	Members     []GIrMNamedTypeRef   `json:"tcm,omitempty"`
 }
 
+type GIrMTypeClassInst struct {
+	Name        string               `json:"tcin"`
+	ClassName   string               `json:"tcicn,omitempty"`
+	Constraints []*GIrMTypeRefConstr `json:"tcic,omitempty"`
+	Types       GIrMTypeRefs         `json:"tcit,omitempty"`
+	Chain       []string             `json:"tcich,omitempty"`
+	ChainIndex  int                  `json:"tcichi,omitempty"`
+}
+
 type GIrMTypeDataDecl struct {
 	Name  string              `json:"tdn"`
 	Ctors []*GIrMTypeDataCtor `json:"tdc,omitempty"`
@@ -161,7 +170,14 @@ func qNameFromExt(subArrAt0andStrAt1 []interface{}) (qname string) {
 	for _, s := range subArrAt0andStrAt1[0].([]interface{}) {
 		qname += (s.(string) + ".")
 	}
-	qname += subArrAt0andStrAt1[1].(string)
+	switch x := subArrAt0andStrAt1[1].(type) {
+	case string:
+		qname += x
+	case map[string]string:
+		qname += x["Ident"]
+	case map[string]interface{}:
+		qname += x["Ident"].(string)
+	}
 	return
 }
 
@@ -299,25 +315,39 @@ func (me *GonadIrMeta) populateExtTypeAliases() {
 }
 
 func (me *GonadIrMeta) populateExtTypeClasses() {
+	populateconstraints := func(xconstrs []PsExtConstr) (mconstrs []*GIrMTypeRefConstr) {
+		for _, constr := range xconstrs {
+			trc := &GIrMTypeRefConstr{Class: qNameFromExt(constr.Class), Data: constr.Data}
+			for _, carg := range constr.Args {
+				trc.Args = append(trc.Args, me.newTypeRefFromExtTc(carg))
+			}
+			mconstrs = append(mconstrs, trc)
+		}
+		return
+	}
 	for _, efdecl := range me.mod.ext.EfDecls {
 		if edc := efdecl.EDClass; edc != nil {
 			tc := GIrMTypeClass{Name: edc.Name}
 			for _, edca := range edc.TypeArgs {
 				tc.TypeArgs = append(tc.TypeArgs, edca[0].(string))
 			}
-			for _, edcc := range edc.Constraints {
-				tcc := &GIrMTypeRefConstr{Class: qNameFromExt(edcc.Class), Data: edcc.Data}
-				for _, edcca := range edcc.Args {
-					tcc.Args = append(tcc.Args, me.newTypeRefFromExtTc(edcca))
-				}
-				tc.Constraints = append(tc.Constraints, tcc)
-			}
+			tc.Constraints = populateconstraints(edc.Constraints)
 			for _, edcm := range edc.Members {
 				mident := edcm[0].(map[string]interface{})["Ident"].(string)
 				mtc := me.newTypeRefFromExtTc(newTaggedContents(edcm[1].(map[string]interface{})))
 				tc.Members = append(tc.Members, GIrMNamedTypeRef{Name: mident, Ref: mtc})
 			}
 			me.ExtTypeClasses = append(me.ExtTypeClasses, tc)
+		}
+		if edi := efdecl.EDInstance; edi != nil {
+			tci := GIrMTypeClassInst{Name: edi.Name.Ident, ClassName: qNameFromExt(edi.ClassName), ChainIndex: edi.ChainIndex}
+			for _, tc := range edi.Types {
+				tci.Types = append(tci.Types, me.newTypeRefFromExtTc(tc))
+			}
+			tci.Constraints = populateconstraints(edi.Constraints)
+			for _, nametuples := range edi.Chain {
+				tci.Chain = append(tci.Chain, qNameFromExt(nametuples))
+			}
 		}
 	}
 }

@@ -44,18 +44,20 @@ type PsExtImportType struct {
 }
 
 type PsExtDecl struct {
-	EDClass           *PsExtTypeClass        `json:",omitempty"`
-	EDType            *PsExtType             `json:",omitempty"`
-	EDTypeSynonym     *PsExtTypeAlias        `json:",omitempty"`
-	EDValue           *PsExtVal              `json:",omitempty"`
-	EDInstance        map[string]interface{} `json:",omitempty"`
-	EDDataConstructor map[string]interface{} `json:",omitempty"`
+	EDClass       *PsExtTypeClass `json:",omitempty"`
+	EDType        *PsExtType      `json:",omitempty"`
+	EDTypeSynonym *PsExtTypeAlias `json:",omitempty"`
+	EDValue       *PsExtVal       `json:",omitempty"`
+	EDInstance    *PsExtInst      `json:",omitempty"`
+	// EDDataConstructor map[string]interface{} `json:",omitempty"`
+}
+
+type PsExtIdent struct {
+	Ident string `json:",omitempty"`
 }
 
 type PsExtVal struct {
-	Name struct {
-		Ident string `json:",omitempty"`
-	} `json:"edValueName"`
+	Name PsExtIdent     `json:"edValueName"`
 	Type TaggedContents `json:"edValueType"`
 }
 
@@ -71,6 +73,21 @@ type PsExtTypeAlias struct {
 	Type      *TaggedContents `json:"edTypeSynonymType,omitempty"`
 }
 
+type PsExtConstr struct {
+	Class []interface{}    `json:"constraintClass,omitempty"`
+	Args  []TaggedContents `json:"constraintArgs,omitempty"`
+	Data  []interface{}    `json:"constraintData,omitempty"`
+}
+
+type PsExtInst struct {
+	ClassName   []interface{}    `json:"edInstanceClassName,omitempty"`
+	Name        PsExtIdent       `json:"edInstanceName,omitempty"`
+	Types       []TaggedContents `json:"edInstanceTypes,omitempty"`
+	Constraints []PsExtConstr    `json:"edInstanceConstraints,omitempty"`
+	Chain       [][]interface{}  `json:"edInstanceChain,omitempty"`
+	ChainIndex  int              `json:"edInstanceChainIndex,omitempty"`
+}
+
 type PsExtTypeClass struct {
 	Name           string          `json:"edClassName,omitempty"`
 	TypeArgs       [][]interface{} `json:"edClassTypeArguments,omitempty"`
@@ -79,11 +96,7 @@ type PsExtTypeClass struct {
 		Determined  []int `json:"determined,omitempty"`
 	} `json:"edFunctionalDependencies,omitempty"`
 	Members     [][]interface{} `json:"edClassMembers,omitempty"`
-	Constraints []struct {
-		Class []interface{}    `json:"constraintClass,omitempty"`
-		Args  []TaggedContents `json:"constraintArgs,omitempty"`
-		Data  [][]interface{}  `json:"constraintData,omitempty"`
-	} `json:"edClassConstraints,omitempty"`
+	Constraints []PsExtConstr   `json:"edClassConstraints,omitempty"`
 }
 
 func (me *PsExt) findTypeClass(name string) *PsExtTypeClass {
