@@ -16,6 +16,12 @@ const (
 	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
 )
 
+func codeEmitCommaIf(w io.Writer, i int) {
+	if i > 0 {
+		fmt.Fprint(w, ", ")
+	}
+}
+
 func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	tabs := ""
 	if indent > 0 {
@@ -39,18 +45,14 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		fmt.Fprint(w, "{")
 		for i, expr := range a.ArrVals {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
+			codeEmitCommaIf(w, i)
 			codeEmitAst(w, indent, expr, trr)
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
+			codeEmitCommaIf(w, i)
 			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
 			codeEmitAst(w, indent, namevaluepair.FieldVal, trr)
 		}
@@ -211,33 +213,28 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 			codeEmitAst(w, indent, a.ForDo, trr)
 		} else if len(a.ForInit) > 0 || len(a.ForStep) > 0 {
 			fmt.Fprint(w, "for ")
+
 			for i, finit := range a.ForInit {
-				if i > 0 {
-					fmt.Fprint(w, ", ")
-				}
+				codeEmitCommaIf(w, i)
 				codeEmitAst(w, indent, finit.SetLeft, trr)
 			}
 			fmt.Fprint(w, " = ")
 			for i, finit := range a.ForInit {
-				if i > 0 {
-					fmt.Fprint(w, ", ")
-				}
+				codeEmitCommaIf(w, i)
 				codeEmitAst(w, indent, finit.ToRight, trr)
 			}
 			fmt.Fprint(w, "; ")
+
 			codeEmitAst(w, indent, a.ForCond, trr)
 			fmt.Fprint(w, "; ")
+
 			for i, fstep := range a.ForStep {
-				if i > 0 {
-					fmt.Fprint(w, ", ")
-				}
+				codeEmitCommaIf(w, i)
 				codeEmitAst(w, indent, fstep.SetLeft, trr)
 			}
 			fmt.Fprint(w, " = ")
 			for i, fstep := range a.ForStep {
-				if i > 0 {
-					fmt.Fprint(w, ", ")
-				}
+				codeEmitCommaIf(w, i)
 				codeEmitAst(w, indent, fstep.ToRight, trr)
 			}
 			codeEmitAst(w, indent, a.ForDo, trr)
@@ -324,9 +321,7 @@ func codeEmitFuncArgs(w io.Writer, methodargs GIrANamedTypeRefs, indlevel int, t
 	}
 	if len(methodargs) > 0 {
 		for i, arg := range methodargs {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
+			codeEmitCommaIf(w, i)
 			if len(arg.NameGo) > 0 {
 				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
@@ -449,9 +444,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		}
 		fmt.Fprint(w, "(")
 		for i, l := 0, len(gtd.RefFunc.Args); i < l; i++ {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
+			codeEmitCommaIf(w, i)
 			if argname := gtd.RefFunc.Args[i].NameGo; len(argname) > 0 {
 				fmt.Fprintf(w, "%s ", argname)
 			}
@@ -463,9 +456,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, "(")
 		}
 		for i := 0; i < numrets; i++ {
-			if i > 0 {
-				fmt.Fprint(w, ", ")
-			}
+			codeEmitCommaIf(w, i)
 			if retname := gtd.RefFunc.Rets[i].NameGo; len(retname) > 0 {
 				fmt.Fprintf(w, "%s ", retname)
 			}

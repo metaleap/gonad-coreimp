@@ -553,6 +553,7 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 					if foundimport = true; markused {
 						imp.used = true
 					}
+					break
 				}
 			}
 			if !foundimport {
