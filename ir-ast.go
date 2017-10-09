@@ -406,19 +406,42 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 		return ast
 	})
 
-	//	detect unexported data-type constructors
-	// newxtypedatadecl := GIrMTypeDataDecl{}
+	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
+	newxtypedatadecl := GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
+	var av *GIrAVar
 	for i := 0; i < len(me.Body); i++ {
-		if av, ok := me.Body[i].(*GIrAVar); ok && av.WasTypeFunc {
-			if me.girM.GoTypeDefByPsName(av.NamePs) == nil {
-
-				// funcimpl := av.VarVal.(GIrACall).Callee.(GIrAFunc).FuncImpl.Body
+		if ac, _ := me.Body[i].(*GIrAComments); ac != nil && ac.CommentsDecl != nil {
+			for tmp, _ := ac.CommentsDecl.(*GIrAComments); tmp != nil; tmp, _ = ac.CommentsDecl.(*GIrAComments) {
+				ac = tmp
+			}
+			av, _ = ac.CommentsDecl.(*GIrAVar)
+		} else {
+			av, _ = me.Body[i].(*GIrAVar)
+		}
+		if av != nil && av.WasTypeFunc {
+			if foo, _ := av.VarVal.(*GIrAFunc); foo != nil {
+				// TODO catches type-classes but not all
+				// fmt.Printf("%v\t%s\t%s\t%s\n", len(foo.RefFunc.Args), av.NameGo, av.NamePs, me.mod.srcFilePath)
+				me.Body = append(me.Body[:i], me.Body[i+1:]...)
+				i--
+			} else {
+				fn := av.VarVal.(*GIrACall).Callee.(*GIrAFunc).FuncImpl.Body[0].(*GIrAFunc)
+				if me.girM.GoTypeDefByPsName(av.NamePs) == nil {
+					nuctor := &GIrMTypeDataCtor{Name: av.NamePs}
+					for i := 0; i < len(fn.RefFunc.Args); i++ {
+						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{TypeConstructor: "T_Unknown"})
+					}
+					newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
+				}
+				me.Body = append(me.Body[:i], me.Body[i+1:]...)
+				i--
 			}
 		}
 	}
-	// for _, gtd := range me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}) {
-	// 	println(gtd.NameGo)
-	// }
+	if len(newxtypedatadecl.Ctors) > 0 {
+		me.girM.GoTypeDefs = append(me.girM.GoTypeDefs, me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
+		me.girM.rebuildLookups()
+	}
 	return
 }
 
@@ -468,15 +491,15 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
 	}
 
-	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAConst); return ok /*&& !c.WasTypeFunc*/ })
-	toplevelvars := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && !c.WasTypeFunc })
-	toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
-	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
+	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAConst); return ok })
+	toplevelvars := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAVar); return ok })
 
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRef)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRef)
 
 	if false {
+		toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
+		toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
 		for _, ast := range toplevelctorfuncs {
 			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
 			fmt.Fprint(buf, "\n\n")
@@ -573,7 +596,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 	if ast != nil {
 		switch a := ast.(type) {
 		case *GIrABlock:
-			if a != nil {
+			if a != nil { // really shouldn't have to do this as per above, no idea why I need to --- bug in go 1.7.6?
 				for i, _ := range a.Body {
 					a.Body[i] = walk(a.Body[i], on)
 				}
@@ -632,7 +655,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 		case *GIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
 		case *GIrAVar:
-			if a != nil {
+			if a != nil { // really shouldn't have to do this as per above, no idea why I need to --- bug in go 1.7.6?
 				a.VarVal = walk(a.VarVal, on)
 			}
 		case *GIrAIsType:

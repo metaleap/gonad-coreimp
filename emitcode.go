@@ -53,7 +53,6 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 			}
 			fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
 			codeEmitAst(w, indent, namevaluepair.FieldVal, trr)
-			break
 		}
 		fmt.Fprint(w, "}")
 	case *GIrAConst:

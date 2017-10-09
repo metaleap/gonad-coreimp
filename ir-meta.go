@@ -332,9 +332,8 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
-	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
 	me.populateGoValDecls()
-	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
+	me.rebuildLookups()
 
 	if err == nil {
 		for _, impmod := range me.imports {
@@ -355,8 +354,7 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 			}
 		}
 	}
-	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
-	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
+	me.rebuildLookups()
 	return nil
 }
 
@@ -379,6 +377,11 @@ func (me *GonadIrMeta) populateGoValDecls() {
 		gvd.setRefFrom(me.toGIrATypeRef(mdict, tdict, evd.Ref))
 		me.GoValDecls = append(me.GoValDecls, gvd)
 	}
+}
+
+func (me *GonadIrMeta) rebuildLookups() {
+	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
+	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
 }
 
 func (me *GonadIrMeta) GoValDeclByGoName(goname string) (gvd *GIrANamedTypeRef) {

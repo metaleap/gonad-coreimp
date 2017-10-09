@@ -78,10 +78,10 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
 
-	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict)...)
+	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict, true)...)
 }
 
-func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, mdict map[string][]string) (gtds GIrANamedTypeRefs) {
+func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
 	var tdict map[string][]string
 	for _, td := range exttypedatadecls {
 		tdict = map[string][]string{}
@@ -89,7 +89,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
 			isnewtype, hasselfref, hasctorargs := false, false, false
-			gid := &GIrANamedTypeRef{RefInterface: &GIrATypeRefInterface{}, Export: true}
+			gid := &GIrANamedTypeRef{RefInterface: &GIrATypeRefInterface{}, Export: forexport}
 			gid.setBothNamesFromPsName(td.Name)
 			for _, ctor := range td.Ctors {
 				if numargs := len(ctor.Args); numargs > 0 {
@@ -108,7 +108,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
 			} else {
 				for _, ctor := range td.Ctors {
-					ctor.gtd = &GIrANamedTypeRef{Export: true, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
+					ctor.gtd = &GIrANamedTypeRef{Export: forexport, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
