@@ -460,11 +460,23 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 
 	me.Walk(func(ast GIrA) GIrA {
 		if d, _ := ast.(*GIrADot); d != nil {
-			//	find all CtorName.value references and change them to the above new vars
-			if dr, _ := d.DotRight.(*GIrAVar); dr != nil && dr.NameGo == "value" {
-				if dl, _ := d.DotLeft.(*GIrAVar); dl != nil {
-					if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
-						return ªV(nuglobalvarname)
+			if dl, _ := d.DotLeft.(*GIrAVar); dl != nil {
+				if dr, _ := d.DotRight.(*GIrAVar); dr != nil {
+					//	find all CtorName.value references and change them to the above new vars
+					if dr.NameGo == "value" {
+						if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
+							return ªV(nuglobalvarname)
+						}
+					}
+
+					//	if referring to a package, ensure the import is marked as in-use
+					for _, imp := range me.girM.Imports {
+						if imp.N == dl.NameGo {
+							imp.used = true
+							dr.Export = true
+							dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
+							break
+						}
 					}
 				}
 			}

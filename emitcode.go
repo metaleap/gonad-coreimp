@@ -272,11 +272,12 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 		maxlen, name := 0, ""
 		for _, a := range asts {
 			_, name = valname(a)
-			if l := len(name); l > maxlen {
+			l := len(name)
+			// if ustr.HasAny(name, "ª", "ĸ", "µ", "º", "ˇ", "ø") {
+			// 	l -= 1
+			// }
+			if l > maxlen {
 				maxlen = l
-			}
-			if ustr.HasAny(name, "ª", "ĸ", "µ", "º", "ˇ", "ø") {
-				maxlen -= 1
 			}
 		}
 		var val GIrA
