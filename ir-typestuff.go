@@ -14,7 +14,7 @@ func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname strin
 	}
 }
 
-func findGoTypeByQName(qname string) *GIrANamedTypeRef {
+func findGoTypeByPsQName(qname string) *GIrANamedTypeRef {
 	var pname, tname string
 	i := strings.LastIndex(qname, ".")
 	if tname = qname[i+1:]; i > 0 {

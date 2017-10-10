@@ -24,6 +24,15 @@ var (
 
 type GIrANamedTypeRefs []*GIrANamedTypeRef
 
+func (me GIrANamedTypeRefs) ByPsName(psname string) *GIrANamedTypeRef {
+	for _, gntr := range me {
+		if gntr.NamePs == psname {
+			return gntr
+		}
+	}
+	return nil
+}
+
 func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
 	if l := len(me); l != len(cmp) {
 		return false
@@ -59,6 +68,7 @@ type GIrANamedTypeRef struct {
 	mBody   *GIrABlock
 	ctor    *GIrMTypeDataCtor
 	comment *GIrAComments
+	instOf  *GIrANamedTypeRef
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
@@ -135,7 +145,7 @@ func (me *GIrATypeRefInterface) allMethods() (allmethods GIrANamedTypeRefs) {
 		if len(me.inheritedMethods) == 0 {
 			m := map[string]*GIrANamedTypeRef{}
 			for _, embed := range me.Embeds {
-				if gtd := findGoTypeByQName(embed); gtd == nil || gtd.RefInterface == nil {
+				if gtd := findGoTypeByPsQName(embed); gtd == nil || gtd.RefInterface == nil {
 					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report!", me.xtc.Name, embed))
 				} else {
 					for _, method := range gtd.RefInterface.allMethods() {
@@ -400,6 +410,7 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 
 	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
 	newxtypedatadecl := GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
+	var newextratypes GIrANamedTypeRefs
 	var av *GIrAVar
 	var ac *GIrAComments
 	for i := 0; i < len(me.Body); i++ {
@@ -418,8 +429,8 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 			if fn, _ := av.VarVal.(*GIrAFunc); fn != nil {
 				// TODO catches type-classes but not all
 				// fmt.Printf("%v\t%s\t%s\t%s\n", len(fn.RefFunc.Args), av.NameGo, av.NamePs, me.mod.srcFilePath)
-				me.Body = append(me.Body[:i], me.Body[i+1:]...)
-				i--
+				// me.Body = append(me.Body[:i], me.Body[i+1:]...)
+				// i--
 			} else {
 				fn := av.VarVal.(*GIrACall).Callee.(*GIrAFunc).FuncImpl.Body[0].(*GIrAFunc)
 				if gtd := me.girM.GoTypeDefByPsName(av.NamePs); gtd == nil {
@@ -437,7 +448,29 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 		}
 	}
 	if len(newxtypedatadecl.Ctors) > 0 {
-		me.girM.GoTypeDefs = append(me.girM.GoTypeDefs, me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
+		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
+	}
+	//	also turn type-class instances into 0-byte structs providing the corresponding interface-implementing method(s)
+	for _, tci := range me.girM.ExtTypeClassInsts {
+		if gid := findGoTypeByPsQName(tci.ClassName); gid == nil {
+			panic(me.mod.srcFilePath + ": type-class " + tci.ClassName + " not found for instance " + tci.Name)
+		} else {
+			gtd := newextratypes.ByPsName(tci.Name)
+			if gtd == nil {
+				gtd = &GIrANamedTypeRef{Export: true, instOf: gid, RefStruct: &GIrATypeRefStruct{}}
+				gtd.setBothNamesFromPsName(tci.Name)
+				gtd.NameGo = "ı" + gtd.NameGo
+				newextratypes = append(newextratypes, gtd)
+			}
+			for _, method := range gid.RefInterface.Methods {
+				mcopy := *method
+				mcopy.mBody = &GIrABlock{Body: []GIrA{ªRet(nil)}}
+				gtd.Methods = append(gtd.Methods, &mcopy)
+			}
+		}
+	}
+	if len(newextratypes) > 0 {
+		me.girM.GoTypeDefs = append(newextratypes, me.girM.GoTypeDefs...)
 		me.girM.rebuildLookups()
 	}
 
@@ -458,51 +491,83 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 	}
 	me.Body = append(nuglobals, me.Body...)
 
+	//	various fix-ups
 	me.Walk(func(ast GIrA) GIrA {
-		if d, _ := ast.(*GIrADot); d != nil {
-			if dl, _ := d.DotLeft.(*GIrAVar); dl != nil {
-				if dr, _ := d.DotRight.(*GIrAVar); dr != nil {
-					//	find all CtorName.value references and change them to the above new vars
-					if dr.NameGo == "value" {
-						if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
-							return ªV(nuglobalvarname)
+		if ast != nil {
+			switch a := ast.(type) {
+			case *GIrADot:
+				if dl, _ := a.DotLeft.(*GIrAVar); dl != nil {
+					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
+						//	find all CtorName.value references and change them to the above new vars
+						if dr.NameGo == "value" {
+							if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
+								return ªV(nuglobalvarname)
+							}
 						}
-					}
-
-					//	if referring to a package, ensure the import is marked as in-use
-					for _, imp := range me.girM.Imports {
-						if imp.N == dl.NameGo {
-							imp.used = true
-							dr.Export = true
-							dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
-							break
+						//	if referring to a package, ensure the import is marked as in-use
+						for _, imp := range me.girM.Imports {
+							if imp.N == dl.NameGo {
+								imp.used = true
+								dr.Export = true
+								dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
+								break
+							}
 						}
 					}
 				}
-			}
-		} else if v, _ := ast.(*GIrAVar); v != nil {
-			//	turn var=literal's into consts
-			if vc, _ := v.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
-				return ªConst(&v.GIrANamedTypeRef, v.VarVal)
-			}
-		} else if o1, _ := ast.(*GIrAOp1); o1 != nil && o1.Op1 == "&" {
-			//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
-			if oc, _ := o1.Of.(*GIrACall); oc != nil {
-				if ocv, _ := oc.Callee.(*GIrAVar); ocv != nil {
-					if gtd := me.girM.GoTypeDefByPsName(ocv.NameGo); gtd != nil {
-						o := ªObj(gtd.NameGo)
-						for _, ctorarg := range oc.CallArgs {
-							o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
+			case *GIrAVar:
+				if a != nil {
+					if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
+						//	turn var=literal's into consts
+						return ªConst(&a.GIrANamedTypeRef, a.VarVal)
+					}
+				}
+			case *GIrAOp1:
+				if a != nil && a.Op1 == "&" {
+					//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
+					if oc, _ := a.Of.(*GIrACall); oc != nil {
+						if ocv, _ := oc.Callee.(*GIrAVar); ocv != nil {
+							if gtd := me.girM.GoTypeDefByPsName(ocv.NameGo); gtd != nil {
+								o := ªObj(gtd.NameGo)
+								for _, ctorarg := range oc.CallArgs {
+									o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
+								}
+								return o
+							} else if ocv.NamePs == "Error" && len(oc.CallArgs) == 1 {
+								// dot := &GIrADot{DotLeft: &GIrAVar{GIrANamedTypeRef: GIrMNamedTypeRef{Name: "errors"}}}
+							}
 						}
-						return o
-					} else if ocv.NamePs == "Error" && len(oc.CallArgs) == 1 {
-						// dot := &GIrADot{DotLeft: &GIrAVar{GIrANamedTypeRef: GIrMNamedTypeRef{Name: "errors"}}}
 					}
 				}
 			}
 		}
 		return ast
 	})
+
+	//	link type-class-instance funcs to interface-implementing struct methods
+	instfuncvars := me.topLevelDefs(func(a GIrA) bool {
+		if v, _ := a.(*GIrAVar); v != nil {
+			if vv, _ := v.VarVal.(*GIrALitObj); vv != nil {
+				if gtd := me.girM.GoTypeDefByPsName(v.NamePs); gtd != nil {
+					return true
+				}
+			}
+		}
+		return false
+	})
+	for _, ifx := range instfuncvars {
+		ifv, _ := ifx.(*GIrAVar)
+		if ifv == nil {
+			ifv = ifx.(*GIrAComments).CommentsDecl.(*GIrAVar)
+		}
+		gtd := me.girM.GoTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
+		ifo := ifv.VarVal.(*GIrALitObj)              //  something like:  InterfaceName{funcs}
+		ifv.Export = gtd.instOf.Export
+		ifv.setBothNamesFromPsName(ifv.NamePs)
+		if len(ifo.ObjFields) != len(gtd.Methods) {
+			println(me.mod.srcFilePath + "\t" + gtd.NamePs)
+		}
+	}
 
 	return
 }
@@ -559,17 +624,15 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRef)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRef)
 
-	if false {
-		toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
-		toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
-		for _, ast := range toplevelctorfuncs {
-			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
-			fmt.Fprint(buf, "\n\n")
-		}
-		for _, ast := range toplevelfuncs {
-			codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
-			fmt.Fprint(buf, "\n\n")
-		}
+	toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
+	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
+	for _, ast := range toplevelctorfuncs {
+		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		fmt.Fprint(buf, "\n\n")
+	}
+	for _, ast := range toplevelfuncs {
+		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		fmt.Fprint(buf, "\n\n")
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
@@ -661,7 +724,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 	if ast != nil {
 		switch a := ast.(type) {
 		case *GIrABlock:
-			if a != nil { // really shouldn't have to do this as per above, no idea why I need to --- bug in go 1.7.6?
+			if a != nil { // odd that this would happen, given the above, but it did! (go1.7.6)
 				for i, _ := range a.Body {
 					a.Body[i] = walk(a.Body[i], on)
 				}
@@ -720,7 +783,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 		case *GIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
 		case *GIrAVar:
-			if a != nil { // really shouldn't have to do this as per above, no idea why I need to --- bug in go 1.7.6?
+			if a != nil { // odd that this would happen, given the above, but it did! (go1.7.6)
 				a.VarVal = walk(a.VarVal, on)
 			}
 		case *GIrAIsType:

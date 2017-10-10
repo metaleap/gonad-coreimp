@@ -23,6 +23,9 @@ func codeEmitCommaIf(w io.Writer, i int) {
 }
 
 func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
+	if ast == nil {
+		return
+	}
 	tabs := ""
 	if indent > 0 {
 		tabs = strings.Repeat("\t", indent)
@@ -75,7 +78,9 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 			fmt.Fprintf(w, "%s", a.NameGo)
 		}
 	case *GIrABlock:
-		if len(a.Body) == 1 {
+		if a == nil || len(a.Body) == 0 {
+			fmt.Fprint(w, "{ }")
+		} else if len(a.Body) == 1 {
 			fmt.Fprint(w, "{ ")
 			codeEmitAst(w, -1, a.Body[0], trr)
 			fmt.Fprint(w, " }")

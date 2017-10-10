@@ -12,13 +12,14 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports          GIrMPkgRefs        `json:",omitempty"`
-	ExtTypeAliases   []GIrMNamedTypeRef `json:",omitempty"`
-	ExtTypeClasses   []GIrMTypeClass    `json:",omitempty"`
-	ExtTypeDataDecls []GIrMTypeDataDecl `json:",omitempty"`
-	ExtValDecls      []GIrMNamedTypeRef `json:",omitempty"`
-	GoTypeDefs       GIrANamedTypeRefs  `json:",omitempty"`
-	GoValDecls       GIrANamedTypeRefs  `json:",omitempty"`
+	Imports           GIrMPkgRefs         `json:",omitempty"`
+	ExtTypeAliases    []GIrMNamedTypeRef  `json:",omitempty"`
+	ExtTypeClasses    []GIrMTypeClass     `json:",omitempty"`
+	ExtTypeClassInsts []GIrMTypeClassInst `json:",omitempty"`
+	ExtTypeDataDecls  []GIrMTypeDataDecl  `json:",omitempty"`
+	ExtValDecls       []GIrMNamedTypeRef  `json:",omitempty"`
+	GoTypeDefs        GIrANamedTypeRefs   `json:",omitempty"`
+	GoValDecls        GIrANamedTypeRefs   `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -348,6 +349,7 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 			for _, nametuples := range edi.Chain {
 				tci.Chain = append(tci.Chain, qNameFromExt(nametuples))
 			}
+			me.ExtTypeClassInsts = append(me.ExtTypeClassInsts, tci)
 		}
 	}
 }
