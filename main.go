@@ -17,22 +17,68 @@ import (
 )
 
 var (
-	Proj      BowerProject
-	Deps      = map[string]*BowerProject{}
-	mapsmutex sync.Mutex
-	Flag      struct {
+	Proj BowerProject
+	Deps = map[string]*BowerProject{}
+	Flag struct {
 		NoPrefix      bool
 		Comments      bool
 		ForceRegenAll bool
 		GoDirSrcPath  string
 		GoNamespace   string
 	}
+
+	err            error
+	mapsmutex      sync.Mutex
+	wg             sync.WaitGroup
 	allpkgimppaths = map[string]bool{}
 )
 
+func checkIfDepDirHasBowerFile(reldirpath string) {
+	defer wg.Done()
+	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
+	if !ufs.FileExists(jsonfilepath) {
+		jsonfilepath = filepath.Join(reldirpath, "bower.json")
+	}
+	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
+		bproj := &BowerProject{
+			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
+		}
+		defer mapsmutex.Unlock()
+		mapsmutex.Lock()
+		Deps[depname] = bproj
+	}
+}
+
+func loadDepFromBowerFile(depname string, dep *BowerProject) {
+	defer wg.Done()
+	if err = dep.LoadFromJsonFile(true); err != nil {
+		panic(err)
+	}
+}
+
+func loadGIrMetas(dep *BowerProject) {
+	defer wg.Done()
+	dep.EnsureModPkgGIrMetas()
+}
+
+func prepGIrAsts(dep *BowerProject) {
+	defer wg.Done()
+	dep.PrepOrReGenModPkgGIrAsts(true)
+	if err = dep.WriteOutDirtyGIrMetas(false); err != nil {
+		panic(err)
+	}
+}
+
+func reGenGIrAsts(dep *BowerProject) {
+	defer wg.Done()
+	dep.PrepOrReGenModPkgGIrAsts(false)
+	if err = dep.WriteOutDirtyGIrMetas(true); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	starttime := time.Now()
-	var wg sync.WaitGroup
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
 	pflag.StringVar(&Proj.DepsDirPath, "dependency-path", "bower_components", "Dependencies directory path")
@@ -50,8 +96,7 @@ func main() {
 	Flag.GoNamespace = filepath.Join("github.com", "gonadz")
 	pflag.StringVar(&Flag.GoNamespace, "go-namespace", Flag.GoNamespace, "Root namespace for all generated Go packages")
 	pflag.Parse()
-	err := ufs.EnsureDirExists(Flag.GoDirSrcPath)
-	if err == nil {
+	if err = ufs.EnsureDirExists(Flag.GoDirSrcPath); err == nil {
 		if !ufs.DirExists(Proj.DepsDirPath) {
 			panic("No such `dependency-path` directory: " + Proj.DepsDirPath)
 		}
@@ -59,48 +104,23 @@ func main() {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
 		if err = Proj.LoadFromJsonFile(false); err == nil {
-			checkifdepdirhasbowerfile := func(reldirpath string) {
-				defer wg.Done()
-				jsonfilepath := filepath.Join(reldirpath, ".bower.json")
-				if !ufs.FileExists(jsonfilepath) {
-					jsonfilepath = filepath.Join(reldirpath, "bower.json")
-				}
-				if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
-					bproj := &BowerProject{
-						DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
-					}
-					defer mapsmutex.Unlock()
-					mapsmutex.Lock()
-					Deps[depname] = bproj
-				}
-			}
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
 				wg.Add(1)
-				go checkifdepdirhasbowerfile(reldirpath)
+				go checkIfDepDirHasBowerFile(reldirpath)
 				return true
 			})
-			loaddepfrombowerfile := func(depname string, dep *BowerProject) {
-				defer wg.Done()
-				if e := dep.LoadFromJsonFile(true); e != nil {
-					panic(e)
-				}
-			}
 			wg.Wait()
 			for dk, dv := range Deps {
 				wg.Add(1)
-				go loaddepfrombowerfile(dk, dv)
-			}
-			loadgirmetas := func(dep *BowerProject) {
-				defer wg.Done()
-				dep.EnsureModPkgGirMetas()
+				go loadDepFromBowerFile(dk, dv)
 			}
 			if wg.Wait(); err == nil {
 				for _, dep := range Deps {
 					wg.Add(1)
-					go loadgirmetas(dep)
+					go loadGIrMetas(dep)
 				}
 				wg.Add(1)
-				go loadgirmetas(&Proj)
+				go loadGIrMetas(&Proj)
 				if err = Proj.EnsureOutDirs(); err == nil {
 					for _, dep := range Deps {
 						if err = dep.EnsureOutDirs(); err != nil {
@@ -108,43 +128,46 @@ func main() {
 						}
 					}
 				}
-				regengirasts := func(dep *BowerProject) {
-					defer wg.Done()
-					dep.RegenModPkgGirAsts()
-					if e := dep.WriteOutDirtyGirMetas(); e != nil {
-						panic(e)
-					}
-				}
 				wg.Wait()
 				if err == nil {
 					for _, dep := range Deps {
 						wg.Add(1)
-						go regengirasts(dep)
+						go prepGIrAsts(dep)
 					}
 					wg.Add(1)
-					go regengirasts(&Proj)
-					numregen := 0
-					for _, mod := range Proj.Modules {
-						if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.regenGir; mod.regenGir {
-							numregen++
+					go prepGIrAsts(&Proj)
+					wg.Wait()
+					if err == nil {
+						for _, dep := range Deps {
+							wg.Add(1)
+							go reGenGIrAsts(dep)
 						}
-					}
-					for _, dep := range Deps {
-						for _, mod := range dep.Modules {
-							if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.regenGir; mod.regenGir {
+						wg.Add(1)
+						go reGenGIrAsts(&Proj)
+						numregen := 0
+						for _, mod := range Proj.Modules {
+							if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
 								numregen++
 							}
 						}
+						for _, dep := range Deps {
+							for _, mod := range dep.Modules {
+								if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+									numregen++
+								}
+							}
+						}
+						if Flag.ForceRegenAll {
+							numregen = len(allpkgimppaths)
+						}
+						if wg.Wait(); err == nil {
+							dur := time.Now().Sub(starttime)
+							if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
+								fmt.Printf("\t(avg. %v per re-generated module)\n", dur/time.Duration(numregen))
+							}
+							err = writeTestMainGo()
+						}
 					}
-					if Flag.ForceRegenAll {
-						numregen = len(allpkgimppaths)
-					}
-					wg.Wait()
-					dur := time.Now().Sub(starttime)
-					if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
-						fmt.Printf("\t(avg. %v per re-generated module)\n", dur/time.Duration(numregen))
-					}
-					err = writeTestMainGo()
 				}
 			}
 		}

@@ -370,7 +370,7 @@ func codeEmitTypeAlias(w io.Writer, tname string, ttype string) {
 func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
-	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.mBody != nil
+	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.method.body != nil
 	if gtd.comment != nil {
 		codeEmitAst(w, indlevel, gtd.comment, typerefresolver)
 	}
@@ -489,10 +489,10 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 	if len(tr.Methods) > 0 {
 		for _, method := range tr.Methods {
 			mthis := "this"
-			if method.mNoThis {
+			if method.method.hasNoThis {
 				mthis = "_"
 			}
-			if method.mCtor {
+			if method.method.isNewCtor {
 				fmt.Fprintf(w, "func %s", method.NameGo)
 			} else if tr.RefStruct.PassByPtr {
 				fmt.Fprintf(w, "func (%s *%s) %s", mthis, tr.NameGo, method.NameGo)
@@ -502,7 +502,7 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 			codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 			codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
 			fmt.Fprint(w, " ")
-			codeEmitAst(w, -1, method.mBody, typerefresolver)
+			codeEmitAst(w, -1, method.method.body, typerefresolver)
 			fmt.Fprint(w, "\n\n")
 		}
 	}

@@ -122,26 +122,26 @@ func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopk
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
 		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.girAstFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
-			modinfo.regenGir = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
+			modinfo.reGenGIr = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
 				modinfo.girMetaFilePath, modinfo.girAstFilePath, modinfo.gopkgfilepath)
 		} else {
-			modinfo.regenGir = true
+			modinfo.reGenGIr = true
 		}
 		me.Modules = append(me.Modules, modinfo)
 	}
 }
 
-func (me *BowerProject) EnsureModPkgGirMetas() {
+func (me *BowerProject) EnsureModPkgGIrMetas() {
 	var wg sync.WaitGroup
 	ensuregirmeta := func(modinfo *ModuleInfo) {
 		var err error
 		defer wg.Done()
-		if modinfo.regenGir || Flag.ForceRegenAll {
-			err = modinfo.regenPkgGirMeta()
-		} else if err = modinfo.loadPkgGirMeta(); err != nil {
-			modinfo.regenGir = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
+		if modinfo.reGenGIr || Flag.ForceRegenAll {
+			err = modinfo.reGenPkgGIrMeta()
+		} else if err = modinfo.loadPkgGIrMeta(); err != nil {
+			modinfo.reGenGIr = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
 			println(modinfo.qName + ": regenerating due to error when loading " + modinfo.girMetaFilePath + ": " + err.Error())
-			err = modinfo.regenPkgGirMeta()
+			err = modinfo.reGenPkgGIrMeta()
 		}
 		if err != nil {
 			panic(err)
@@ -154,29 +154,38 @@ func (me *BowerProject) EnsureModPkgGirMetas() {
 	wg.Wait()
 }
 
-func (me *BowerProject) RegenModPkgGirAsts() {
+func (me *BowerProject) PrepOrReGenModPkgGIrAsts(prep bool) {
 	var wg sync.WaitGroup
-	regengirast := func(modinfo *ModuleInfo) {
+	regenorprep := func(modinfo *ModuleInfo) {
 		defer wg.Done()
-		if err := modinfo.regenPkgGirAst(); err != nil {
+		fn := modinfo.prepGIrAst
+		if !prep {
+			fn = modinfo.reGenPkgGIrAst
+		}
+		if err := fn(); err != nil {
 			panic(err)
 		}
 	}
 	for _, modinfo := range me.Modules {
-		if modinfo.regenGir || Flag.ForceRegenAll {
+		if modinfo.reGenGIr || Flag.ForceRegenAll {
 			wg.Add(1)
-			go regengirast(modinfo)
+			go regenorprep(modinfo)
 		}
 	}
 	wg.Wait()
 }
 
-func (me *BowerProject) WriteOutDirtyGirMetas() (err error) {
+func (me *BowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
 	var buf bytes.Buffer
 	for _, m := range me.Modules {
-		if m.regenGir || Flag.ForceRegenAll || m.girMeta.save {
+		isfirst := !isagain
+		dosave := (isagain && m.girMeta.save) ||
+			(isfirst && (m.reGenGIr || Flag.ForceRegenAll || m.girMeta.save))
+		if dosave {
 			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
-				err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes())
+				if err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes()); err == nil {
+					m.girMeta.save = false
+				}
 				buf.Reset()
 			}
 		}

@@ -63,12 +63,16 @@ type GIrANamedTypeRef struct {
 	Export         bool              `json:",omitempty"`
 	WasTypeFunc    bool              `json:",omitempty"`
 
-	mCtor   bool
-	mNoThis bool
-	mBody   *GIrABlock
+	method  GIrATypeMethod
 	ctor    *GIrMTypeDataCtor
 	comment *GIrAComments
 	instOf  *GIrANamedTypeRef
+}
+
+type GIrATypeMethod struct {
+	body      *GIrABlock
+	isNewCtor bool
+	hasNoThis bool
 }
 
 func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
@@ -357,7 +361,7 @@ type GIrALitObjField struct {
 func (me *GIrALitObjField) subAsts() []GIrA { return []GIrA{me.FieldVal} }
 
 type GIrANil struct {
-	Nil interface{}
+	Nil interface{} // useless except we want to see it in the gonadast.json
 }
 
 func (me *GIrANil) subAsts() []GIrA { return []GIrA{} }
@@ -402,7 +406,11 @@ type GIrAIsType struct {
 
 func (me *GIrAIsType) subAsts() []GIrA { return []GIrA{me.ExprToTest, me.TypeToTest} }
 
-func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
+func (me *GonadIrAst) FinalizePostPrep() (err error) {
+	return
+}
+
+func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	for _, cia := range me.mod.coreimp.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
@@ -464,13 +472,14 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 			}
 			for _, method := range gid.RefInterface.Methods {
 				mcopy := *method
-				mcopy.mBody = &GIrABlock{Body: []GIrA{ªRet(nil)}}
+				mcopy.method.body = ªBlock(ªRet(nil))
+				mcopy.method.hasNoThis = true
 				gtd.Methods = append(gtd.Methods, &mcopy)
 			}
 		}
 	}
 	if len(newextratypes) > 0 {
-		me.girM.GoTypeDefs = append(newextratypes, me.girM.GoTypeDefs...)
+		me.girM.GoTypeDefs = append(me.girM.GoTypeDefs, newextratypes...)
 		me.girM.rebuildLookups()
 	}
 
@@ -564,8 +573,30 @@ func (me *GonadIrAst) PopulateFromCoreImp() (err error) {
 		ifo := ifv.VarVal.(*GIrALitObj)              //  something like:  InterfaceName{funcs}
 		ifv.Export = gtd.instOf.Export
 		ifv.setBothNamesFromPsName(ifv.NamePs)
-		if len(ifo.ObjFields) != len(gtd.Methods) {
-			println(me.mod.srcFilePath + "\t" + gtd.NamePs)
+		if strings.Contains(me.mod.srcFilePath, "TCls") {
+			println(gtd.NameGo)
+			tcctors := me.topLevelDefs(func(a GIrA) bool {
+				if fn, _ := a.(*GIrAFunc); fn != nil {
+					return fn.WasTypeFunc && fn.NamePs == gtd.instOf.NamePs
+				}
+				return false
+			})
+			tcctor := tcctors[0].(*GIrAFunc)
+			// fmt.Printf("%s\t%s\t%s-%v %s\n", ifv.NameGo, gtd.NameGo, tcctor.NamePs, len(tcctor.RefFunc.Args), tcctor.RefFunc.Args[0].NamePs)
+			for i, instfuncarg := range tcctor.RefFunc.Args {
+				for _, gtdmethod := range gtd.Methods {
+					if gtdmethod.NamePs == instfuncarg.NamePs {
+						ifofv := ifo.ObjFields[i].FieldVal
+						switch ifa := ifofv.(type) {
+						case *GIrAFunc:
+							gtdmethod.method.body = ifa.FuncImpl
+						default:
+							gtdmethod.method.body = ªBlock(ªRet(ifofv))
+						}
+						break
+					}
+				}
+			}
 		}
 	}
 
@@ -836,6 +867,10 @@ func ªObj(typerefalias string) *GIrALitObj {
 
 func ªRet(retarg GIrA) *GIrARet {
 	return &GIrARet{RetArg: retarg}
+}
+
+func ªBlock(asts ...GIrA) *GIrABlock {
+	return &GIrABlock{Body: asts}
 }
 
 func ªB(literal bool) *GIrALitBool {

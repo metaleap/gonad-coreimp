@@ -187,7 +187,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
 		me.AstBody.astForceIntoBlock(f.FuncImpl)
-		f.mBody = f.FuncImpl
+		f.method.body = f.FuncImpl
 		a = f
 	case "Unary":
 		o := &GIrAOp1{Op1: me.AstOp, Of: me.Unary.ciAstToGIrAst()}
