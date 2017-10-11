@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/metaleap/go-util-str"
 )
@@ -108,7 +107,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		v := &GIrAVar{}
 		if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Var); gvd != nil {
 			v.Export = true
-		} else if unicode.IsUpper(ustr.FirstRune(me.Var)) {
+		} else if ustr.BeginsUpper(me.Var) {
 			v.WasTypeFunc = true
 		}
 		v.setBothNamesFromPsName(me.Var)
@@ -157,7 +156,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	case "VariableIntroduction":
 		v := &GIrAVar{}
 		if istopleveldecl {
-			if unicode.IsUpper(ustr.FirstRune(me.VariableIntroduction)) {
+			if ustr.BeginsUpper(me.VariableIntroduction) {
 				v.WasTypeFunc = true
 			}
 			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.VariableIntroduction); gvd != nil {
@@ -172,7 +171,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	case "Function":
 		f := &GIrAFunc{FuncImpl: &GIrABlock{}}
 		if istopleveldecl && len(me.Function) > 0 {
-			if unicode.IsUpper(ustr.FirstRune(me.Function)) {
+			if ustr.BeginsUpper(me.Function) {
 				f.WasTypeFunc = true
 			}
 			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Function); gvd != nil {

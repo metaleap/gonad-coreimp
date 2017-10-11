@@ -373,8 +373,8 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
-	me.populateGoValDecls()
 	me.rebuildLookups()
+	me.populateGoValDecls()
 
 	if err == nil {
 		for _, impmod := range me.imports {
@@ -405,7 +405,8 @@ func (me *GonadIrMeta) populateGoValDecls() {
 
 	for _, evd := range me.ExtValDecls {
 		tdict = map[string][]string{}
-		gvd := &GIrANamedTypeRef{NamePs: evd.Name, NameGo: sanitizeSymbolForGo(evd.Name, true), Export: true}
+		gvd := &GIrANamedTypeRef{Export: true}
+		gvd.setBothNamesFromPsName(evd.Name)
 		for true {
 			_, funcexists := m[gvd.NameGo]
 			if gtd := me.GoTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {

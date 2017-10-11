@@ -451,7 +451,6 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 							}
 							return o
 						} else if ocv != nil && ocv.NamePs == "Error" {
-							println(me.mod.srcFilePath)
 							if !me.girM.Imports.Has("errors") {
 								me.girM.Imports = append(me.girM.Imports, &GIrMPkgRef{used: true, N: "errors", P: "errors", Q: ""})
 							}
@@ -532,6 +531,16 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	for _, cia := range me.mod.coreimp.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
+
+	me.topLevelDefs(func(a GIrA) bool {
+		if afn, _ := a.(*GIrAFunc); afn != nil {
+			for _, gvd := range me.girM.GoValDecls {
+				if gvd.NamePs == afn.NamePs {
+				}
+			}
+		}
+		return false
+	})
 
 	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
 	newxtypedatadecl := GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
@@ -790,7 +799,7 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		runes[0] = unicode.ToUpper(runes[0])
 		name = string(runes)
 	} else {
-		if unicode.IsUpper(ustr.FirstRune(name)) {
+		if ustr.BeginsUpper(name) {
 			name = saniUpperToLowerPrefix + name
 		} else {
 			switch name {
