@@ -74,16 +74,16 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 			fmt.Fprint(w, " = ")
 			codeEmitAst(w, indent, a.VarVal, trr)
 			fmt.Fprint(w, "\n")
-		} else {
+		} else if len(a.NameGo) > 0 {
 			fmt.Fprintf(w, "%s", a.NameGo)
 		}
 	case *GIrABlock:
 		if a == nil || len(a.Body) == 0 {
-			fmt.Fprint(w, "{ }")
-		} else if len(a.Body) == 1 {
-			fmt.Fprint(w, "{ ")
-			codeEmitAst(w, -1, a.Body[0], trr)
-			fmt.Fprint(w, " }")
+			fmt.Fprint(w, "{}")
+			// } else if len(a.Body) == 1 {
+			// 	fmt.Fprint(w, "{ ")
+			// 	codeEmitAst(w, -1, a.Body[0], trr)
+			// 	fmt.Fprint(w, " }")
 		} else {
 			fmt.Fprint(w, "{\n")
 			indent++
@@ -154,6 +154,19 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		codeEmitAst(w, indent, a.ExprToTest, trr)
 		fmt.Fprint(w, " __IS__ ")
 		codeEmitAst(w, indent, a.TypeToTest, trr)
+	case *GIrAToType:
+		if len(a.TypePkg) == 0 {
+			fmt.Fprintf(w, "%s(", a.TypeName)
+		} else {
+			fmt.Fprintf(w, "%s.%s(", a.TypePkg, a.TypeName)
+		}
+		codeEmitAst(w, indent, a.ExprToCast, trr)
+		fmt.Fprint(w, ")")
+	case *GIrAPkgRef:
+		if len(a.PkgName) > 0 {
+			fmt.Fprintf(w, "%s.", a.PkgName)
+		}
+		fmt.Fprint(w, a.Symbol)
 	case *GIrASet:
 		fmt.Fprint(w, tabs)
 		codeEmitAst(w, indent, a.SetLeft, trr)
@@ -502,7 +515,7 @@ func codeEmitTypeMethods(w io.Writer, tr *GIrANamedTypeRef, typerefresolver goTy
 			codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
 			codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
 			fmt.Fprint(w, " ")
-			codeEmitAst(w, -1, method.method.body, typerefresolver)
+			codeEmitAst(w, 0, method.method.body, typerefresolver)
 			fmt.Fprint(w, "\n\n")
 		}
 	}

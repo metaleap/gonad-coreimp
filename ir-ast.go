@@ -66,7 +66,7 @@ type GIrANamedTypeRef struct {
 	method  GIrATypeMethod
 	ctor    *GIrMTypeDataCtor
 	comment *GIrAComments
-	instOf  *GIrANamedTypeRef
+	instOf  string
 }
 
 type GIrATypeMethod struct {
@@ -111,7 +111,7 @@ func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
 	case nil:
 		me.RefAlias = "interface{/*TodoTRefWasNil*/}"
 	default:
-		println(tref.(float32))
+		println(tref.(float32)) // in case of future oversight, trigger immediate panic-msg with actual-type included
 	}
 }
 
@@ -406,12 +406,129 @@ type GIrAIsType struct {
 
 func (me *GIrAIsType) subAsts() []GIrA { return []GIrA{me.ExprToTest, me.TypeToTest} }
 
+type GIrAToType struct {
+	ExprToCast GIrA   `json:",omitempty"`
+	TypePkg    string `json:",omitempty"`
+	TypeName   string `json:",omitempty"`
+}
+
+func (me *GIrAToType) subAsts() []GIrA { return []GIrA{me.ExprToCast} }
+
+type GIrAPkgRef struct {
+	PkgName string `json:",omitempty"`
+	Symbol  string `json:",omitempty"`
+}
+
+func (me *GIrAPkgRef) subAsts() []GIrA { return []GIrA{} }
+
 func (me *GonadIrAst) FinalizePostPrep() (err error) {
+	//	various fix-ups
+	me.Walk(func(ast GIrA) GIrA {
+		if ast != nil {
+			switch a := ast.(type) {
+			case *GIrAOp1:
+				if a != nil && a.Op1 == "&" {
+					//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
+					if oc, _ := a.Of.(*GIrACall); oc != nil {
+						var gtd *GIrANamedTypeRef
+						if ocd, _ := oc.Callee.(*GIrADot); ocd != nil {
+							if ocd1, _ := ocd.DotLeft.(*GIrAVar); ocd1 != nil {
+								if mod := FindModuleByPName(ocd1.NamePs); mod != nil {
+									if ocd2, _ := ocd.DotRight.(*GIrAVar); ocd2 != nil {
+										gtd = mod.girMeta.GoTypeDefByPsName(ocd.DotRight.(*GIrAVar).NamePs)
+									}
+								}
+							}
+						}
+						ocv, _ := oc.Callee.(*GIrAVar)
+						if gtd == nil && ocv != nil {
+							gtd = me.girM.GoTypeDefByPsName(ocv.NameGo)
+						}
+						if gtd != nil {
+							o := ªObj(gtd.NameGo)
+							for _, ctorarg := range oc.CallArgs {
+								o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
+							}
+							return o
+						} else if ocv != nil && ocv.NamePs == "Error" {
+							println(me.mod.srcFilePath)
+							if !me.girM.Imports.Has("errors") {
+								me.girM.Imports = append(me.girM.Imports, &GIrMPkgRef{used: true, N: "errors", P: "errors", Q: ""})
+							}
+							return ªCall(ªPkgRef("errors", "New"), oc.CallArgs...)
+						}
+					}
+				}
+			}
+		}
+		return ast
+	})
+
+	//	link type-class-instance funcs to interface-implementing struct methods
+	instfuncvars := me.topLevelDefs(func(a GIrA) bool {
+		if v, _ := a.(*GIrAVar); v != nil {
+			if vv, _ := v.VarVal.(*GIrALitObj); vv != nil {
+				if gtd := me.girM.GoTypeDefByPsName(v.NamePs); gtd != nil {
+					return true
+				}
+			}
+		}
+		return false
+	})
+	for _, ifx := range instfuncvars {
+		ifv, _ := ifx.(*GIrAVar)
+		if ifv == nil {
+			ifv = ifx.(*GIrAComments).CommentsDecl.(*GIrAVar)
+		}
+		gtd := me.girM.GoTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
+		gtdInstOf := findGoTypeByPsQName(gtd.instOf)
+		ifv.Export = gtdInstOf.Export
+		ifv.setBothNamesFromPsName(ifv.NamePs)
+		ifo := ifv.VarVal.(*GIrALitObj) //  something like:  InterfaceName{funcs}
+		if strings.Contains(me.mod.srcFilePath, "TCls") {
+			var tcctors []GIrA
+			var mod *ModuleInfo
+			pname, tcname := me.resolveGoTypeRef(gtd.instOf, true)
+			if len(pname) == 0 || pname == me.mod.pName {
+				mod = me.mod
+			} else {
+				mod = FindModuleByPName(pname)
+			}
+			tcctors = mod.girAst.topLevelDefs(func(a GIrA) bool {
+				if fn, _ := a.(*GIrAFunc); fn != nil {
+					return fn.WasTypeFunc && fn.NamePs == tcname
+				}
+				return false
+			})
+			if len(tcctors) > 0 {
+				tcctor := tcctors[0].(*GIrAFunc)
+				for i, instfuncarg := range tcctor.RefFunc.Args {
+					for _, gtdmethod := range gtd.Methods {
+						if gtdmethod.NamePs == instfuncarg.NamePs {
+							ifofv := ifo.ObjFields[i].FieldVal
+							switch ifa := ifofv.(type) {
+							case *GIrAFunc:
+								gtdmethod.method.body = ifa.FuncImpl
+							default:
+								gtdmethod.method.body = ªBlock(ªRet(ifofv))
+							}
+							break
+						}
+					}
+				}
+			}
+			nuctor := ªObj(gtd.NameGo)
+			nucast := ªTo(nuctor, pname, tcname)
+			ifv.VarVal = nucast
+		}
+	}
 	return
 }
 
 func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
+	//	mostly focus on discovering new type-defs, final transforms once all
+	//	type-defs in all modules are known happen in FinalizePostPrep
 	for _, cia := range me.mod.coreimp.Body {
 		me.Body = append(me.Body, cia.ciAstToGIrAst())
 	}
@@ -465,7 +582,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 		} else {
 			gtd := newextratypes.ByPsName(tci.Name)
 			if gtd == nil {
-				gtd = &GIrANamedTypeRef{Export: true, instOf: gid, RefStruct: &GIrATypeRefStruct{}}
+				gtd = &GIrANamedTypeRef{Export: true, instOf: tci.ClassName, RefStruct: &GIrATypeRefStruct{}}
 				gtd.setBothNamesFromPsName(tci.Name)
 				gtd.NameGo = "ı" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
@@ -531,74 +648,10 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 						return ªConst(&a.GIrANamedTypeRef, a.VarVal)
 					}
 				}
-			case *GIrAOp1:
-				if a != nil && a.Op1 == "&" {
-					//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
-					if oc, _ := a.Of.(*GIrACall); oc != nil {
-						if ocv, _ := oc.Callee.(*GIrAVar); ocv != nil {
-							if gtd := me.girM.GoTypeDefByPsName(ocv.NameGo); gtd != nil {
-								o := ªObj(gtd.NameGo)
-								for _, ctorarg := range oc.CallArgs {
-									o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
-								}
-								return o
-							} else if ocv.NamePs == "Error" && len(oc.CallArgs) == 1 {
-								// dot := &GIrADot{DotLeft: &GIrAVar{GIrANamedTypeRef: GIrMNamedTypeRef{Name: "errors"}}}
-							}
-						}
-					}
-				}
 			}
 		}
 		return ast
 	})
-
-	//	link type-class-instance funcs to interface-implementing struct methods
-	instfuncvars := me.topLevelDefs(func(a GIrA) bool {
-		if v, _ := a.(*GIrAVar); v != nil {
-			if vv, _ := v.VarVal.(*GIrALitObj); vv != nil {
-				if gtd := me.girM.GoTypeDefByPsName(v.NamePs); gtd != nil {
-					return true
-				}
-			}
-		}
-		return false
-	})
-	for _, ifx := range instfuncvars {
-		ifv, _ := ifx.(*GIrAVar)
-		if ifv == nil {
-			ifv = ifx.(*GIrAComments).CommentsDecl.(*GIrAVar)
-		}
-		gtd := me.girM.GoTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
-		ifo := ifv.VarVal.(*GIrALitObj)              //  something like:  InterfaceName{funcs}
-		ifv.Export = gtd.instOf.Export
-		ifv.setBothNamesFromPsName(ifv.NamePs)
-		if strings.Contains(me.mod.srcFilePath, "TCls") {
-			println(gtd.NameGo)
-			tcctors := me.topLevelDefs(func(a GIrA) bool {
-				if fn, _ := a.(*GIrAFunc); fn != nil {
-					return fn.WasTypeFunc && fn.NamePs == gtd.instOf.NamePs
-				}
-				return false
-			})
-			tcctor := tcctors[0].(*GIrAFunc)
-			// fmt.Printf("%s\t%s\t%s-%v %s\n", ifv.NameGo, gtd.NameGo, tcctor.NamePs, len(tcctor.RefFunc.Args), tcctor.RefFunc.Args[0].NamePs)
-			for i, instfuncarg := range tcctor.RefFunc.Args {
-				for _, gtdmethod := range gtd.Methods {
-					if gtdmethod.NamePs == instfuncarg.NamePs {
-						ifofv := ifo.ObjFields[i].FieldVal
-						switch ifa := ifofv.(type) {
-						case *GIrAFunc:
-							gtdmethod.method.body = ifa.FuncImpl
-						default:
-							gtdmethod.method.body = ªBlock(ªRet(ifofv))
-						}
-						break
-					}
-				}
-			}
-		}
-	}
 
 	return
 }
@@ -819,6 +872,8 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 			}
 		case *GIrAIsType:
 			a.ExprToTest, a.TypeToTest = walk(a.ExprToTest, on), walk(a.TypeToTest, on)
+		case *GIrAToType:
+			a.ExprToCast = walk(a.ExprToCast, on)
 		case *GIrALitArr:
 			for i, av := range a.ArrVals {
 				a.ArrVals[i] = walk(av, on)
@@ -831,7 +886,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 			}
 		case *GIrALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
+		case *GIrAPkgRef, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
 		default:
 			fmt.Printf("%v", ast)
 			panic("WALK not handling a GIrA type")
@@ -839,6 +894,10 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 		ast = on(ast)
 	}
 	return ast
+}
+
+func ªCall(callee GIrA, callargs ...GIrA) *GIrACall {
+	return &GIrACall{Callee: callee, CallArgs: callargs}
 }
 
 func ªConst(tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
@@ -877,6 +936,10 @@ func ªB(literal bool) *GIrALitBool {
 	return &GIrALitBool{LitBool: literal}
 }
 
+func ªPkgRef(pkgname string, symbol string) *GIrAPkgRef {
+	return &GIrAPkgRef{PkgName: pkgname, Symbol: symbol}
+}
+
 func ªS(literal string) *GIrALitStr {
 	return &GIrALitStr{LitStr: literal}
 }
@@ -887,4 +950,8 @@ func ªSet(left string, right GIrA) *GIrASet {
 
 func ªV(name string) *GIrAVar {
 	return &GIrAVar{GIrANamedTypeRef: GIrANamedTypeRef{NameGo: name}}
+}
+
+func ªTo(expr GIrA, pname string, tname string) *GIrAToType {
+	return &GIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
 }

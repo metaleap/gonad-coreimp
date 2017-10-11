@@ -37,6 +37,14 @@ type GIrMPkgRefs []*GIrMPkgRef
 func (me GIrMPkgRefs) Len() int           { return len(me) }
 func (me GIrMPkgRefs) Less(i, j int) bool { return me[i].P < me[j].P }
 func (me GIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
+func (me GIrMPkgRefs) Has(imppath string) bool {
+	for _, imp := range me {
+		if imp.P == imppath {
+			return true
+		}
+	}
+	return false
+}
 
 type GIrMPkgRef struct {
 	N string

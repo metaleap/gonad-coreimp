@@ -74,6 +74,15 @@ func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
 	return nil
 }
 
+func (me *BowerProject) ModuleByPName(pname string) *ModuleInfo {
+	for _, m := range me.Modules {
+		if m.pName == pname {
+			return m
+		}
+	}
+	return nil
+}
+
 func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	var jsonbytes []byte
 	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {

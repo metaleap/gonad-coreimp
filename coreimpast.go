@@ -295,7 +295,9 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			a = &GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: ªV(me.AstRight.StringLiteral)}
+			dv := &GIrAVar{}
+			dv.setBothNamesFromPsName(me.AstRight.StringLiteral)
+			a = &GIrADot{DotLeft: me.Indexer.ciAstToGIrAst(), DotRight: dv}
 		} else {
 			a = &GIrAIndex{IdxLeft: me.Indexer.ciAstToGIrAst(), IdxRight: me.AstRight.ciAstToGIrAst()}
 		}

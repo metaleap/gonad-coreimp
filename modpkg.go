@@ -39,10 +39,19 @@ var (
 
 func FindModuleByQName(qname string) (modinfo *ModuleInfo) {
 	if modinfo = Proj.ModuleByQName(qname); modinfo == nil {
-		// defer mapsmutex.Unlock()
-		// mapsmutex.Lock()
 		for _, dep := range Deps {
 			if modinfo = dep.ModuleByQName(qname); modinfo != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+func FindModuleByPName(pname string) (modinfo *ModuleInfo) {
+	if modinfo = Proj.ModuleByPName(pname); modinfo == nil {
+		for _, dep := range Deps {
+			if modinfo = dep.ModuleByPName(pname); modinfo != nil {
 				return
 			}
 		}
