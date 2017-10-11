@@ -109,7 +109,7 @@ func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
 	case string:
 		me.RefAlias = tr
 	case nil:
-		me.RefAlias = "interface{/*TodoTRefWasNil*/}"
+		me.RefAlias = "interface{/*setRefFrom*/}"
 	default:
 		println(tref.(float32)) // in case of future oversight, trigger immediate panic-msg with actual-type included
 	}
@@ -561,7 +561,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 				if gtd := me.girM.GoTypeDefByPsName(av.NamePs); gtd == nil {
 					nuctor := &GIrMTypeDataCtor{Name: av.NamePs, comment: ac}
 					for i := 0; i < len(fn.RefFunc.Args); i++ {
-						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{TypeConstructor: "T_Unknown"})
+						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{TypeConstructor: "interface{/*PrepFromCoreImp*/}"})
 					}
 					newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
 				} else {

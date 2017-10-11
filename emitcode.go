@@ -151,9 +151,11 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		codeEmitAst(w, indent, a.IdxRight, trr)
 		fmt.Fprint(w, "]")
 	case *GIrAIsType:
+		fmt.Fprint(w, "_,øĸ := ")
 		codeEmitAst(w, indent, a.ExprToTest, trr)
-		fmt.Fprint(w, " __IS__ ")
+		fmt.Fprint(w, ".(")
 		codeEmitAst(w, indent, a.TypeToTest, trr)
+		fmt.Fprint(w, "); øĸ")
 	case *GIrAToType:
 		if len(a.TypePkg) == 0 {
 			fmt.Fprintf(w, "%s(", a.TypeName)
@@ -491,7 +493,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, ")")
 		}
 	} else {
-		fmt.Fprint(w, "TUNKNOWN")
+		fmt.Fprint(w, "interface{/*codeEmitTypeDecl*/}")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")
