@@ -136,6 +136,7 @@ type GIrATypeRefInterface struct {
 	Methods GIrANamedTypeRefs `json:",omitempty"`
 
 	xtc              *GIrMTypeClass
+	xtd              *GIrMTypeDataDecl
 	inheritedMethods GIrANamedTypeRefs
 }
 
@@ -454,6 +455,11 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 							if !me.girM.Imports.Has("errors") {
 								me.girM.Imports = append(me.girM.Imports, &GIrMPkgRef{used: true, N: "errors", P: "errors", Q: ""})
 							}
+							if len(oc.CallArgs) == 1 {
+								if op2, _ := oc.CallArgs[0].(*GIrAOp2); op2 != nil && op2.Op2 == "+" {
+									oc.CallArgs[0] = op2.Left
+								}
+							}
 							return ªCall(ªPkgRef("errors", "New"), oc.CallArgs...)
 						}
 					}
@@ -536,6 +542,8 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 		if afn, _ := a.(*GIrAFunc); afn != nil {
 			for _, gvd := range me.girM.GoValDecls {
 				if gvd.NamePs == afn.NamePs {
+					afn.Export = true
+					afn.NameGo = gvd.NameGo
 				}
 			}
 		}
@@ -613,12 +621,12 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	nuglobals := []GIrA{}
 	nuglobalsmap := map[string]string{}
 	for _, gtd := range me.girM.GoTypeDefs {
-		if gtd.RefInterface != nil {
-			for _, gtdm := range gtd.RefInterface.Methods {
-				if gtdm.ctor != nil && gtdm.ctor.gtd != nil && len(gtdm.ctor.Args) == 0 {
-					nuvar := ªV("º" + gtdm.ctor.Name)
-					nuvar.VarVal = ªObj(gtdm.ctor.gtd.NameGo)
-					nuglobalsmap[gtdm.ctor.Name] = nuvar.NameGo
+		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
+			for _, ctor := range gtd.RefInterface.xtd.Ctors {
+				if ctor.gtd != nil && ctor.gtd != nil && len(ctor.Args) == 0 {
+					nuvar := ªV("º" + ctor.Name)
+					nuvar.VarVal = ªObj(ctor.gtd.NameGo)
+					nuglobalsmap[ctor.Name] = nuvar.NameGo
 					nuglobals = append(nuglobals, nuvar)
 				}
 			}

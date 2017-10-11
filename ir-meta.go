@@ -410,7 +410,7 @@ func (me *GonadIrMeta) populateGoValDecls() {
 		for true {
 			_, funcexists := m[gvd.NameGo]
 			if gtd := me.GoTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
-				gvd.NameGo += "_"
+				gvd.NameGo += "ˇ"
 			} else {
 				break
 			}

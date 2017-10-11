@@ -107,6 +107,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 				gid.RefInterface = nil
 				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
 			} else {
+				gid.RefInterface.xtd = &td
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &GIrANamedTypeRef{Export: forexport, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
@@ -120,15 +121,19 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 						ctor.gtd.RefStruct.Fields = append(ctor.gtd.RefStruct.Fields, field)
 					}
 
-					method_iskind := &GIrANamedTypeRef{ctor: ctor, NameGo: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
-						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
-					}}
-					gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_iskind)
+					if false {
+						method_iskind := &GIrANamedTypeRef{ctor: ctor, NameGo: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
+							Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
+						}}
+						gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_iskind)
+					}
 					method_ret := &GIrANamedTypeRef{RefPtr: &GIrATypeRefPtr{Of: &GIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}}}
 					if numargs := len(ctor.Args); numargs > 0 {
-						method_askind := &GIrANamedTypeRef{ctor: ctor, NameGo: "As" + ctor.Name,
-							RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{method_ret}}}
-						gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_askind)
+						if false {
+							method_askind := &GIrANamedTypeRef{ctor: ctor, NameGo: "As" + ctor.Name,
+								RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{method_ret}}}
+							gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_askind)
+						}
 					}
 					gtds = append(gtds, ctor.gtd)
 				}
