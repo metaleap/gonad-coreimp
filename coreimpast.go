@@ -79,6 +79,9 @@ func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
 	switch maybebody := me.ciAstToGIrAst().(type) {
 	case *GIrABlock:
 		into.Body = maybebody.Body
+		for _, a := range into.Body {
+			a.Base().parent = into
+		}
 	default:
 		into.Add(maybebody)
 	}
@@ -104,14 +107,13 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	case "NumericLiteral_Integer":
 		a = ªI(me.NumericLiteral_Integer)
 	case "Var":
-		v := ªVar("")
+		v := ªVar("", me.Var, nil)
 		if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Var); gvd != nil {
 			v.Export = true
 		}
 		if ustr.BeginsUpper(me.Var) {
 			v.WasTypeFunc = true
 		}
-		v.setBothNamesFromPsName(me.Var)
 		a = v
 	case "Block":
 		b := ªBlock()
@@ -127,9 +129,8 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = f
 	case "ForIn":
 		f := ªFor()
-		f.ForRange = ªVar("")
-		f.ForRange.setBothNamesFromPsName(me.ForIn)
-		f.ForRange.parent, f.ForRange.VarVal = f, me.AstFor1.ciAstToGIrAst()
+		f.ForRange = ªVar("", me.ForIn, me.AstFor1.ciAstToGIrAst())
+		f.ForRange.parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "For":
@@ -163,7 +164,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = c
 	case "VariableIntroduction":
-		v := ªVar("")
+		v := ªVar("", me.VariableIntroduction, nil)
 		if istopleveldecl {
 			if ustr.BeginsUpper(me.VariableIntroduction) {
 				v.WasTypeFunc = true
@@ -172,7 +173,6 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 				v.Export = true
 			}
 		}
-		v.setBothNamesFromPsName(me.VariableIntroduction)
 		if me.AstRight != nil {
 			v.VarVal = me.AstRight.ciAstToGIrAst()
 			v.VarVal.Base().parent = v
@@ -303,8 +303,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			dv := ªVar("")
-			dv.setBothNamesFromPsName(me.AstRight.StringLiteral)
+			dv := ªVar("", me.AstRight.StringLiteral, nil)
 			a = ªDot(me.Indexer.ciAstToGIrAst(), dv)
 		} else {
 			a = ªIndex(me.Indexer.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
