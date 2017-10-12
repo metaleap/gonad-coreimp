@@ -196,7 +196,20 @@ type GonadIrAst struct {
 }
 
 type GIrA interface {
-	subAsts() []GIrA
+	Base() *gIrABase
+	Parent() GIrA
+}
+
+type gIrABase struct {
+	parent GIrA
+}
+
+func (me *gIrABase) Base() *gIrABase {
+	return me
+}
+
+func (me *gIrABase) Parent() GIrA {
+	return me.parent
 }
 
 type gIrAConstable interface {
@@ -205,77 +218,74 @@ type gIrAConstable interface {
 }
 
 type GIrAConst struct {
+	gIrABase
 	GIrANamedTypeRef `json:",omitempty"`
 	ConstVal         GIrA `json:",omitempty"`
 }
 
-func (me *GIrAConst) subAsts() []GIrA { return []GIrA{me.ConstVal} }
-
 type GIrAVar struct {
+	gIrABase
 	GIrANamedTypeRef `json:",omitempty"`
 	VarVal           GIrA `json:",omitempty"`
 }
 
-func (me *GIrAVar) subAsts() []GIrA { return []GIrA{me.VarVal} }
-
 type GIrAFunc struct {
+	gIrABase
 	GIrANamedTypeRef `json:",omitempty"`
 	FuncImpl         *GIrABlock `json:",omitempty"`
 }
 
-func (me *GIrAFunc) subAsts() []GIrA { return []GIrA{me.FuncImpl} }
-
 type GIrALitStr struct {
+	gIrABase
 	LitStr string
 }
 
 func (_ GIrALitStr) isConstable() bool { return true }
-func (me *GIrALitStr) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitBool struct {
+	gIrABase
 	LitBool bool
 }
 
 func (_ GIrALitBool) isConstable() bool { return true }
-func (me *GIrALitBool) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitDouble struct {
+	gIrABase
 	LitDouble float64
 }
 
 func (_ GIrALitDouble) isConstable() bool { return true }
-func (me *GIrALitDouble) subAsts() []GIrA { return []GIrA{} }
 
 type GIrALitInt struct {
+	gIrABase
 	LitInt int
 }
 
 func (_ GIrALitInt) isConstable() bool { return true }
-func (me *GIrALitInt) subAsts() []GIrA { return []GIrA{} }
 
 type GIrABlock struct {
+	gIrABase
 	Body []GIrA `json:",omitempty"`
 }
 
-func (me *GIrABlock) subAsts() []GIrA { return me.Body }
-
 func (me *GIrABlock) Add(asts ...GIrA) {
+	for _, a := range asts {
+		a.Base().parent = me
+	}
 	me.Body = append(me.Body, asts...)
 }
 
 type GIrAComments struct {
-	Comments     []CoreImpComment `json:",omitempty"`
-	CommentsDecl GIrA             `json:",omitempty"`
+	gIrABase
+	Comments     []*CoreImpComment `json:",omitempty"`
+	CommentsDecl GIrA              `json:",omitempty"`
 }
 
-func (me *GIrAComments) subAsts() []GIrA { return []GIrA{me.CommentsDecl} }
-
 type GIrAOp1 struct {
+	gIrABase
 	Op1 string `json:",omitempty"`
 	Of  GIrA   `json:",omitempty"`
 }
-
-func (me *GIrAOp1) subAsts() []GIrA { return []GIrA{me.Of} }
 
 func (me GIrAOp1) isConstable() bool {
 	if c, ok := me.Of.(gIrAConstable); ok {
@@ -285,12 +295,11 @@ func (me GIrAOp1) isConstable() bool {
 }
 
 type GIrAOp2 struct {
+	gIrABase
 	Left  GIrA   `json:",omitempty"`
 	Op2   string `json:",omitempty"`
 	Right GIrA   `json:",omitempty"`
 }
-
-func (me *GIrAOp2) subAsts() []GIrA { return []GIrA{me.Left, me.Right} }
 
 func (me GIrAOp2) isConstable() bool {
 	if c, ok := me.Left.(gIrAConstable); ok && c.isConstable() {
@@ -302,13 +311,13 @@ func (me GIrAOp2) isConstable() bool {
 }
 
 type GIrASet struct {
+	gIrABase
 	SetLeft GIrA `json:",omitempty"`
 	ToRight GIrA `json:",omitempty"`
 }
 
-func (me *GIrASet) subAsts() []GIrA { return []GIrA{me.SetLeft, me.ToRight} }
-
 type GIrAFor struct {
+	gIrABase
 	ForDo    *GIrABlock `json:",omitempty"`
 	ForCond  GIrA       `json:",omitempty"`
 	ForInit  []*GIrASet `json:",omitempty"`
@@ -316,111 +325,82 @@ type GIrAFor struct {
 	ForRange *GIrAVar   `json:",omitempty"`
 }
 
-func (me *GIrAFor) subAsts() (all []GIrA) {
-	all = append(all, me.ForDo, me.ForCond, me.ForRange)
-	for _, fi := range me.ForInit {
-		all = append(all, fi)
-	}
-	for _, fs := range me.ForStep {
-		all = append(all, fs)
-	}
-	return
-}
-
 type GIrAIf struct {
+	gIrABase
 	If   GIrA       `json:",omitempty"`
 	Then *GIrABlock `json:",omitempty"`
 	Else *GIrABlock `json:",omitempty"`
 }
 
-func (me *GIrAIf) subAsts() []GIrA { return []GIrA{me.If, me.Then, me.Else} }
-
 type GIrACall struct {
+	gIrABase
 	Callee   GIrA   `json:",omitempty"`
 	CallArgs []GIrA `json:",omitempty"`
 }
 
-func (me *GIrACall) subAsts() []GIrA { return append(me.CallArgs, me.Callee) }
-
 type GIrALitObj struct {
+	gIrABase
 	GIrANamedTypeRef `json:",omitempty"`
 	ObjFields        []*GIrALitObjField `json:",omitempty"`
 }
 
-func (me *GIrALitObj) subAsts() (all []GIrA) {
-	for _, of := range me.ObjFields {
-		all = append(all, of)
-	}
-	return
-}
-
 type GIrALitObjField struct {
+	gIrABase
 	GIrANamedTypeRef `json:",omitempty"`
 	FieldVal         GIrA `json:",omitempty"`
 }
 
-func (me *GIrALitObjField) subAsts() []GIrA { return []GIrA{me.FieldVal} }
-
 type GIrANil struct {
+	gIrABase
 	Nil interface{} // useless except we want to see it in the gonadast.json
 }
 
-func (me *GIrANil) subAsts() []GIrA { return []GIrA{} }
-
 type GIrARet struct {
+	gIrABase
 	RetArg GIrA `json:",omitempty"`
 }
 
-func (me *GIrARet) subAsts() []GIrA { return []GIrA{me.RetArg} }
-
 type GIrAPanic struct {
+	gIrABase
 	PanicArg GIrA `json:",omitempty"`
 }
 
-func (me *GIrAPanic) subAsts() []GIrA { return []GIrA{me.PanicArg} }
-
 type GIrALitArr struct {
+	gIrABase
 	GIrANamedTypeRef
 	ArrVals []GIrA `json:",omitempty"`
 }
 
-func (me *GIrALitArr) subAsts() []GIrA { return me.ArrVals }
-
 type GIrAIndex struct {
+	gIrABase
 	IdxLeft  GIrA `json:",omitempty"`
 	IdxRight GIrA `json:",omitempty"`
 }
 
-func (me *GIrAIndex) subAsts() []GIrA { return []GIrA{me.IdxLeft, me.IdxRight} }
-
 type GIrADot struct {
+	gIrABase
 	DotLeft  GIrA `json:",omitempty"`
 	DotRight GIrA `json:",omitempty"`
 }
 
-func (me *GIrADot) subAsts() []GIrA { return []GIrA{me.DotLeft, me.DotRight} }
-
 type GIrAIsType struct {
+	gIrABase
 	ExprToTest GIrA `json:",omitempty"`
 	TypeToTest GIrA `json:",omitempty"`
 }
 
-func (me *GIrAIsType) subAsts() []GIrA { return []GIrA{me.ExprToTest, me.TypeToTest} }
-
 type GIrAToType struct {
+	gIrABase
 	ExprToCast GIrA   `json:",omitempty"`
 	TypePkg    string `json:",omitempty"`
 	TypeName   string `json:",omitempty"`
 }
 
-func (me *GIrAToType) subAsts() []GIrA { return []GIrA{me.ExprToCast} }
-
 type GIrAPkgRef struct {
+	gIrABase
 	PkgName string `json:",omitempty"`
 	Symbol  string `json:",omitempty"`
 }
-
-func (me *GIrAPkgRef) subAsts() []GIrA { return []GIrA{} }
 
 func (me *GonadIrAst) FinalizePostPrep() (err error) {
 	//	various fix-ups
@@ -446,9 +426,9 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 							gtd = me.girM.GoTypeDefByPsName(ocv.NameGo)
 						}
 						if gtd != nil {
-							o := ªObj(gtd.NameGo)
+							o := ªO(gtd.NameGo)
 							for _, ctorarg := range oc.CallArgs {
-								o.ObjFields = append(o.ObjFields, &GIrALitObjField{FieldVal: ctorarg})
+								o.ObjFields = append(o.ObjFields, ªOFld(ctorarg))
 							}
 							return o
 						} else if ocv != nil && ocv.NamePs == "Error" {
@@ -522,11 +502,13 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 					}
 				}
 			}
-			nuctor := ªObj(gtd.NameGo)
+			nuctor := ªO(gtd.NameGo)
 			nucast := ªTo(nuctor, pname, tcname)
 			ifv.VarVal = nucast
 		}
 	}
+
+	me.resolveAllArgTypes()
 	return
 }
 
@@ -624,8 +606,8 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
 				if ctor.gtd != nil && ctor.gtd != nil && len(ctor.Args) == 0 {
-					nuvar := ªV("º" + ctor.Name)
-					nuvar.VarVal = ªObj(ctor.gtd.NameGo)
+					nuvar := ªVar("º" + ctor.Name)
+					nuvar.VarVal = ªO(ctor.gtd.NameGo)
 					nuglobalsmap[ctor.Name] = nuvar.NameGo
 					nuglobals = append(nuglobals, nuvar)
 				}
@@ -644,7 +626,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 						//	find all CtorName.value references and change them to the above new vars
 						if dr.NameGo == "value" {
 							if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
-								return ªV(nuglobalvarname)
+								return ªVar(nuglobalvarname)
 							}
 						}
 						//	if referring to a package, ensure the import is marked as in-use
@@ -671,6 +653,15 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	})
 
 	return
+}
+
+func (me *GonadIrAst) resolveAllArgTypes() {
+	//	first pass: walk all literals and propagate to parent expressions
+	me.Walk(func(ast GIrA) GIrA {
+		switch a := ast.(type) {
+		}
+		return ast
+	})
 }
 
 func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
@@ -913,62 +904,194 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 	return ast
 }
 
-func ªCall(callee GIrA, callargs ...GIrA) *GIrACall {
-	return &GIrACall{Callee: callee, CallArgs: callargs}
+func ªA( /*p GIrA,*/ exprs ...GIrA) *GIrALitArr {
+	a := &GIrALitArr{ArrVals: exprs}
+	for _, expr := range a.ArrVals {
+		expr.Base().parent = a
+	}
+	// a.parent = p
+	return a
 }
 
-func ªConst(tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
-	return &GIrAConst{ConstVal: val, GIrANamedTypeRef: *tref}
+func ªB( /*p GIrA,*/ literal bool) *GIrALitBool {
+	a := &GIrALitBool{LitBool: literal}
+	// a.parent = p
+	return a
 }
 
-func ªDot(left GIrA, right string) *GIrADot {
-	return &GIrADot{DotLeft: left, DotRight: ªV(right)}
+func ªF( /*p GIrA,*/ literal float64) *GIrALitDouble {
+	a := &GIrALitDouble{LitDouble: literal}
+	// a.parent = p
+	return a
 }
 
-func ªEq(left GIrA, right GIrA) *GIrAOp2 {
-	return &GIrAOp2{Op2: "==", Left: left, Right: right}
+func ªI( /*p GIrA,*/ literal int) *GIrALitInt {
+	a := &GIrALitInt{LitInt: literal}
+	// a.parent = p
+	return a
 }
 
-func ªO1(op string, operand GIrA) *GIrAOp1 {
-	return &GIrAOp1{Op1: op, Of: operand}
+func ªO( /*p GIrA,*/ typerefalias string, fields ...*GIrALitObjField) *GIrALitObj {
+	a := &GIrALitObj{ObjFields: fields}
+	a.GIrANamedTypeRef.RefAlias = typerefalias
+	for _, of := range a.ObjFields {
+		of.parent = a
+	}
+	// a.parent = p
+	return a
 }
 
-func ªO2(left GIrA, op string, right GIrA) *GIrAOp2 {
-	return &GIrAOp2{Op2: op, Left: left, Right: right}
+func ªOFld( /*p GIrA,*/ fieldval GIrA) *GIrALitObjField {
+	a := &GIrALitObjField{FieldVal: fieldval}
+	// a.parent = p
+	return a
 }
 
-func ªObj(typerefalias string) *GIrALitObj {
-	return &GIrALitObj{GIrANamedTypeRef: GIrANamedTypeRef{RefAlias: typerefalias}}
+func ªS( /*p GIrA,*/ literal string) *GIrALitStr {
+	a := &GIrALitStr{LitStr: literal}
+	// a.parent = p
+	return a
 }
 
-func ªRet(retarg GIrA) *GIrARet {
-	return &GIrARet{RetArg: retarg}
+func ªBlock( /*p GIrA,*/ asts ...GIrA) *GIrABlock {
+	a := &GIrABlock{Body: asts}
+	for _, expr := range a.Body {
+		expr.Base().parent = a
+	}
+	// a.parent = p
+	return a
 }
 
-func ªBlock(asts ...GIrA) *GIrABlock {
-	return &GIrABlock{Body: asts}
+func ªCall( /*p GIrA,*/ callee GIrA, callargs ...GIrA) *GIrACall {
+	a := &GIrACall{Callee: callee, CallArgs: callargs}
+	a.Callee.Base().parent = a
+	for _, expr := range callargs {
+		expr.Base().parent = a
+	}
+	// a.parent = p
+	return a
 }
 
-func ªB(literal bool) *GIrALitBool {
-	return &GIrALitBool{LitBool: literal}
+func ªComments( /*p GIrA,*/ comments ...*CoreImpComment) *GIrAComments {
+	a := &GIrAComments{Comments: comments}
+	// a.parent = p
+	return a
 }
 
-func ªPkgRef(pkgname string, symbol string) *GIrAPkgRef {
-	return &GIrAPkgRef{PkgName: pkgname, Symbol: symbol}
+func ªConst( /*p GIrA,*/ tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
+	a := &GIrAConst{ConstVal: val, GIrANamedTypeRef: *tref}
+	a.ConstVal.Base().parent = a
+	// a.parent = p
+	return a
 }
 
-func ªS(literal string) *GIrALitStr {
-	return &GIrALitStr{LitStr: literal}
+func ªDot( /*p GIrA,*/ left GIrA, right GIrA) *GIrADot {
+	a := &GIrADot{DotLeft: left, DotRight: right}
+	a.DotLeft.Base().parent, a.DotRight.Base().parent = a, a
+	// a.parent = p
+	return a
 }
 
-func ªSet(left string, right GIrA) *GIrASet {
-	return &GIrASet{SetLeft: ªV(left), ToRight: right}
+func ªEq( /*p GIrA,*/ left GIrA, right GIrA) *GIrAOp2 {
+	a := &GIrAOp2{Op2: "==", Left: left, Right: right}
+	a.Left.Base().parent, a.Right.Base().parent = a, a
+	// a.parent = p
+	return a
 }
 
-func ªV(name string) *GIrAVar {
-	return &GIrAVar{GIrANamedTypeRef: GIrANamedTypeRef{NameGo: name}}
+func ªFor( /*p GIrA*/ ) *GIrAFor {
+	a := &GIrAFor{ForDo: ªBlock()}
+	a.ForDo.parent = a
+	// a.parent = p
+	return a
 }
 
-func ªTo(expr GIrA, pname string, tname string) *GIrAToType {
-	return &GIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
+func ªFunc( /*p GIrA*/ ) *GIrAFunc {
+	a := &GIrAFunc{FuncImpl: ªBlock()}
+	a.FuncImpl.parent = a
+	// a.parent = p
+	return a
+}
+
+func ªIf( /*p GIrA,*/ cond GIrA) *GIrAIf {
+	a := &GIrAIf{If: cond, Then: ªBlock()}
+	a.If.Base().parent, a.Then.parent = a, a
+	// a.parent = p
+	return a
+}
+
+func ªIndex( /*p GIrA,*/ left GIrA, right GIrA) *GIrAIndex {
+	a := &GIrAIndex{IdxLeft: left, IdxRight: right}
+	a.IdxLeft.Base().parent, a.IdxRight.Base().parent = a, a
+	// a.parent = p
+	return a
+}
+
+func ªIs( /*p GIrA,*/ expr GIrA, typeexpr GIrA) *GIrAIsType {
+	a := &GIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
+	a.ExprToTest.Base().parent, a.TypeToTest.Base().parent = a, a
+	// a.parent = p
+	return a
+}
+
+func ªNil() *GIrANil {
+	a := &GIrANil{}
+	return a
+}
+
+func ªO1( /*p GIrA,*/ op string, operand GIrA) *GIrAOp1 {
+	a := &GIrAOp1{Op1: op, Of: operand}
+	a.Of.Base().parent = a
+	// a.parent = p
+	return a
+}
+
+func ªO2( /*p GIrA,*/ left GIrA, op string, right GIrA) *GIrAOp2 {
+	a := &GIrAOp2{Op2: op, Left: left, Right: right}
+	a.Left.Base().parent, a.Right.Base().parent = a, a
+	// a.parent = p
+	return a
+}
+
+func ªPanic( /*p GIrA,*/ errarg GIrA) *GIrAPanic {
+	a := &GIrAPanic{PanicArg: errarg}
+	a.PanicArg.Base().parent = a
+	// a.parent = p
+	return a
+}
+
+func ªPkgRef( /*p GIrA,*/ pkgname string, symbol string) *GIrAPkgRef {
+	a := &GIrAPkgRef{PkgName: pkgname, Symbol: symbol}
+	// a.parent = p
+	return a
+}
+
+func ªRet( /*p GIrA,*/ retarg GIrA) *GIrARet {
+	a := &GIrARet{RetArg: retarg}
+	if a.RetArg != nil {
+		a.RetArg.Base().parent = a
+	}
+	// a.parent = p
+	return a
+}
+
+func ªSet( /*p GIrA,*/ left GIrA, right GIrA) *GIrASet {
+	a := &GIrASet{SetLeft: left, ToRight: right}
+	a.SetLeft.Base().parent, a.ToRight.Base().parent = a, a
+	// a.parent = p
+	return a
+}
+
+func ªTo( /*p GIrA,*/ expr GIrA, pname string, tname string) *GIrAToType {
+	a := &GIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
+	a.ExprToCast.Base().parent = a
+	// a.parent = p
+	return a
+}
+
+func ªVar( /*p GIrA,*/ name string) *GIrAVar {
+	a := &GIrAVar{}
+	a.NameGo = name
+	// a.parent = p
+	return a
 }

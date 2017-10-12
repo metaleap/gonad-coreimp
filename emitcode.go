@@ -305,7 +305,7 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 			if ac, ok := a.(*GIrAComments); ok {
 				decl := ac.CommentsDecl
 				val, name = valname(decl)
-				ac.CommentsDecl = ªSet(name, val)
+				ac.CommentsDecl = ªSet(ªVar(name), val)
 				codeEmitAst(w, indent+1, ac, trr)
 				ac.CommentsDecl = decl
 				if i < (len(asts) - 1) {
@@ -313,7 +313,7 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 				}
 			} else {
 				val, name = valname(a)
-				codeEmitAst(w, indent+1, ªSet(ustr.PadRight(name, maxlen), val), trr)
+				codeEmitAst(w, indent+1, ªSet(ªVar(ustr.PadRight(name, maxlen)), val), trr)
 				if i < (len(asts) - 1) {
 					if _, ok := asts[i+1].(*GIrAComments); ok {
 						fmt.Fprint(w, "\n")

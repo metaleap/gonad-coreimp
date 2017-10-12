@@ -140,19 +140,19 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 				for _, ctor := range td.Ctors {
 					for _, method := range gid.RefInterface.Methods {
 						mcopy := *method
-						mcopy.method.body, mcopy.method.hasNoThis = &GIrABlock{}, true
+						mcopy.method.body, mcopy.method.hasNoThis = ªBlock(), true
 						if strings.HasPrefix(method.NameGo, "Is") {
 							mcopy.method.body.Add(ªRet(ªB(method.ctor == ctor)))
 						} else if strings.HasPrefix(method.NameGo, "As") {
 							if method.ctor == ctor {
 								mcopy.method.hasNoThis = false
 								if ctor.gtd.RefStruct.PassByPtr {
-									mcopy.method.body.Add(ªRet(ªV("this")))
+									mcopy.method.body.Add(ªRet(ªVar("this")))
 								} else {
-									mcopy.method.body.Add(ªRet(ªO1("&", ªV("this"))))
+									mcopy.method.body.Add(ªRet(ªO1("&", ªVar("this"))))
 								}
 							} else {
-								mcopy.method.body.Add(ªRet(&GIrANil{}))
+								mcopy.method.body.Add(ªRet(ªNil()))
 							}
 						}
 						ctor.gtd.Methods = append(ctor.gtd.Methods, &mcopy)
