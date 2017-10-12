@@ -12,14 +12,14 @@ import (
 )
 
 type GonadIrMeta struct {
-	Imports           GIrMPkgRefs         `json:",omitempty"`
-	ExtTypeAliases    []GIrMNamedTypeRef  `json:",omitempty"`
-	ExtTypeClasses    []GIrMTypeClass     `json:",omitempty"`
-	ExtTypeClassInsts []GIrMTypeClassInst `json:",omitempty"`
-	ExtTypeDataDecls  []GIrMTypeDataDecl  `json:",omitempty"`
-	ExtValDecls       []GIrMNamedTypeRef  `json:",omitempty"`
-	GoTypeDefs        GIrANamedTypeRefs   `json:",omitempty"`
-	GoValDecls        GIrANamedTypeRefs   `json:",omitempty"`
+	Imports           GIrMPkgRefs          `json:",omitempty"`
+	ExtTypeAliases    []*GIrMNamedTypeRef  `json:",omitempty"`
+	ExtTypeClasses    []*GIrMTypeClass     `json:",omitempty"`
+	ExtTypeClassInsts []*GIrMTypeClassInst `json:",omitempty"`
+	ExtTypeDataDecls  []*GIrMTypeDataDecl  `json:",omitempty"`
+	ExtValDecls       []*GIrMNamedTypeRef  `json:",omitempty"`
+	GoTypeDefs        GIrANamedTypeRefs    `json:",omitempty"`
+	GoValDecls        GIrANamedTypeRefs    `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -265,7 +265,7 @@ func (me *GonadIrMeta) populateExtFuncsAndVals() {
 			}
 			if !referstotypeclassmember {
 				tr := me.newTypeRefFromExtTc(edval.Type)
-				me.ExtValDecls = append(me.ExtValDecls, GIrMNamedTypeRef{Name: edval.Name.Ident, Ref: tr})
+				me.ExtValDecls = append(me.ExtValDecls, &GIrMNamedTypeRef{Name: edval.Name.Ident, Ref: tr})
 			}
 		}
 	}
@@ -276,7 +276,7 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 		if d.EDType != nil && d.EDType.DeclKind != nil {
 			if m_edTypeDeclarationKind, ok := d.EDType.DeclKind.(map[string]interface{}); ok && m_edTypeDeclarationKind != nil {
 				if m_DataType, ok := m_edTypeDeclarationKind["DataType"].(map[string]interface{}); ok && m_DataType != nil {
-					datadecl := GIrMTypeDataDecl{Name: d.EDType.Name}
+					datadecl := &GIrMTypeDataDecl{Name: d.EDType.Name}
 					for _, argif := range m_DataType["args"].([]interface{}) {
 						datadecl.Args = append(datadecl.Args, argif.([]interface{})[0].(string))
 					}
@@ -302,7 +302,7 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 						//	type will be present to go build at compilation time --- the typical case
 					} else {
 						//	special case for official purescript core libs: alias to gonad's default ffi package
-						ta := GIrMNamedTypeRef{Name: d.EDType.Name, Ref: &GIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + d.EDType.Name}}
+						ta := &GIrMNamedTypeRef{Name: d.EDType.Name, Ref: &GIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + d.EDType.Name}}
 						me.ExtTypeAliases = append(me.ExtTypeAliases, ta)
 					}
 				default:
@@ -316,7 +316,7 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 func (me *GonadIrMeta) populateExtTypeAliases() {
 	for _, d := range me.mod.ext.EfDecls {
 		if d.EDTypeSynonym != nil && d.EDTypeSynonym.Type != nil && len(d.EDTypeSynonym.Name) > 0 && me.mod.ext.findTypeClass(d.EDTypeSynonym.Name) == nil {
-			ta := GIrMNamedTypeRef{Name: d.EDTypeSynonym.Name}
+			ta := &GIrMNamedTypeRef{Name: d.EDTypeSynonym.Name}
 			ta.Ref = me.newTypeRefFromExtTc(*d.EDTypeSynonym.Type)
 			me.ExtTypeAliases = append(me.ExtTypeAliases, ta)
 		}
@@ -336,7 +336,7 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 	}
 	for _, efdecl := range me.mod.ext.EfDecls {
 		if edc := efdecl.EDClass; edc != nil {
-			tc := GIrMTypeClass{Name: edc.Name}
+			tc := &GIrMTypeClass{Name: edc.Name}
 			for _, edca := range edc.TypeArgs {
 				tc.TypeArgs = append(tc.TypeArgs, edca[0].(string))
 			}
@@ -349,7 +349,7 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 			me.ExtTypeClasses = append(me.ExtTypeClasses, tc)
 		}
 		if edi := efdecl.EDInstance; edi != nil {
-			tci := GIrMTypeClassInst{Name: edi.Name.Ident, ClassName: qNameFromExt(edi.ClassName), ChainIndex: edi.ChainIndex}
+			tci := &GIrMTypeClassInst{Name: edi.Name.Ident, ClassName: qNameFromExt(edi.ClassName), ChainIndex: edi.ChainIndex}
 			for _, tc := range edi.Types {
 				tci.Types = append(tci.Types, me.newTypeRefFromExtTc(tc))
 			}
@@ -375,12 +375,14 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateGoTypeDefs()
 	me.rebuildLookups()
 	me.populateGoValDecls()
+	me.rebuildLookups()
 
 	if err == nil {
 		for _, impmod := range me.imports {
 			me.Imports = append(me.Imports, newModImp(impmod))
 		}
 	}
+
 	return
 }
 

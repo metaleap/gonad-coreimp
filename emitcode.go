@@ -64,7 +64,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrAConst:
-		fmt.Fprintf(w, "%sconst %s", tabs, a.NameGo)
+		fmt.Fprintf(w, "%sconst %s %s", tabs, a.NameGo, a.RefAlias)
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ConstVal, trr)
 		fmt.Fprint(w, "\n")
@@ -172,6 +172,9 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	case *GIrASet:
 		fmt.Fprint(w, tabs)
 		codeEmitAst(w, indent, a.SetLeft, trr)
+		if a.isInVarGroup {
+			fmt.Fprintf(w, " %s", a.RefAlias)
+		}
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ToRight, trr)
 		fmt.Fprint(w, "\n")
@@ -281,17 +284,17 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 		} else {
 			fmt.Fprint(w, "var (\n")
 		}
-		valname := func(a GIrA) (val GIrA, name string) {
+		valºnameºtype := func(a GIrA) (val GIrA, name string, typeref string) {
 			if ac, ok := a.(*GIrAConst); ok && consts {
-				val, name = ac.ConstVal, ac.NameGo
+				val, name, typeref = ac.ConstVal, ac.NameGo, ac.effExprType()
 			} else if av, ok := a.(*GIrAVar); ok {
-				val, name = av.VarVal, av.NameGo
+				val, name, typeref = av.VarVal, av.NameGo, av.effExprType()
 			}
 			return
 		}
-		maxlen, name := 0, ""
+		maxlen, name, typespec := 0, "", ""
 		for _, a := range asts {
-			_, name = valname(a)
+			_, name, _ = valºnameºtype(a)
 			l := len(name)
 			// if ustr.HasAny(name, "ª", "ĸ", "µ", "º", "ˇ", "ø") {
 			// 	l -= 1
@@ -304,16 +307,18 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 		for i, a := range asts {
 			if ac, ok := a.(*GIrAComments); ok {
 				decl := ac.CommentsDecl
-				val, name = valname(decl)
-				ac.CommentsDecl = ªSet(ªVar(name, "", nil), val)
+				val, name, typespec = valºnameºtype(decl)
+				typespec = codeEmitTypeRef(trr(typespec, true))
+				ac.CommentsDecl = ªsetVarInGroup(ªVar(name, "", nil), val, typespec)
 				codeEmitAst(w, indent+1, ac, trr)
 				ac.CommentsDecl = decl
 				if i < (len(asts) - 1) {
 					fmt.Fprint(w, "\n")
 				}
 			} else {
-				val, name = valname(a)
-				codeEmitAst(w, indent+1, ªSet(ªVar(ustr.PadRight(name, maxlen), "", nil), val), trr)
+				val, name, typespec = valºnameºtype(a)
+				typespec = codeEmitTypeRef(trr(typespec, true))
+				codeEmitAst(w, indent+1, ªsetVarInGroup(ªVar(ustr.PadRight(name, maxlen), "", nil), val, typespec), trr)
 				if i < (len(asts) - 1) {
 					if _, ok := asts[i+1].(*GIrAComments); ok {
 						fmt.Fprint(w, "\n")
@@ -394,7 +399,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	}
 	if len(gtd.RefAlias) > 0 {
 		fmt.Fprint(w, codeEmitTypeRef(typerefresolver(gtd.RefAlias, true)))
-	} else if gtd.RefUnknown > 0 {
+	} else if gtd.RefUnknown != 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
 		fmt.Fprint(w, "[]")

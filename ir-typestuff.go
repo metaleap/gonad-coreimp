@@ -43,7 +43,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 
 	for _, tc := range me.ExtTypeClasses {
 		tdict = map[string][]string{}
-		gif := &GIrATypeRefInterface{xtc: &tc}
+		gif := &GIrATypeRefInterface{xtc: tc}
 		for _, tcc := range tc.Constraints {
 			for _, tcca := range tcc.Args {
 				ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
@@ -68,7 +68,9 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 					}
 					ifm.RefAlias = ""
 				} else {
-					panic(me.mod.srcFilePath + ": " + tc.Name + "." + ifm.NamePs + ": strangely unrecognized or missing typevar-typeclass relation, please report!")
+					ifm.RefFunc = &GIrATypeRefFunc{
+						Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefUnknown: ifm.RefUnknown /*always 0 so far but whatever*/}},
+					}
 				}
 			}
 			gif.Methods = append(gif.Methods, ifm)
@@ -81,7 +83,8 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict, true)...)
 }
 
-func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
+func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []*GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
+	const USE_LEGACY_METHODS_APPROACH = false
 	var tdict map[string][]string
 	for _, td := range exttypedatadecls {
 		tdict = map[string][]string{}
@@ -89,7 +92,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
 			isnewtype, hasselfref, hasctorargs := false, false, false
-			gid := &GIrANamedTypeRef{RefInterface: &GIrATypeRefInterface{}, Export: forexport}
+			gid := &GIrANamedTypeRef{RefInterface: &GIrATypeRefInterface{xtd: td}, Export: forexport}
 			gid.setBothNamesFromPsName(td.Name)
 			for _, ctor := range td.Ctors {
 				if numargs := len(ctor.Args); numargs > 0 {
@@ -102,12 +105,10 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 					}
 				}
 			}
-			gtds = append(gtds, gid)
 			if isnewtype {
 				gid.RefInterface = nil
 				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
 			} else {
-				gid.RefInterface.xtd = &td
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &GIrANamedTypeRef{Export: forexport, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
@@ -121,7 +122,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 						ctor.gtd.RefStruct.Fields = append(ctor.gtd.RefStruct.Fields, field)
 					}
 
-					if false {
+					if USE_LEGACY_METHODS_APPROACH {
 						method_iskind := &GIrANamedTypeRef{ctor: ctor, NameGo: "Is" + ctor.Name, RefFunc: &GIrATypeRefFunc{
 							Rets: GIrANamedTypeRefs{&GIrANamedTypeRef{RefAlias: "Prim.Boolean"}},
 						}}
@@ -129,7 +130,7 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 					}
 					method_ret := &GIrANamedTypeRef{RefPtr: &GIrATypeRefPtr{Of: &GIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}}}
 					if numargs := len(ctor.Args); numargs > 0 {
-						if false {
+						if USE_LEGACY_METHODS_APPROACH {
 							method_askind := &GIrANamedTypeRef{ctor: ctor, NameGo: "As" + ctor.Name,
 								RefFunc: &GIrATypeRefFunc{Rets: GIrANamedTypeRefs{method_ret}}}
 							gid.RefInterface.Methods = append(gid.RefInterface.Methods, method_askind)
@@ -137,28 +138,31 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []GIrMTypeDataDecl, m
 					}
 					gtds = append(gtds, ctor.gtd)
 				}
-				for _, ctor := range td.Ctors {
-					for _, method := range gid.RefInterface.Methods {
-						mcopy := *method
-						mcopy.method.body, mcopy.method.hasNoThis = ªBlock(), true
-						if strings.HasPrefix(method.NameGo, "Is") {
-							mcopy.method.body.Add(ªRet(ªB(method.ctor == ctor)))
-						} else if strings.HasPrefix(method.NameGo, "As") {
-							if method.ctor == ctor {
-								mcopy.method.hasNoThis = false
-								if ctor.gtd.RefStruct.PassByPtr {
-									mcopy.method.body.Add(ªRet(ªVar("this", "", nil)))
+				if USE_LEGACY_METHODS_APPROACH {
+					for _, ctor := range td.Ctors {
+						for _, method := range gid.RefInterface.Methods {
+							mcopy := *method
+							mcopy.method.body, mcopy.method.hasNoThis = ªBlock(), true
+							if strings.HasPrefix(method.NameGo, "Is") {
+								mcopy.method.body.Add(ªRet(ªB(method.ctor == ctor)))
+							} else if strings.HasPrefix(method.NameGo, "As") {
+								if method.ctor == ctor {
+									mcopy.method.hasNoThis = false
+									if ctor.gtd.RefStruct.PassByPtr {
+										mcopy.method.body.Add(ªRet(ªVar("this", "", nil)))
+									} else {
+										mcopy.method.body.Add(ªRet(ªO1("&", ªVar("this", "", nil))))
+									}
 								} else {
-									mcopy.method.body.Add(ªRet(ªO1("&", ªVar("this", "", nil))))
+									mcopy.method.body.Add(ªRet(ªNil()))
 								}
-							} else {
-								mcopy.method.body.Add(ªRet(ªNil()))
 							}
+							ctor.gtd.Methods = append(ctor.gtd.Methods, &mcopy)
 						}
-						ctor.gtd.Methods = append(ctor.gtd.Methods, &mcopy)
 					}
 				}
 			}
+			gtds = append(gtds, gid)
 		}
 	}
 	return

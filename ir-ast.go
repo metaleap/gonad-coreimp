@@ -109,7 +109,6 @@ func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
 	case string:
 		me.RefAlias = tr
 	case nil:
-		me.RefAlias = "interface{/*setRefFrom*/}"
 	default:
 		println(tref.(float32)) // in case of future oversight, trigger immediate panic-msg with actual-type included
 	}
@@ -198,14 +197,22 @@ type GonadIrAst struct {
 type GIrA interface {
 	Base() *gIrABase
 	Parent() GIrA
+
+	effExprType() string
 }
 
 type gIrABase struct {
+	GIrANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
+
 	parent GIrA
 }
 
 func (me *gIrABase) Base() *gIrABase {
 	return me
+}
+
+func (me *gIrABase) effExprType() string {
+	return me.RefAlias
 }
 
 func (me *gIrABase) Parent() GIrA {
@@ -219,20 +226,35 @@ type gIrAConstable interface {
 
 type GIrAConst struct {
 	gIrABase
-	GIrANamedTypeRef `json:",omitempty"`
-	ConstVal         GIrA `json:",omitempty"`
+	ConstVal GIrA `json:",omitempty"`
+}
+
+func (me *GIrAConst) effExprType() string {
+	if len(me.RefAlias) == 0 {
+		me.RefAlias = me.ConstVal.effExprType()
+	}
+	return me.RefAlias
 }
 
 type GIrAVar struct {
 	gIrABase
-	GIrANamedTypeRef `json:",omitempty"`
-	VarVal           GIrA `json:",omitempty"`
+	VarVal GIrA `json:",omitempty"`
+}
+
+func (me *GIrAVar) effExprType() string {
+	if len(me.RefAlias) == 0 {
+		if me.VarVal != nil {
+			me.RefAlias = me.VarVal.effExprType()
+		} else {
+			//	TODO: in this case, the 'var' is just a lone identifier referring to a symbol defined elsewhere, go search here!
+		}
+	}
+	return me.RefAlias
 }
 
 type GIrAFunc struct {
 	gIrABase
-	GIrANamedTypeRef `json:",omitempty"`
-	FuncImpl         *GIrABlock `json:",omitempty"`
+	FuncImpl *GIrABlock `json:",omitempty"`
 }
 
 type GIrALitStr struct {
@@ -240,7 +262,13 @@ type GIrALitStr struct {
 	LitStr string
 }
 
-func (_ GIrALitStr) isConstable() bool { return true }
+func (me *GIrALitStr) isConstable() bool {
+	return true
+}
+
+func (_ *GIrALitStr) effExprType() string {
+	return "Prim.String"
+}
 
 type GIrALitBool struct {
 	gIrABase
@@ -249,9 +277,17 @@ type GIrALitBool struct {
 
 func (_ GIrALitBool) isConstable() bool { return true }
 
+func (_ *GIrALitBool) effExprType() string {
+	return "Prim.Boolean"
+}
+
 type GIrALitDouble struct {
 	gIrABase
 	LitDouble float64
+}
+
+func (_ *GIrALitDouble) effExprType() string {
+	return "Prim.Number"
 }
 
 func (_ GIrALitDouble) isConstable() bool { return true }
@@ -262,6 +298,10 @@ type GIrALitInt struct {
 }
 
 func (_ GIrALitInt) isConstable() bool { return true }
+
+func (_ *GIrALitInt) effExprType() string {
+	return "Prim.Int"
+}
 
 type GIrABlock struct {
 	gIrABase
@@ -314,6 +354,8 @@ type GIrASet struct {
 	gIrABase
 	SetLeft GIrA `json:",omitempty"`
 	ToRight GIrA `json:",omitempty"`
+
+	isInVarGroup bool
 }
 
 type GIrAFor struct {
@@ -340,14 +382,12 @@ type GIrACall struct {
 
 type GIrALitObj struct {
 	gIrABase
-	GIrANamedTypeRef `json:",omitempty"`
-	ObjFields        []*GIrALitObjField `json:",omitempty"`
+	ObjFields []*GIrALitObjField `json:",omitempty"`
 }
 
 type GIrALitObjField struct {
 	gIrABase
-	GIrANamedTypeRef `json:",omitempty"`
-	FieldVal         GIrA `json:",omitempty"`
+	FieldVal GIrA `json:",omitempty"`
 }
 
 type GIrANil struct {
@@ -367,7 +407,6 @@ type GIrAPanic struct {
 
 type GIrALitArr struct {
 	gIrABase
-	GIrANamedTypeRef
 	ArrVals []GIrA `json:",omitempty"`
 }
 
@@ -509,9 +548,11 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 				}
 			}
 			nuctor := ªO(gtd.NameGo)
-			nucast := ªTo(nuctor, pname, tcname)
-			nucast.parent = ifv
-			ifv.VarVal = nucast
+			// nucast := ªTo(nuctor, pname, tcname)
+			// nucast.parent = ifv
+			nuctor.parent = ifv
+			ifv.VarVal = nuctor
+			ifv.RefAlias = ustr.PrependIf(tcname, pname)
 		}
 	}
 
@@ -540,7 +581,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	})
 
 	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
-	newxtypedatadecl := GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
+	newxtypedatadecl := &GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var newextratypes GIrANamedTypeRefs
 	var av *GIrAVar
 	var ac *GIrAComments
@@ -567,7 +608,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 				if gtd := me.girM.GoTypeDefByPsName(av.NamePs); gtd == nil {
 					nuctor := &GIrMTypeDataCtor{Name: av.NamePs, comment: ac}
 					for i := 0; i < len(fn.RefFunc.Args); i++ {
-						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{TypeConstructor: "interface{/*PrepFromCoreImp*/}"})
+						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{})
 					}
 					newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
 				} else {
@@ -579,7 +620,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 		}
 	}
 	if len(newxtypedatadecl.Ctors) > 0 {
-		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
+		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]*GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
 	}
 	//	also turn type-class instances into 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.girM.ExtTypeClassInsts {
@@ -612,7 +653,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	for _, gtd := range me.girM.GoTypeDefs {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
-				if ctor.gtd != nil && ctor.gtd != nil && len(ctor.Args) == 0 {
+				if ctor.gtd != nil && len(ctor.Args) == 0 {
 					nuvar := ªVar("º"+ctor.Name, "", ªO(ctor.gtd.NameGo))
 					nuglobalsmap[ctor.Name] = nuvar.NameGo
 					nuglobals = append(nuglobals, nuvar)
@@ -631,7 +672,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
 						//	find all CtorName.value references and change them to the above new vars
 						if dr.NameGo == "value" {
-							if nuglobalvarname, _ := nuglobalsmap[dl.NameGo]; len(nuglobalvarname) > 0 {
+							if nuglobalvarname, _ := nuglobalsmap[dl.NamePs]; len(nuglobalvarname) > 0 {
 								return ªVar(nuglobalvarname, "", nil)
 							}
 						}
@@ -663,11 +704,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 
 func (me *GonadIrAst) resolveAllArgTypes() {
 	//	first pass: walk all literals and propagate to parent expressions
-	me.Walk(func(ast GIrA) GIrA {
-		switch a := ast.(type) {
-		}
-		return ast
-	})
+
 }
 
 func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
@@ -980,7 +1017,8 @@ func ªComments(comments ...*CoreImpComment) *GIrAComments {
 }
 
 func ªConst(tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
-	a := &GIrAConst{ConstVal: val, GIrANamedTypeRef: *tref}
+	a := &GIrAConst{ConstVal: val}
+	a.GIrANamedTypeRef = *tref
 	a.ConstVal.Base().parent = a
 	return a
 }
@@ -1066,6 +1104,13 @@ func ªRet(retarg GIrA) *GIrARet {
 func ªSet(left GIrA, right GIrA) *GIrASet {
 	a := &GIrASet{SetLeft: left, ToRight: right}
 	a.SetLeft.Base().parent, a.ToRight.Base().parent = a, a
+	return a
+}
+
+func ªsetVarInGroup(left GIrA, right GIrA, typespec string) *GIrASet {
+	a := ªSet(left, right)
+	a.RefAlias = typespec
+	a.isInVarGroup = true
 	return a
 }
 
