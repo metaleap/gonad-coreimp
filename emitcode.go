@@ -53,8 +53,8 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
-		// codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
-		fmt.Fprint(w, a.GIrANamedTypeRef.RefAlias+"{")
+		fmt.Fprint(w, codeEmitTypeRef(trr(a.effExprType(), true)))
+		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			codeEmitCommaIf(w, i)
 			if len(namevaluepair.NameGo) > 0 {
@@ -64,7 +64,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrAConst:
-		fmt.Fprintf(w, "%sconst %s %s", tabs, a.NameGo, a.RefAlias)
+		fmt.Fprintf(w, "%sconst %s %s", tabs, a.NameGo, codeEmitTypeRef(trr(a.effExprType(), true)))
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ConstVal, trr)
 		fmt.Fprint(w, "\n")
@@ -173,7 +173,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, tabs)
 		codeEmitAst(w, indent, a.SetLeft, trr)
 		if a.isInVarGroup {
-			fmt.Fprintf(w, " %s", a.RefAlias)
+			fmt.Fprintf(w, " %s", codeEmitTypeRef(trr(a.effExprType(), true)))
 		}
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ToRight, trr)
