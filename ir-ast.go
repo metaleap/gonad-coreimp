@@ -79,6 +79,10 @@ func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray) && me.RefPtr.Eq(cmp.RefPtr))
 }
 
+func (me *GIrANamedTypeRef) HasTypeInfo() bool {
+	return len(me.RefAlias) > 0 || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
+}
+
 func (me *GIrANamedTypeRef) setBothNamesFromPsName(psname string) {
 	me.NamePs = psname
 	me.NameGo = sanitizeSymbolForGo(psname, me.Export || me.WasTypeFunc)
@@ -430,7 +434,7 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 							gtd = me.girM.GoTypeDefByPsName(ocv.NameGo)
 						}
 						if gtd != nil {
-							o := ªO(gtd.NameGo)
+							o := ªO(gtd)
 							for _, ctorarg := range oc.CallArgs {
 								of := ªOFld(ctorarg)
 								of.parent = o
@@ -512,9 +516,7 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 					}
 				}
 			}
-			nuctor := ªO(gtd.NameGo)
-			// nucast := ªTo(nuctor, pname, tcname)
-			// nucast.parent = ifv
+			nuctor := ªO(gtd)
 			nuctor.parent = ifv
 			ifv.VarVal = nuctor
 			ifv.RefAlias = ustr.PrependIf(tcname, pname)
@@ -614,13 +616,13 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 
 	//	now that we have these additional structs/interfaces, add private globals to represent all arg-less ctors
 	nuglobals := []GIrA{}
-	nuglobalsmap := map[string]string{}
+	nuglobalsmap := map[string]*GIrAVar{}
 	for _, gtd := range me.girM.GoTypeDefs {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
 				if ctor.gtd != nil && len(ctor.Args) == 0 {
-					nuvar := ªVar("º"+ctor.Name, "", ªO(ctor.gtd.NameGo))
-					nuglobalsmap[ctor.Name] = nuvar.NameGo
+					nuvar := ªVar("º"+ctor.Name, "", ªO(&GIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
+					nuglobalsmap[ctor.Name] = nuvar
 					nuglobals = append(nuglobals, nuvar)
 				}
 			}
@@ -637,8 +639,11 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
 						//	find all CtorName.value references and change them to the above new vars
 						if dr.NameGo == "value" {
-							if nuglobalvarname, _ := nuglobalsmap[dl.NamePs]; len(nuglobalvarname) > 0 {
-								return ªVar(nuglobalvarname, "", nil)
+							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
+								nuvarsym := ªVar("", "", nil)
+								nuvarsym.GIrANamedTypeRef = nuglobalvar.GIrANamedTypeRef
+								nuvarsym.NameGo = nuglobalvar.NameGo
+								return nuvarsym
 							}
 						}
 						//	if referring to a package, ensure the import is marked as in-use
@@ -919,8 +924,13 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 
 func ªA(exprs ...GIrA) *GIrALitArr {
 	a := &GIrALitArr{ArrVals: exprs}
+	a.RefArray = &GIrATypeRefArray{}
+	typefound := false
 	for _, expr := range a.ArrVals {
-		expr.Base().parent = a
+		eb := expr.Base()
+		if eb.parent = a; !typefound && eb.HasTypeInfo() {
+			a.RefArray.Of = &eb.GIrANamedTypeRef
+		}
 	}
 	return a
 }
@@ -943,9 +953,11 @@ func ªI(literal int) *GIrALitInt {
 	return a
 }
 
-func ªO(typerefalias string, fields ...*GIrALitObjField) *GIrALitObj {
+func ªO(typeref *GIrANamedTypeRef, fields ...*GIrALitObjField) *GIrALitObj {
 	a := &GIrALitObj{ObjFields: fields}
-	a.GIrANamedTypeRef.RefAlias = typerefalias
+	if typeref != nil {
+		a.GIrANamedTypeRef = *typeref
+	}
 	for _, of := range a.ObjFields {
 		of.parent = a
 	}
@@ -1073,12 +1085,17 @@ func ªRet(retarg GIrA) *GIrARet {
 func ªSet(left GIrA, right GIrA) *GIrASet {
 	a := &GIrASet{SetLeft: left, ToRight: right}
 	a.SetLeft.Base().parent, a.ToRight.Base().parent = a, a
+	if rb := right.Base(); rb.HasTypeInfo() {
+		a.GIrANamedTypeRef = rb.GIrANamedTypeRef
+	}
 	return a
 }
 
-func ªsetVarInGroup(left GIrA, right GIrA, typespec *GIrANamedTypeRef) *GIrASet {
-	a := ªSet(left, right)
-	a.GIrANamedTypeRef = *typespec
+func ªsetVarInGroup(name string, right GIrA, typespec *GIrANamedTypeRef) *GIrASet {
+	a := ªSet(ªVar(name, "", nil), right)
+	if (!a.HasTypeInfo()) && typespec != nil && typespec.HasTypeInfo() {
+		a.GIrANamedTypeRef = *typespec
+	}
 	a.isInVarGroup = true
 	return a
 }
@@ -1092,7 +1109,9 @@ func ªTo(expr GIrA, pname string, tname string) *GIrAToType {
 func ªVar(namego string, nameps string, val GIrA) *GIrAVar {
 	a := &GIrAVar{VarVal: val}
 	if val != nil {
-		val.Base().parent = a
+		vb := val.Base()
+		vb.parent = a
+		a.GIrANamedTypeRef = vb.GIrANamedTypeRef
 	}
 	if len(a.NameGo) == 0 && len(nameps) > 0 {
 		a.setBothNamesFromPsName(nameps)

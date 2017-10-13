@@ -270,7 +270,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		}
 		a = c
 	case "ObjectLiteral":
-		o := ªO("")
+		o := ªO(nil)
 		for _, namevaluepair := range me.ObjectLiteral {
 			for onekey, oneval := range namevaluepair {
 				ofv := ªOFld(oneval.ciAstToGIrAst())
@@ -291,12 +291,11 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		r := ªPanic(me.Throw.ciAstToGIrAst())
 		a = r
 	case "ArrayLiteral":
-		l := ªA()
+		exprs := make([]GIrA, 0, len(me.ArrayLiteral))
 		for _, v := range me.ArrayLiteral {
-			arrval := v.ciAstToGIrAst()
-			arrval.Base().parent = l
-			l.ArrVals = append(l.ArrVals, arrval)
+			exprs = append(exprs, v.ciAstToGIrAst())
 		}
+		l := ªA(exprs...)
 		a = l
 	case "Assignment":
 		o := ªSet(me.Assignment.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())

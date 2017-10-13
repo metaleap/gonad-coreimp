@@ -296,16 +296,16 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 		for i, a := range asts {
 			if ac, ok := a.(*GIrAComments); ok {
 				decl := ac.CommentsDecl
-				val, name, typespec := valºnameºtype(decl)
-				ac.CommentsDecl = ªsetVarInGroup(ªVar(name, "", nil), val, typespec)
+				val, name, typeref := valºnameºtype(decl)
+				ac.CommentsDecl = ªsetVarInGroup(name, val, typeref)
 				codeEmitAst(w, indent+1, ac, trr)
 				ac.CommentsDecl = decl
 				if i < (len(asts) - 1) {
 					fmt.Fprint(w, "\n")
 				}
 			} else {
-				val, name, typespec := valºnameºtype(a)
-				codeEmitAst(w, indent+1, ªsetVarInGroup(ªVar(name, "", nil), val, typespec), trr)
+				val, name, typeref := valºnameºtype(a)
+				codeEmitAst(w, indent+1, ªsetVarInGroup(name, val, typeref), trr)
 				if i < (len(asts) - 1) {
 					if _, ok := asts[i+1].(*GIrAComments); ok {
 						fmt.Fprint(w, "\n")
@@ -375,6 +375,10 @@ func codeEmitTypeAlias(w io.Writer, tname string, ttype string) {
 }
 
 func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
+	if gtd == nil {
+		fmt.Fprint(w, "interface{/*GIrANamedTypeRef=Nil*/}")
+		return
+	}
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.method.body != nil
@@ -485,7 +489,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, ")")
 		}
 	} else {
-		fmt.Fprint(w, "interface{/*codeEmitTypeDecl*/}")
+		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")
