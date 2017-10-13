@@ -198,7 +198,7 @@ type GIrA interface {
 	Base() *gIrABase
 	Parent() GIrA
 
-	effExprType() string
+	tryFindExprType()
 }
 
 type gIrABase struct {
@@ -211,8 +211,7 @@ func (me *gIrABase) Base() *gIrABase {
 	return me
 }
 
-func (me *gIrABase) effExprType() string {
-	return me.RefAlias
+func (me *gIrABase) tryFindExprType() {
 }
 
 func (me *gIrABase) Parent() GIrA {
@@ -229,27 +228,9 @@ type GIrAConst struct {
 	ConstVal GIrA `json:",omitempty"`
 }
 
-func (me *GIrAConst) effExprType() string {
-	if len(me.RefAlias) == 0 {
-		me.RefAlias = me.ConstVal.effExprType()
-	}
-	return me.RefAlias
-}
-
 type GIrAVar struct {
 	gIrABase
 	VarVal GIrA `json:",omitempty"`
-}
-
-func (me *GIrAVar) effExprType() string {
-	if len(me.RefAlias) == 0 {
-		if me.VarVal != nil {
-			me.RefAlias = me.VarVal.effExprType()
-		} else {
-			//	TODO: in this case, the 'var' is just a lone identifier referring to a symbol defined elsewhere, go search here!
-		}
-	}
-	return me.RefAlias
 }
 
 type GIrAFunc struct {
@@ -266,10 +247,6 @@ func (me *GIrALitStr) isConstable() bool {
 	return true
 }
 
-func (_ *GIrALitStr) effExprType() string {
-	return "Prim.String"
-}
-
 type GIrALitBool struct {
 	gIrABase
 	LitBool bool
@@ -277,17 +254,9 @@ type GIrALitBool struct {
 
 func (_ GIrALitBool) isConstable() bool { return true }
 
-func (_ *GIrALitBool) effExprType() string {
-	return "Prim.Boolean"
-}
-
 type GIrALitDouble struct {
 	gIrABase
 	LitDouble float64
-}
-
-func (_ *GIrALitDouble) effExprType() string {
-	return "Prim.Number"
 }
 
 func (_ GIrALitDouble) isConstable() bool { return true }
@@ -298,10 +267,6 @@ type GIrALitInt struct {
 }
 
 func (_ GIrALitInt) isConstable() bool { return true }
-
-func (_ *GIrALitInt) effExprType() string {
-	return "Prim.Int"
-}
 
 type GIrABlock struct {
 	gIrABase
@@ -342,8 +307,8 @@ type GIrAOp2 struct {
 }
 
 func (me GIrAOp2) isConstable() bool {
-	if c, ok := me.Left.(gIrAConstable); ok && c.isConstable() {
-		if c, ok := me.Right.(gIrAConstable); ok {
+	if c, _ := me.Left.(gIrAConstable); c != nil && c.isConstable() {
+		if c, _ := me.Right.(gIrAConstable); c != nil {
 			return c.isConstable()
 		}
 	}
@@ -962,16 +927,19 @@ func ªA(exprs ...GIrA) *GIrALitArr {
 
 func ªB(literal bool) *GIrALitBool {
 	a := &GIrALitBool{LitBool: literal}
+	a.RefAlias = "Prim.Boolean"
 	return a
 }
 
 func ªF(literal float64) *GIrALitDouble {
 	a := &GIrALitDouble{LitDouble: literal}
+	a.RefAlias = "Prim.Number"
 	return a
 }
 
 func ªI(literal int) *GIrALitInt {
 	a := &GIrALitInt{LitInt: literal}
+	a.RefAlias = "Prim.Int"
 	return a
 }
 
@@ -991,6 +959,7 @@ func ªOFld(fieldval GIrA) *GIrALitObjField {
 
 func ªS(literal string) *GIrALitStr {
 	a := &GIrALitStr{LitStr: literal}
+	a.RefAlias = "Prim.String"
 	return a
 }
 
@@ -1016,10 +985,10 @@ func ªComments(comments ...*CoreImpComment) *GIrAComments {
 	return a
 }
 
-func ªConst(tref *GIrANamedTypeRef, val GIrA) *GIrAConst {
-	a := &GIrAConst{ConstVal: val}
-	a.GIrANamedTypeRef = *tref
-	a.ConstVal.Base().parent = a
+func ªConst(name *GIrANamedTypeRef, val GIrA) *GIrAConst {
+	a, v := &GIrAConst{ConstVal: val}, val.Base()
+	v.parent, a.GIrANamedTypeRef = a, v.GIrANamedTypeRef
+	a.NameGo, a.NamePs = name.NameGo, name.NamePs
 	return a
 }
 
@@ -1107,9 +1076,9 @@ func ªSet(left GIrA, right GIrA) *GIrASet {
 	return a
 }
 
-func ªsetVarInGroup(left GIrA, right GIrA, typespec string) *GIrASet {
+func ªsetVarInGroup(left GIrA, right GIrA, typespec *GIrANamedTypeRef) *GIrASet {
 	a := ªSet(left, right)
-	a.RefAlias = typespec
+	a.GIrANamedTypeRef = *typespec
 	a.isInVarGroup = true
 	return a
 }

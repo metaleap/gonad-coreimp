@@ -44,7 +44,6 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	case *GIrALitInt:
 		fmt.Fprintf(w, "%d", a.LitInt)
 	case *GIrALitArr:
-		fmt.Fprint(w, "[]")
 		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		fmt.Fprint(w, "{")
 		for i, expr := range a.ArrVals {
@@ -53,7 +52,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
-		fmt.Fprint(w, codeEmitTypeRef(trr(a.effExprType(), true)))
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			codeEmitCommaIf(w, i)
@@ -64,7 +63,8 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrAConst:
-		fmt.Fprintf(w, "%sconst %s %s", tabs, a.NameGo, codeEmitTypeRef(trr(a.effExprType(), true)))
+		fmt.Fprintf(w, "%sconst %s ", tabs, a.NameGo)
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ConstVal, trr)
 		fmt.Fprint(w, "\n")
@@ -173,7 +173,8 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, tabs)
 		codeEmitAst(w, indent, a.SetLeft, trr)
 		if a.isInVarGroup {
-			fmt.Fprintf(w, " %s", codeEmitTypeRef(trr(a.effExprType(), true)))
+			fmt.Fprint(w, " ")
+			codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		}
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ToRight, trr)
@@ -284,31 +285,18 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 		} else {
 			fmt.Fprint(w, "var (\n")
 		}
-		valºnameºtype := func(a GIrA) (val GIrA, name string, typeref string) {
+		valºnameºtype := func(a GIrA) (val GIrA, name string, typeref *GIrANamedTypeRef) {
 			if ac, ok := a.(*GIrAConst); ok && consts {
-				val, name, typeref = ac.ConstVal, ac.NameGo, ac.effExprType()
+				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.GIrANamedTypeRef
 			} else if av, ok := a.(*GIrAVar); ok {
-				val, name, typeref = av.VarVal, av.NameGo, av.effExprType()
+				val, name, typeref = av.VarVal, av.NameGo, &av.GIrANamedTypeRef
 			}
 			return
 		}
-		maxlen, name, typespec := 0, "", ""
-		for _, a := range asts {
-			_, name, _ = valºnameºtype(a)
-			l := len(name)
-			// if ustr.HasAny(name, "ª", "ĸ", "µ", "º", "ˇ", "ø") {
-			// 	l -= 1
-			// }
-			if l > maxlen {
-				maxlen = l
-			}
-		}
-		var val GIrA
 		for i, a := range asts {
 			if ac, ok := a.(*GIrAComments); ok {
 				decl := ac.CommentsDecl
-				val, name, typespec = valºnameºtype(decl)
-				typespec = codeEmitTypeRef(trr(typespec, true))
+				val, name, typespec := valºnameºtype(decl)
 				ac.CommentsDecl = ªsetVarInGroup(ªVar(name, "", nil), val, typespec)
 				codeEmitAst(w, indent+1, ac, trr)
 				ac.CommentsDecl = decl
@@ -316,9 +304,8 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 					fmt.Fprint(w, "\n")
 				}
 			} else {
-				val, name, typespec = valºnameºtype(a)
-				typespec = codeEmitTypeRef(trr(typespec, true))
-				codeEmitAst(w, indent+1, ªsetVarInGroup(ªVar(ustr.PadRight(name, maxlen), "", nil), val, typespec), trr)
+				val, name, typespec := valºnameºtype(a)
+				codeEmitAst(w, indent+1, ªsetVarInGroup(ªVar(name, "", nil), val, typespec), trr)
 				if i < (len(asts) - 1) {
 					if _, ok := asts[i+1].(*GIrAComments); ok {
 						fmt.Fprint(w, "\n")
