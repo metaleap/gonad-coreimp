@@ -3,9 +3,187 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/metaleap/go-util-slice"
+	"github.com/metaleap/go-util-str"
 )
+
+const (
+	saniUpperToLowerPrefix = "µˇ"
+)
+
+var (
+	sanitizer = strings.NewReplacer("'", "ˇ", "$", "Ø")
+)
+
+type GIrANamedTypeRefs []*GIrANamedTypeRef
+
+func (me GIrANamedTypeRefs) ByPsName(psname string) *GIrANamedTypeRef {
+	for _, gntr := range me {
+		if gntr.NamePs == psname {
+			return gntr
+		}
+	}
+	return nil
+}
+
+func (me GIrANamedTypeRefs) Eq(cmp GIrANamedTypeRefs) bool {
+	if l := len(me); l != len(cmp) {
+		return false
+	} else {
+		for i := 0; i < l; i++ {
+			if !me[i].Eq(cmp[i]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+type GIrANamedTypeRef struct {
+	NamePs string `json:",omitempty"`
+	NameGo string `json:",omitempty"`
+
+	RefAlias     string                `json:",omitempty"`
+	RefUnknown   int                   `json:",omitempty"`
+	RefInterface *GIrATypeRefInterface `json:",omitempty"`
+	RefFunc      *GIrATypeRefFunc      `json:",omitempty"`
+	RefStruct    *GIrATypeRefStruct    `json:",omitempty"`
+	RefArray     *GIrATypeRefArray     `json:",omitempty"`
+	RefPtr       *GIrATypeRefPtr       `json:",omitempty"`
+
+	EnumConstNames []string          `json:",omitempty"`
+	Methods        GIrANamedTypeRefs `json:",omitempty"`
+	Export         bool              `json:",omitempty"`
+	WasTypeFunc    bool              `json:",omitempty"`
+
+	method  GIrATypeMethod
+	ctor    *GIrMTypeDataCtor
+	comment *GIrAComments
+	instOf  string
+}
+
+type GIrATypeMethod struct {
+	body      *GIrABlock
+	isNewCtor bool
+	hasNoThis bool
+}
+
+func (me *GIrANamedTypeRef) Eq(cmp *GIrANamedTypeRef) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.Eq(cmp.RefInterface) && me.RefFunc.Eq(cmp.RefFunc) && me.RefStruct.Eq(cmp.RefStruct) && me.RefArray.Eq(cmp.RefArray) && me.RefPtr.Eq(cmp.RefPtr))
+}
+
+func (me *GIrANamedTypeRef) HasTypeInfo() bool {
+	return len(me.RefAlias) > 0 || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
+}
+
+func (me *GIrANamedTypeRef) setBothNamesFromPsName(psname string) {
+	me.NamePs = psname
+	me.NameGo = sanitizeSymbolForGo(psname, me.Export || me.WasTypeFunc)
+}
+
+func (me *GIrANamedTypeRef) setRefFrom(tref interface{}) {
+	switch tr := tref.(type) {
+	case *GIrANamedTypeRef:
+		me.RefAlias = tr.RefAlias
+		me.RefArray = tr.RefArray
+		me.RefFunc = tr.RefFunc
+		me.RefInterface = tr.RefInterface
+		me.RefPtr = tr.RefPtr
+		me.RefStruct = tr.RefStruct
+		me.RefUnknown = tr.RefUnknown
+	case *GIrATypeRefInterface:
+		me.RefInterface = tr
+	case *GIrATypeRefFunc:
+		me.RefFunc = tr
+	case *GIrATypeRefStruct:
+		me.RefStruct = tr
+	case *GIrATypeRefArray:
+		me.RefArray = tr
+	case *GIrATypeRefPtr:
+		me.RefPtr = tr
+	case int:
+		me.RefUnknown = tr
+	case string:
+		me.RefAlias = tr
+	case nil:
+	default:
+		println(tref.(string)) // in case of future oversight, this triggers immediate panic-msg with actual-type included
+	}
+}
+
+type GIrATypeRefArray struct {
+	Of *GIrANamedTypeRef
+}
+
+func (me *GIrATypeRefArray) Eq(cmp *GIrATypeRefArray) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.Eq(cmp.Of))
+}
+
+type GIrATypeRefPtr struct {
+	Of *GIrANamedTypeRef
+}
+
+func (me *GIrATypeRefPtr) Eq(cmp *GIrATypeRefPtr) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.Eq(cmp.Of))
+}
+
+type GIrATypeRefInterface struct {
+	Embeds  []string          `json:",omitempty"`
+	Methods GIrANamedTypeRefs `json:",omitempty"`
+
+	xtc              *GIrMTypeClass
+	xtd              *GIrMTypeDataDecl
+	inheritedMethods GIrANamedTypeRefs
+}
+
+func (me *GIrATypeRefInterface) Eq(cmp *GIrATypeRefInterface) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.Eq(cmp.Methods))
+}
+
+func (me *GIrATypeRefInterface) allMethods() (allmethods GIrANamedTypeRefs) {
+	allmethods = me.Methods
+	if (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
+		if len(me.inheritedMethods) == 0 {
+			m := map[string]*GIrANamedTypeRef{}
+			for _, embed := range me.Embeds {
+				if gtd := findGoTypeByPsQName(embed); gtd == nil || gtd.RefInterface == nil {
+					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report!", me.xtc.Name, embed))
+				} else {
+					for _, method := range gtd.RefInterface.allMethods() {
+						if dupl, _ := m[method.NameGo]; dupl == nil {
+							m[method.NameGo], me.inheritedMethods = method, append(me.inheritedMethods, method)
+						} else if !dupl.Eq(method) {
+							panic("Interface (generated from type-class " + me.xtc.Name + ") would inherit multiple (but different-signature) methods named " + method.NameGo)
+						}
+					}
+				}
+			}
+		}
+		allmethods = append(me.inheritedMethods, allmethods...)
+	}
+	return
+}
+
+type GIrATypeRefFunc struct {
+	Args GIrANamedTypeRefs `json:",omitempty"`
+	Rets GIrANamedTypeRefs `json:",omitempty"`
+}
+
+func (me *GIrATypeRefFunc) Eq(cmp *GIrATypeRefFunc) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.Eq(cmp.Args) && me.Rets.Eq(cmp.Rets))
+}
+
+type GIrATypeRefStruct struct {
+	Embeds    []string          `json:",omitempty"`
+	Fields    GIrANamedTypeRefs `json:",omitempty"`
+	PassByPtr bool              `json:",omitempty"`
+}
+
+func (me *GIrATypeRefStruct) Eq(cmp *GIrATypeRefStruct) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.Eq(cmp.Fields))
+}
 
 func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname string) {
 	if ifaces4tvar := tdict[tvar]; !uslice.StrHas(ifaces4tvar, ifacetname) {
@@ -81,6 +259,29 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 	}
 
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict, true)...)
+}
+
+func sanitizeSymbolForGo(name string, upper bool) string {
+	if len(name) == 0 {
+		return name
+	}
+	if upper {
+		runes := []rune(name)
+		runes[0] = unicode.ToUpper(runes[0])
+		name = string(runes)
+	} else {
+		if ustr.BeginsUpper(name) {
+			name = saniUpperToLowerPrefix + name
+		} else {
+			switch name {
+			case "append", "false", "iota", "nil", "true":
+				return "ˇ" + name
+			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
+				return "ˇĸˇ" + name
+			}
+		}
+	}
+	return sanitizer.Replace(name)
 }
 
 func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []*GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
@@ -237,4 +438,11 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		}
 	}
 	return nil
+}
+
+func typeNameWithPkgName(typename string, pkgname string) (fullname string) {
+	if fullname = typename; len(pkgname) > 0 {
+		fullname = pkgname + "." + fullname
+	}
+	return
 }
