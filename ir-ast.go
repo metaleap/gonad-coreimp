@@ -420,21 +420,21 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 					//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
 					if oc, _ := a.Of.(*GIrACall); oc != nil {
 						var gtd *GIrANamedTypeRef
-						if ocd, _ := oc.Callee.(*GIrADot); ocd != nil {
-							if ocd1, _ := ocd.DotLeft.(*GIrAVar); ocd1 != nil {
-								if mod := FindModuleByPName(ocd1.NamePs); mod != nil {
-									if ocd2, _ := ocd.DotRight.(*GIrAVar); ocd2 != nil {
-										gtd = mod.girMeta.GoTypeDefByPsName(ocd.DotRight.(*GIrAVar).NamePs)
+						if ocdot, _ := oc.Callee.(*GIrADot); ocdot != nil {
+							if ocdot1, _ := ocdot.DotLeft.(*GIrAVar); ocdot1 != nil {
+								if mod := FindModuleByPName(ocdot1.NamePs); mod != nil {
+									if ocdot2, _ := ocdot.DotRight.(*GIrAVar); ocdot2 != nil {
+										gtd = mod.girMeta.GoTypeDefByPsName(ocdot.DotRight.(*GIrAVar).NamePs)
 									}
 								}
 							}
 						}
 						ocv, _ := oc.Callee.(*GIrAVar)
 						if gtd == nil && ocv != nil {
-							gtd = me.girM.GoTypeDefByPsName(ocv.NameGo)
+							gtd = me.girM.GoTypeDefByPsName(ocv.NamePs)
 						}
 						if gtd != nil {
-							o := ªO(gtd)
+							o := ªO(&GIrANamedTypeRef{RefAlias: gtd.NameGo})
 							for _, ctorarg := range oc.CallArgs {
 								of := ªOFld(ctorarg)
 								of.parent = o
@@ -442,17 +442,35 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 							}
 							return o
 						} else if ocv != nil && ocv.NamePs == "Error" {
-							if !me.girM.Imports.Has("errors") {
-								me.girM.Imports = append(me.girM.Imports, &GIrMPkgRef{used: true, N: "errors", P: "errors", Q: ""})
-							}
 							if len(oc.CallArgs) == 1 {
 								if op2, _ := oc.CallArgs[0].(*GIrAOp2); op2 != nil && op2.Op2 == "+" {
 									oc.CallArgs[0] = op2.Left
 									op2.Left.Base().parent = oc
+									if oparr := op2.Right.(*GIrALitArr); oparr != nil {
+										for _, oparrelem := range oparr.ArrVals {
+											nucallarg := oparrelem
+											if oaedot, _ := oparrelem.(*GIrADot); oaedot != nil {
+												if oaedot2, _ := oaedot.DotLeft.(*GIrADot); oaedot2 != nil {
+													nucallarg = oaedot2.DotLeft
+												} else {
+													nucallarg = oaedot
+												}
+											}
+											oc.CallArgs = append(oc.CallArgs, ªCall(ªDotNamed("reflect", "TypeOf"), nucallarg))
+											oc.CallArgs = append(oc.CallArgs, nucallarg)
+										}
+									}
+									if len(oc.CallArgs) > 1 {
+										me.girM.Imports.AddIfHasnt("reflect", "reflect", "")
+										oc.CallArgs[0].(*GIrALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
+									}
 								}
 							}
-							call := ªCall(ªPkgRef("errors", "New"), oc.CallArgs...)
+							me.girM.Imports.AddIfHasnt("fmt", "fmt", "")
+							call := ªCall(ªPkgRef("fmt", "Errorf"), oc.CallArgs...)
 							return call
+						} else if ocv != nil {
+							println(me.mod.srcFilePath + "\t" + ocv.NamePs)
 						}
 					}
 				}
@@ -634,13 +652,17 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	me.Walk(func(ast GIrA) GIrA {
 		if ast != nil {
 			switch a := ast.(type) {
+			case *GIrAOp2:
+				if opright, _ := a.Right.(*GIrALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
+					return a.Left
+				}
 			case *GIrADot:
 				if dl, _ := a.DotLeft.(*GIrAVar); dl != nil {
 					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
 						//	find all CtorName.value references and change them to the above new vars
 						if dr.NameGo == "value" {
 							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
-								nuvarsym := ªVar("", "", nil)
+								nuvarsym := ªSym("")
 								nuvarsym.GIrANamedTypeRef = nuglobalvar.GIrANamedTypeRef
 								nuvarsym.NameGo = nuglobalvar.NameGo
 								return nuvarsym
@@ -1010,6 +1032,10 @@ func ªDot(left GIrA, right GIrA) *GIrADot {
 	return a
 }
 
+func ªDotNamed(left string, right string) *GIrADot {
+	return ªDot(ªSym(left), ªSym(right))
+}
+
 func ªEq(left GIrA, right GIrA) *GIrAOp2 {
 	a := &GIrAOp2{Op2: "==", Left: left, Right: right}
 	a.Left.Base().parent, a.Right.Base().parent = a, a
@@ -1092,12 +1118,16 @@ func ªSet(left GIrA, right GIrA) *GIrASet {
 }
 
 func ªsetVarInGroup(name string, right GIrA, typespec *GIrANamedTypeRef) *GIrASet {
-	a := ªSet(ªVar(name, "", nil), right)
+	a := ªSet(ªSym(name), right)
 	if (!a.HasTypeInfo()) && typespec != nil && typespec.HasTypeInfo() {
 		a.GIrANamedTypeRef = *typespec
 	}
 	a.isInVarGroup = true
 	return a
+}
+
+func ªSym(name string) *GIrAVar {
+	return ªVar(name, "", nil)
 }
 
 func ªTo(expr GIrA, pname string, tname string) *GIrAToType {

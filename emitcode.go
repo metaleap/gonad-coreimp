@@ -108,7 +108,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, "(")
 		for i, expr := range a.CallArgs {
 			if i > 0 {
-				fmt.Fprint(w, ",")
+				fmt.Fprint(w, ", ")
 			}
 			codeEmitAst(w, indent, expr, trr)
 		}
@@ -357,7 +357,11 @@ func codeEmitModImps(w io.Writer, modimps []*GIrMPkgRef) {
 		fmt.Fprint(w, "import (\n")
 		for _, modimp := range modimps {
 			if modimp.used {
-				fmt.Fprintf(w, "\t%s %q\n", modimp.N, modimp.P)
+				if modimp.N == modimp.P {
+					fmt.Fprintf(w, "\t%q\n", modimp.P)
+				} else {
+					fmt.Fprintf(w, "\t%s %q\n", modimp.N, modimp.P)
+				}
 			} else {
 				fmt.Fprintf(w, "\t// %s %q\n", modimp.N, modimp.P)
 			}

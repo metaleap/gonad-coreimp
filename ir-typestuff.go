@@ -149,9 +149,9 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []*GIrMTypeDataDecl, 
 								if method.ctor == ctor {
 									mcopy.method.hasNoThis = false
 									if ctor.gtd.RefStruct.PassByPtr {
-										mcopy.method.body.Add(ªRet(ªVar("this", "", nil)))
+										mcopy.method.body.Add(ªRet(ªSym("this")))
 									} else {
-										mcopy.method.body.Add(ªRet(ªO1("&", ªVar("this", "", nil))))
+										mcopy.method.body.Add(ªRet(ªO1("&", ªSym("this"))))
 									}
 								} else {
 									mcopy.method.body.Add(ªRet(ªNil()))
