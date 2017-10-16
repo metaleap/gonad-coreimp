@@ -5,7 +5,7 @@ import (
 )
 
 func (me *GonadIrAst) AddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) {
-	//	after we have also created additional structs/interfaces in AddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum value")
+	//	after we have also created additional structs/interfaces in AddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []GIrA{}
 	nuglobalsmap = map[string]*GIrAVar{}
 	for _, gtd := range me.girM.GoTypeDefs {
@@ -24,7 +24,7 @@ func (me *GonadIrAst) AddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) 
 }
 
 func (me *GonadIrAst) AddNewExtraTypes() {
-	//	detect unexported data-type constructors and add the missing structs implementing a new unexported single-per-pkg ADT interface type
+	//	detect unexported data-type constructors and add the missing structs implementing a newly added single unexported ADT umbrella interface type
 	newxtypedatadecl := &GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var newextratypes GIrANamedTypeRefs
 	var av *GIrAVar
@@ -92,6 +92,36 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 	}
 }
 
+func (me *GonadIrAst) ClearTcDictFuncs() {
+	//	ditch all: func tcmethodname(dict){return dict.tcmethodname}
+	dictfuncs := me.topLevelDefs(func(a GIrA) bool {
+		if fn, _ := a.(*GIrAFunc); fn != nil &&
+			fn.RefFunc != nil && len(fn.RefFunc.Args) == 1 && fn.RefFunc.Args[0].NamePs == "dict" &&
+			fn.FuncImpl != nil && len(fn.FuncImpl.Body) == 1 {
+			if fnret, _ := fn.FuncImpl.Body[0].(*GIrARet); fnret != nil {
+				if fnretdot, _ := fnret.RetArg.(*GIrADot); fnretdot != nil {
+					if fnretdotl, _ := fnretdot.DotLeft.(*GIrAVar); fnretdotl != nil && fnretdotl.NamePs == "dict" {
+						if fnretdotr, _ := fnretdot.DotRight.(*GIrAVar); fnretdotr != nil && fnretdotr.NamePs == fn.NamePs {
+							return true
+						}
+					}
+				}
+			}
+		}
+		return false
+	})
+	if len(dictfuncs) > 0 {
+		me.Walk(func(a GIrA) GIrA {
+			for _, df := range dictfuncs {
+				if df == a {
+					return nil
+				}
+			}
+			return a
+		})
+	}
+}
+
 func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
 	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
 	var gtd *GIrANamedTypeRef
@@ -151,14 +181,22 @@ func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
 }
 
 func (me *GonadIrAst) FixupExportedNames() {
-	me.topLevelDefs(func(a GIrA) bool {
-		if afn, _ := a.(*GIrAFunc); afn != nil {
+	ensure := func(gntr *GIrANamedTypeRef) {
+		if gntr != nil {
 			for _, gvd := range me.girM.GoValDecls {
-				if gvd.NamePs == afn.NamePs {
-					afn.Export = true
-					afn.NameGo = gvd.NameGo
+				if gvd.NamePs == gntr.NamePs {
+					gntr.Export = true
+					gntr.NameGo = gvd.NameGo
+					break
 				}
 			}
+		}
+	}
+	me.topLevelDefs(func(a GIrA) bool {
+		if af, _ := a.(*GIrAFunc); af != nil {
+			ensure(&af.GIrANamedTypeRef)
+		} else if av, _ := a.(*GIrAVar); av != nil {
+			ensure(&av.GIrANamedTypeRef)
 		}
 		return false
 	})
@@ -257,7 +295,7 @@ func (me *GonadIrAst) MiscPrepFixups(nuglobalsmap map[string]*GIrAVar) {
 					}
 				}
 			case *GIrAVar:
-				if a != nil {
+				if a != nil && a.VarVal != nil {
 					if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
 						//	turn var=literal's into consts
 						return ªConst(&a.GIrANamedTypeRef, a.VarVal)

@@ -245,6 +245,7 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 	})
 
 	me.LinkTcInstFuncsToImplStructs()
+	me.ClearTcDictFuncs()
 	me.resolveAllArgTypes()
 	return
 }
