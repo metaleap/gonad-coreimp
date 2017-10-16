@@ -98,7 +98,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 				a.VarVal = walk(a.VarVal, on)
 			}
 		case *GIrAIsType:
-			a.ExprToTest, a.TypeToTest = walk(a.ExprToTest, on), walk(a.TypeToTest, on)
+			a.ExprToTest = walk(a.ExprToTest, on)
 		case *GIrAToType:
 			a.ExprToCast = walk(a.ExprToCast, on)
 		case *GIrALitArr:

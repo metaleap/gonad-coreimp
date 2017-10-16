@@ -122,9 +122,9 @@ func ªIndex(left GIrA, right GIrA) *GIrAIndex {
 	return a
 }
 
-func ªIs(expr GIrA, typeexpr GIrA) *GIrAIsType {
+func ªIs(expr GIrA, typeexpr string) *GIrAIsType {
 	a := &GIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
-	a.ExprToTest.Base().parent, a.TypeToTest.Base().parent = a, a
+	a.ExprToTest.Base().parent = a
 	return a
 }
 

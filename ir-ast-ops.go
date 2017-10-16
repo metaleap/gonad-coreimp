@@ -92,9 +92,9 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 	}
 }
 
-func (me *GonadIrAst) ClearTcDictFuncs() {
+func (me *GonadIrAst) ClearTcDictFuncs() (dictfuncs []GIrA) {
 	//	ditch all: func tcmethodname(dict){return dict.tcmethodname}
-	dictfuncs := me.topLevelDefs(func(a GIrA) bool {
+	dictfuncs = me.topLevelDefs(func(a GIrA) bool {
 		if fn, _ := a.(*GIrAFunc); fn != nil &&
 			fn.RefFunc != nil && len(fn.RefFunc.Args) == 1 && fn.RefFunc.Args[0].NamePs == "dict" &&
 			fn.FuncImpl != nil && len(fn.FuncImpl.Body) == 1 {
@@ -110,16 +110,7 @@ func (me *GonadIrAst) ClearTcDictFuncs() {
 		}
 		return false
 	})
-	if len(dictfuncs) > 0 {
-		me.Walk(func(a GIrA) GIrA {
-			for _, df := range dictfuncs {
-				if df == a {
-					return nil
-				}
-			}
-			return a
-		})
-	}
+	return
 }
 
 func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
@@ -225,7 +216,7 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 		ifo := ifv.VarVal.(*GIrALitObj) //  something like:  InterfaceName{funcs}
 		var tcctors []GIrA
 		var mod *ModuleInfo
-		pname, tcname := me.resolveGoTypeRef(gtd.instOf, true)
+		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.instOf, true)
 		if len(pname) == 0 || pname == me.mod.pName {
 			mod = me.mod
 		} else {
@@ -261,6 +252,20 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 		ifv.VarVal = nuctor
 		ifv.RefAlias = gtd.instOf
 	}
+}
+
+func (me *GonadIrAst) MiscPostFixups(dictfuncs []GIrA) {
+	me.Walk(func(ast GIrA) GIrA {
+		switch a := ast.(type) {
+		case *GIrAFunc:
+			for _, df := range dictfuncs {
+				if df == a {
+					return nil
+				}
+			}
+		}
+		return ast
+	})
 }
 
 func (me *GonadIrAst) MiscPrepFixups(nuglobalsmap map[string]*GIrAVar) {

@@ -440,7 +440,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	return nil
 }
 
-func typeNameWithPkgName(typename string, pkgname string) (fullname string) {
+func typeNameWithPkgName(pkgname string, typename string) (fullname string) {
 	if fullname = typename; len(pkgname) > 0 {
 		fullname = pkgname + "." + fullname
 	}

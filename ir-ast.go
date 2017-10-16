@@ -211,8 +211,8 @@ type GIrADot struct {
 
 type GIrAIsType struct {
 	gIrABase
-	ExprToTest GIrA `json:",omitempty"`
-	TypeToTest GIrA `json:",omitempty"`
+	ExprToTest GIrA   `json:",omitempty"`
+	TypeToTest string `json:",omitempty"`
 }
 
 type GIrAToType struct {
@@ -245,7 +245,8 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 	})
 
 	me.LinkTcInstFuncsToImplStructs()
-	me.ClearTcDictFuncs()
+	dictfuncs := me.ClearTcDictFuncs()
+	me.MiscPostFixups(dictfuncs)
 	me.resolveAllArgTypes()
 	return
 }
@@ -280,29 +281,29 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	var buf = &bytes.Buffer{}
 
 	for _, gtd := range me.girM.GoTypeDefs {
-		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRef)
+		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRefFromPsQName)
 		if len(gtd.EnumConstNames) > 0 {
 			enumtypename := toGIrAEnumTypeName(gtd.NamePs)
 			codeEmitTypeAlias(buf, enumtypename, "int")
 			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
 		}
-		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRef)
+		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
 
 	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAConst); return ok })
 	toplevelvars := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAVar); return ok })
 
-	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRef)
-	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRef)
+	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
+	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
 
 	toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
 	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
 	for _, ast := range toplevelctorfuncs {
-		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
 		fmt.Fprint(buf, "\n\n")
 	}
 	for _, ast := range toplevelfuncs {
-		codeEmitAst(buf, 0, ast, me.resolveGoTypeRef)
+		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
 		fmt.Fprint(buf, "\n\n")
 	}
 
@@ -313,13 +314,16 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	return
 }
 
-func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string, tname string) {
+func (me *GonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (pname string, tname string) {
+	var mod *ModuleInfo
+	wasprim := false
 	i := strings.LastIndex(tref, ".")
 	if tname = tref[i+1:]; i > 0 {
 		pname = tref[:i]
 		if pname == me.mod.qName {
 			pname = ""
-		} else if pname == "Prim" {
+			mod = me.mod
+		} else if wasprim = pname == "Prim"; wasprim {
 			pname = ""
 			switch tname {
 			case "String":
@@ -335,7 +339,6 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 			}
 		} else {
 			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
-			var mod *ModuleInfo
 			if isffi {
 				pname = dot2underscore.Replace(pname)
 			} else {
@@ -363,6 +366,13 @@ func (me *GonadIrAst) resolveGoTypeRef(tref string, markused bool) (pname string
 					imp.used = true
 				}
 			}
+		}
+	} else {
+		mod = me.mod
+	}
+	if (!wasprim) && mod != nil {
+		if tref := mod.girMeta.GoTypeDefByPsName(tname); tref != nil {
+			tname = mod.girMeta.GoTypeDefByPsName(tname).NameGo
 		}
 	}
 	return

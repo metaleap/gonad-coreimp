@@ -52,7 +52,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
-		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, -999, trr)
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			codeEmitCommaIf(w, i)
@@ -64,7 +64,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, "}")
 	case *GIrAConst:
 		fmt.Fprintf(w, "%sconst %s ", tabs, a.NameGo)
-		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, -1, trr)
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ConstVal, trr)
 		fmt.Fprint(w, "\n")
@@ -154,7 +154,8 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, "_,øĸ := ")
 		codeEmitAst(w, indent, a.ExprToTest, trr)
 		fmt.Fprint(w, ".(")
-		codeEmitAst(w, indent, a.TypeToTest, trr)
+		fmt.Fprint(w, typeNameWithPkgName(trr(a.TypeToTest, true)))
+		// codeEmitAst(w, indent, a.TypeToTest, trr)
 		fmt.Fprint(w, "); øĸ")
 	case *GIrAToType:
 		if len(a.TypePkg) == 0 {
@@ -493,7 +494,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, ")")
 		}
 	} else {
-		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
+		fmt.Fprint(w, "struct{/*EmptyNotNil*/}")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")

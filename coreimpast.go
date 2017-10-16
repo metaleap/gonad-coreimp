@@ -308,7 +308,12 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			a = ªIndex(me.Indexer.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
 		}
 	case "InstanceOf":
-		a = ªIs(me.InstanceOf.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
+		if len(me.AstRight.Var) > 0 {
+			a = ªIs(me.InstanceOf.ciAstToGIrAst(), me.AstRight.Var)
+		} else /*if me.AstRight.Indexer != nil*/ {
+			adot := me.AstRight.ciAstToGIrAst().(*GIrADot)
+			a = ªIs(me.InstanceOf.ciAstToGIrAst(), FindModuleByPName(adot.DotLeft.(*GIrAVar).NamePs).qName+"."+adot.DotRight.(*GIrAVar).NamePs)
+		}
 	default:
 		panic(fmt.Errorf("Just below %v: unrecognized CoreImp AST-tag, please report: %s", me.parent, me.AstTag))
 	}
