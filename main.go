@@ -25,34 +25,9 @@ var (
 		GoDirSrcPath  string
 		GoNamespace   string
 	}
-
-	err            error
-	mapsmutex      sync.Mutex
-	wg             sync.WaitGroup
-	allpkgimppaths = map[string]bool{}
 )
 
-func countNumOfReGendModules() (numregen int) {
-	if Flag.ForceRegenAll {
-		numregen = len(allpkgimppaths)
-	} else {
-		for _, mod := range Proj.Modules {
-			if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-				numregen++
-			}
-		}
-		for _, dep := range Deps {
-			for _, mod := range dep.Modules {
-				if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-					numregen++
-				}
-			}
-		}
-	}
-	return
-}
-
-func checkIfDepDirHasBowerFile(reldirpath string) {
+func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex *sync.Mutex, reldirpath string) {
 	defer wg.Done()
 	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
 	if !ufs.FileExists(jsonfilepath) {
@@ -62,36 +37,36 @@ func checkIfDepDirHasBowerFile(reldirpath string) {
 		bproj := &PsBowerProject{
 			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
 		}
-		defer mapsmutex.Unlock()
-		mapsmutex.Lock()
+		defer mutex.Unlock()
+		mutex.Lock()
 		Deps[depname] = bproj
 	}
 }
 
-func loadDepFromBowerFile(depname string, dep *PsBowerProject) {
+func loadDepFromBowerFile(wg *sync.WaitGroup, depname string, dep *PsBowerProject) {
 	defer wg.Done()
-	if err = dep.LoadFromJsonFile(true); err != nil {
+	if err := dep.LoadFromJsonFile(true); err != nil {
 		panic(err)
 	}
 }
 
-func loadGIrMetas(dep *PsBowerProject) {
+func loadGIrMetas(wg *sync.WaitGroup, dep *PsBowerProject) {
 	defer wg.Done()
 	dep.EnsureModPkgGIrMetas()
 }
 
-func prepGIrAsts(dep *PsBowerProject) {
+func prepGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
 	defer wg.Done()
 	dep.PrepModPkgGIrAsts()
-	if err = dep.WriteOutDirtyGIrMetas(false); err != nil {
+	if err := dep.WriteOutDirtyGIrMetas(false); err != nil {
 		panic(err)
 	}
 }
 
-func reGenGIrAsts(dep *PsBowerProject) {
+func reGenGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
 	defer wg.Done()
 	dep.ReGenModPkgGIrAsts()
-	if err = dep.WriteOutDirtyGIrMetas(true); err != nil {
+	if err := dep.WriteOutDirtyGIrMetas(true); err != nil {
 		panic(err)
 	}
 }
@@ -114,6 +89,7 @@ func main() {
 	Flag.GoNamespace = filepath.Join("github.com", "gonadz")
 	pflag.StringVar(&Flag.GoNamespace, "go-namespace", Flag.GoNamespace, "Root namespace for all generated Go packages")
 	pflag.Parse()
+	var err error
 	if err = ufs.EnsureDirExists(Flag.GoDirSrcPath); err == nil {
 		if !ufs.DirExists(Proj.DepsDirPath) {
 			panic("No such `dependency-path` directory: " + Proj.DepsDirPath)
@@ -122,23 +98,25 @@ func main() {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
 		if err = Proj.LoadFromJsonFile(false); err == nil {
+			var mutex sync.Mutex
+			var wg sync.WaitGroup
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
 				wg.Add(1)
-				go checkIfDepDirHasBowerFile(reldirpath)
+				go checkIfDepDirHasBowerFile(&wg, &mutex, reldirpath)
 				return true
 			})
 			wg.Wait()
 			for dk, dv := range Deps {
 				wg.Add(1)
-				go loadDepFromBowerFile(dk, dv)
+				go loadDepFromBowerFile(&wg, dk, dv)
 			}
 			if wg.Wait(); err == nil {
 				for _, dep := range Deps {
 					wg.Add(1)
-					go loadGIrMetas(dep)
+					go loadGIrMetas(&wg, dep)
 				}
 				wg.Add(1)
-				go loadGIrMetas(&Proj)
+				go loadGIrMetas(&wg, &Proj)
 				if err = Proj.EnsureOutDirs(); err == nil {
 					for _, dep := range Deps {
 						if err = dep.EnsureOutDirs(); err != nil {
@@ -150,25 +128,26 @@ func main() {
 				if err == nil {
 					for _, dep := range Deps {
 						wg.Add(1)
-						go prepGIrAsts(dep)
+						go prepGIrAsts(&wg, dep)
 					}
 					wg.Add(1)
-					go prepGIrAsts(&Proj)
+					go prepGIrAsts(&wg, &Proj)
 					wg.Wait()
 					if err == nil {
 						for _, dep := range Deps {
 							wg.Add(1)
-							go reGenGIrAsts(dep)
+							go reGenGIrAsts(&wg, dep)
 						}
 						wg.Add(1)
-						go reGenGIrAsts(&Proj)
-						numregen := countNumOfReGendModules()
+						go reGenGIrAsts(&wg, &Proj)
+						allpkgimppaths := map[string]bool{}
+						numregen := countNumOfReGendModules(allpkgimppaths)
 						if wg.Wait(); err == nil {
 							dur := time.Now().Sub(starttime)
 							if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
 								fmt.Printf("\t(avg. %v per re-generated module)\n", dur/time.Duration(numregen))
 							}
-							err = writeTestMainGo()
+							err = writeTestMainGo(allpkgimppaths)
 						}
 					}
 				}
@@ -180,7 +159,27 @@ func main() {
 	}
 }
 
-func writeTestMainGo() (err error) {
+func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
+	if Flag.ForceRegenAll {
+		numregen = len(allpkgimppaths)
+	} else {
+		for _, mod := range Proj.Modules {
+			if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+				numregen++
+			}
+		}
+		for _, dep := range Deps {
+			for _, mod := range dep.Modules {
+				if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+					numregen++
+				}
+			}
+		}
+	}
+	return
+}
+
+func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 	w := &bytes.Buffer{}
 	if _, err = fmt.Fprintln(w, "package main\n\nimport ("); err == nil {
 		//	we sort them to avoid useless diffs
