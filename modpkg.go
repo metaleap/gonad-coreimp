@@ -83,9 +83,8 @@ func (me *ModuleInfo) reGenPkgGIrMeta() (err error) {
 				if err = json.Unmarshal(jsonbytes, &me.coreimp); err == nil {
 					me.coreimp.mod = me
 					girmeta := GonadIrMeta{save: true, mod: me, proj: me.proj}
-					if err = girmeta.PopulateFromCoreImp(); err == nil {
-						me.girMeta = &girmeta
-					}
+					girmeta.PopulateFromCoreImp()
+					me.girMeta = &girmeta
 				}
 			}
 		}

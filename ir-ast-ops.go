@@ -87,7 +87,6 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 	}
 	if len(newextratypes) > 0 {
 		me.girM.GoTypeDefs = append(me.girM.GoTypeDefs, newextratypes...)
-		me.girM.rebuildLookups()
 	}
 }
 
@@ -228,9 +227,6 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 			return false
 		})
 		if len(tcctors) > 0 {
-			if strings.Contains(me.mod.srcFilePath, "TClsImpl3") {
-				println("YEAH")
-			}
 			tcctor := tcctors[0].(*GIrAFunc)
 			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.Methods {
@@ -249,9 +245,7 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 				}
 			}
 		} else {
-			if strings.Contains(me.mod.srcFilePath, "TClsImpl3") {
-				println("NOEZ")
-			}
+			println("NOEZ\t" + me.mod.srcFilePath)
 		}
 		nuctor := ªO(&GIrANamedTypeRef{RefAlias: gtd.NameGo})
 		nuctor.parent = ifv
@@ -264,9 +258,6 @@ func (me *GonadIrAst) MiscPostFixups(dictfuncs []GIrA) {
 	me.Walk(func(ast GIrA) GIrA {
 		switch a := ast.(type) {
 		case *GIrAFunc:
-			if a.WasTypeFunc {
-				return nil
-			}
 			// marked to be ditched?
 			for _, df := range dictfuncs {
 				if df == a {
@@ -317,14 +308,15 @@ func (me *GonadIrAst) MiscPrepFixups(nuglobalsmap map[string]*GIrAVar) {
 								nuvarsym.NameGo = nuglobalvar.NameGo
 								return nuvarsym
 							}
-						}
-						//	if the dot's LHS refers to a package, ensure the import is marked as in-use
-						for _, imp := range me.girM.Imports {
-							if imp.N == dl.NameGo {
-								imp.used = true
-								dr.Export = true
-								dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
-								break
+						} else {
+							//	if the dot's LHS refers to a package, ensure the import is marked as in-use
+							for _, imp := range me.girM.Imports {
+								if imp.N == dl.NameGo {
+									imp.used = true
+									dr.Export = true
+									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
+									break
+								}
 							}
 						}
 					}

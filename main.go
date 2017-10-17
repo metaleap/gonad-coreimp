@@ -141,7 +141,11 @@ func main() {
 						wg.Add(1)
 						go reGenGIrAsts(&wg, &Proj)
 						allpkgimppaths := map[string]bool{}
-						numregen := countNumOfReGendModules(allpkgimppaths)
+						numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
+						if Flag.ForceRegenAll {
+							numregen = len(allpkgimppaths)
+
+						}
 						if wg.Wait(); err == nil {
 							dur := time.Now().Sub(starttime)
 							if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
@@ -160,19 +164,15 @@ func main() {
 }
 
 func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
-	if Flag.ForceRegenAll {
-		numregen = len(allpkgimppaths)
-	} else {
-		for _, mod := range Proj.Modules {
-			if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-				numregen++
-			}
+	for _, mod := range Proj.Modules {
+		if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+			numregen++
 		}
-		for _, dep := range Deps {
-			for _, mod := range dep.Modules {
-				if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-					numregen++
-				}
+	}
+	for _, dep := range Deps {
+		for _, mod := range dep.Modules {
+			if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+				numregen++
 			}
 		}
 	}

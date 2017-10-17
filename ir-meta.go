@@ -23,13 +23,9 @@ type GonadIrMeta struct {
 
 	imports []*ModuleInfo
 
-	lookuptypesgo map[string]*GIrANamedTypeRef
-	lookuptypesps map[string]*GIrANamedTypeRef
-	lookupvalsgo  map[string]*GIrANamedTypeRef
-	lookupvalsps  map[string]*GIrANamedTypeRef
-	mod           *ModuleInfo
-	proj          *PsBowerProject
-	save          bool
+	mod  *ModuleInfo
+	proj *PsBowerProject
+	save bool
 }
 
 type GIrMPkgRefs []*GIrMPkgRef
@@ -192,15 +188,6 @@ func qNameFromExt(subArrAt0andStrAt1 []interface{}) (qname string) {
 		qname += x["Ident"]
 	case map[string]interface{}:
 		qname += x["Ident"].(string)
-	}
-	return
-}
-
-func newLookupTablesFrom(refs GIrANamedTypeRefs) (lookupgo, lookupps map[string]*GIrANamedTypeRef) {
-	lookupgo, lookupps = make(map[string]*GIrANamedTypeRef, len(refs)), make(map[string]*GIrANamedTypeRef, len(refs))
-	for _, r := range refs {
-		lookupgo[r.NameGo] = r
-		lookupps[r.NamePs] = r
 	}
 	return
 }
@@ -368,7 +355,7 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 	}
 }
 
-func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
+func (me *GonadIrMeta) PopulateFromCoreImp() {
 	for _, impname := range me.mod.coreimp.Imports {
 		if impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
 			me.imports = append(me.imports, FindModuleByQName(impname))
@@ -379,16 +366,11 @@ func (me *GonadIrMeta) PopulateFromCoreImp() (err error) {
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()
 	me.populateGoTypeDefs()
-	me.rebuildLookups()
 	me.populateGoValDecls()
-	me.rebuildLookups()
 
-	if err == nil {
-		for _, impmod := range me.imports {
-			me.Imports = append(me.Imports, newModImp(impmod))
-		}
+	for _, impmod := range me.imports {
+		me.Imports = append(me.Imports, newModImp(impmod))
 	}
-
 	return
 }
 
@@ -403,7 +385,6 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 			}
 		}
 	}
-	me.rebuildLookups()
 	return nil
 }
 
@@ -429,29 +410,40 @@ func (me *GonadIrMeta) populateGoValDecls() {
 	}
 }
 
-func (me *GonadIrMeta) rebuildLookups() {
-	me.lookuptypesgo, me.lookuptypesps = newLookupTablesFrom(me.GoTypeDefs)
-	me.lookupvalsgo, me.lookupvalsps = newLookupTablesFrom(me.GoValDecls)
+func (me *GonadIrMeta) GoValDeclByGoName(goname string) *GIrANamedTypeRef {
+	for _, gvd := range me.GoValDecls {
+		if gvd.NameGo == goname {
+			return gvd
+		}
+	}
+	return nil
 }
 
-func (me *GonadIrMeta) GoValDeclByGoName(goname string) (gvd *GIrANamedTypeRef) {
-	gvd, _ = me.lookupvalsgo[goname]
-	return
+func (me *GonadIrMeta) GoValDeclByPsName(psname string) *GIrANamedTypeRef {
+	for _, gvd := range me.GoValDecls {
+		if gvd.NamePs == psname {
+			return gvd
+		}
+	}
+	return nil
 }
 
-func (me *GonadIrMeta) GoValDeclByPsName(psname string) (gvd *GIrANamedTypeRef) {
-	gvd, _ = me.lookupvalsps[psname]
-	return
+func (me *GonadIrMeta) GoTypeDefByGoName(goname string) *GIrANamedTypeRef {
+	for _, gtd := range me.GoTypeDefs {
+		if gtd.NameGo == goname {
+			return gtd
+		}
+	}
+	return nil
 }
 
-func (me *GonadIrMeta) GoTypeDefByGoName(goname string) (gtd *GIrANamedTypeRef) {
-	gtd, _ = me.lookuptypesgo[goname]
-	return
-}
-
-func (me *GonadIrMeta) GoTypeDefByPsName(psname string) (gtd *GIrANamedTypeRef) {
-	gtd, _ = me.lookuptypesps[psname]
-	return
+func (me *GonadIrMeta) GoTypeDefByPsName(psname string) *GIrANamedTypeRef {
+	for _, gtd := range me.GoTypeDefs {
+		if gtd.NamePs == psname {
+			return gtd
+		}
+	}
+	return nil
 }
 
 func (me *GonadIrMeta) WriteAsJsonTo(w io.Writer) error {
