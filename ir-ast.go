@@ -268,7 +268,6 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 
 func (me *GonadIrAst) resolveAllArgTypes() {
 	//	first pass: walk all literals and propagate to parent expressions
-
 }
 
 func (me *GonadIrAst) WriteAsJsonTo(w io.Writer) error {

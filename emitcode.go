@@ -494,7 +494,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprint(w, ")")
 		}
 	} else {
-		fmt.Fprint(w, "struct{/*EmptyNotNil*/}")
+		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintln(w, "\n")

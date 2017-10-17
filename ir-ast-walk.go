@@ -29,6 +29,13 @@ func (me *GonadIrAst) Walk(on func(GIrA) GIrA) {
 			me.Body[i] = walk(a, on)
 		}
 	}
+	for _, tr := range me.girM.GoTypeDefs {
+		for _, trm := range tr.Methods {
+			if trm.method.body != nil {
+				trm.method.body, _ = walk(trm.method.body, on).(*GIrABlock)
+			}
+		}
+	}
 }
 
 func walk(ast GIrA, on func(GIrA) GIrA) GIrA {

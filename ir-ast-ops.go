@@ -258,11 +258,35 @@ func (me *GonadIrAst) MiscPostFixups(dictfuncs []GIrA) {
 	me.Walk(func(ast GIrA) GIrA {
 		switch a := ast.(type) {
 		case *GIrAFunc:
+			if a.WasTypeFunc {
+				return nil
+			}
+			// marked to be ditched?
 			for _, df := range dictfuncs {
 				if df == a {
 					return nil
 				}
 			}
+			// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
+			if len(a.GIrANamedTypeRef.RefFunc.Rets) > 0 {
+				panic(me.mod.srcFilePath + ": unexpected at this stage, please report as bug: func return-args present for " + a.NameGo + "/" + a.NamePs)
+			}
+			// at *this* point, we never seem to run into functions without a return statement at present, so the below check is skipped but kept around:
+			if checkhasrets := false; checkhasrets {
+				hasrets := false
+				walk(a, func(asub GIrA) GIrA {
+					switch asub.(type) {
+					case *GIrARet:
+						hasrets = true
+					}
+					return asub
+				})
+				if !hasrets {
+					panic(me.mod.srcFilePath + ": unexpected at this stage, please report as bug: no return in func " + a.NameGo + "/" + a.NamePs)
+				}
+			}
+			// finally, add an empty-for-now 'unknown' (aka interface{}) return type
+			a.GIrANamedTypeRef.RefFunc.Rets = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
 		}
 		return ast
 	})
