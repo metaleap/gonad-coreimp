@@ -2,58 +2,28 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
-	"io/ioutil"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/metaleap/go-util-dev/bower"
 	"github.com/metaleap/go-util-fs"
 )
 
-type BowerFile struct {
-	Name        string `json:"name"`
-	HomePage    string `json:"homepage,omitempty"`
-	Description string `json:"description,omitempty"`
-	License     string `json:"license,omitempty"`
-
-	Repository struct {
-		Type string `json:"type,omitempty"`
-		URL  string `json:"url,omitempty"`
-	} `json:"repository,omitempty"`
-	Ignore            []string          `json:"ignore,omitempty"`
-	Dependencies      map[string]string `json:"dependencies,omitempty"`
-	DevDependencies   map[string]string `json:"devDependencies,omitempty"`
-	GonadDependencies map[string]string `json:"gonadDependencies,omitempty"`
-
-	Version     string `json:"version,omitempty"`
-	_Release    string `json:"_release,omitempty"`
-	_Resolution struct {
-		Type   string `json:"type,omitempty"`
-		Tag    string `json:"tag,omitempty"`
-		Commit string `json:"commit,omitempty"`
-	} `json:"_resolution,omitempty"`
-	_Source         string `json:"_source,omitempty"`
-	_Target         string `json:"_target,omitempty"`
-	_OriginalSource string `json:"_originalSource,omitempty"`
-	_Direct         bool   `json:"_direct,omitempty"`
-}
-
-type BowerProject struct {
+type PsBowerProject struct {
 	JsonFilePath     string
 	SrcDirPath       string
 	DepsDirPath      string
 	DumpsDirProjPath string
-	JsonFile         BowerFile
+	JsonFile         udevbower.BowerFile
 	Modules          []*ModuleInfo
 	GoOut            struct {
 		PkgDirPath string
 	}
 }
 
-func (me *BowerProject) EnsureOutDirs() (err error) {
+func (me *PsBowerProject) EnsureOutDirs() (err error) {
 	dirpath := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 	if err = ufs.EnsureDirExists(dirpath); err == nil {
 		for _, depmod := range me.Modules {
@@ -65,7 +35,7 @@ func (me *BowerProject) EnsureOutDirs() (err error) {
 	return
 }
 
-func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
+func (me *PsBowerProject) ModuleByQName(qname string) *ModuleInfo {
 	for _, m := range me.Modules {
 		if m.qName == qname {
 			return m
@@ -74,7 +44,7 @@ func (me *BowerProject) ModuleByQName(qname string) *ModuleInfo {
 	return nil
 }
 
-func (me *BowerProject) ModuleByPName(pname string) *ModuleInfo {
+func (me *PsBowerProject) ModuleByPName(pname string) *ModuleInfo {
 	for _, m := range me.Modules {
 		if m.pName == pname {
 			return m
@@ -83,32 +53,29 @@ func (me *BowerProject) ModuleByPName(pname string) *ModuleInfo {
 	return nil
 }
 
-func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
-	var jsonbytes []byte
-	if jsonbytes, err = ioutil.ReadFile(me.JsonFilePath); err == nil {
-		if err = json.Unmarshal(jsonbytes, &me.JsonFile); err == nil {
-			me.GoOut.PkgDirPath = Flag.GoNamespace
-			if u, _ := url.Parse(me.JsonFile.Repository.URL); u != nil && len(u.Path) > 0 { // yeap, double-check apparently needed ..
-				if i := strings.LastIndex(u.Path, "."); i > 0 {
-					me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, u.Path[:i])
-				} else {
-					me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, u.Path)
-				}
+func (me *PsBowerProject) LoadFromJsonFile(isdep bool) (err error) {
+	if err = udevbower.LoadFromFile(me.JsonFilePath, &me.JsonFile); err == nil {
+		me.GoOut.PkgDirPath = Flag.GoNamespace
+		if repourl := me.JsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {
+			if i := strings.LastIndex(repourl.Path, "."); i > 0 {
+				me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, repourl.Path[:i])
+			} else {
+				me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, repourl.Path)
 			}
-			if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.JsonFile.Name) {
-				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Name)
-			}
-			if len(me.JsonFile.Version) > 0 {
-				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Version)
-			}
-			gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
-			ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
-				if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-					me.AddModuleInfoFromPsSrcFileIfCoreimp(relpath, gopkgdir)
-				}
-				return true
-			})
 		}
+		if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.JsonFile.Name) {
+			me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Name)
+		}
+		if len(me.JsonFile.Version) > 0 {
+			me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Version)
+		}
+		gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
+		ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
+			if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
+				me.AddModuleInfoFromPsSrcFileIfCoreimp(relpath, gopkgdir)
+			}
+			return true
+		})
 	}
 	if err != nil {
 		err = errors.New(me.JsonFilePath + ": " + err.Error())
@@ -116,7 +83,7 @@ func (me *BowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	return
 }
 
-func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
+func (me *PsBowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
 	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
 	modinfo := &ModuleInfo{
 		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
@@ -140,7 +107,7 @@ func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopk
 	}
 }
 
-func (me *BowerProject) ForAll(always bool, op func(*sync.WaitGroup, *ModuleInfo)) {
+func (me *PsBowerProject) ForAll(always bool, op func(*sync.WaitGroup, *ModuleInfo)) {
 	var wg sync.WaitGroup
 	for _, modinfo := range me.Modules {
 		if always || modinfo.reGenGIr || Flag.ForceRegenAll {
@@ -151,7 +118,7 @@ func (me *BowerProject) ForAll(always bool, op func(*sync.WaitGroup, *ModuleInfo
 	wg.Wait()
 }
 
-func (me *BowerProject) EnsureModPkgGIrMetas() {
+func (me *PsBowerProject) EnsureModPkgGIrMetas() {
 	me.ForAll(true, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		var err error
 		defer wg.Done()
@@ -168,7 +135,7 @@ func (me *BowerProject) EnsureModPkgGIrMetas() {
 	})
 }
 
-func (me *BowerProject) PrepModPkgGIrAsts() {
+func (me *PsBowerProject) PrepModPkgGIrAsts() {
 	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
 		if err := modinfo.prepGIrAst(); err != nil {
@@ -177,7 +144,7 @@ func (me *BowerProject) PrepModPkgGIrAsts() {
 	})
 }
 
-func (me *BowerProject) ReGenModPkgGIrAsts() {
+func (me *PsBowerProject) ReGenModPkgGIrAsts() {
 	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
 		if err := modinfo.reGenPkgGIrAst(); err != nil {
@@ -186,7 +153,7 @@ func (me *BowerProject) ReGenModPkgGIrAsts() {
 	})
 }
 
-func (me *BowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
+func (me *PsBowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
 	var buf bytes.Buffer
 	isfirst := !isagain
 	write := func(m *ModuleInfo) {

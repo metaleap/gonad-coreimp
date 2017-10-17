@@ -25,7 +25,7 @@ type ModuleInfo struct {
 
 	girMeta       *GonadIrMeta
 	girAst        *GonadIrAst
-	proj          *BowerProject
+	proj          *PsBowerProject
 	gopkgfilepath string //	full target file path (not necessarily absolute but starting with the applicable gopath)
 	ext           *PsExt
 	coreimp       *CoreImp

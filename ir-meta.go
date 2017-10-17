@@ -28,7 +28,7 @@ type GonadIrMeta struct {
 	lookupvalsgo  map[string]*GIrANamedTypeRef
 	lookupvalsps  map[string]*GIrANamedTypeRef
 	mod           *ModuleInfo
-	proj          *BowerProject
+	proj          *PsBowerProject
 	save          bool
 }
 

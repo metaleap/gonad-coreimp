@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	Proj BowerProject
-	Deps = map[string]*BowerProject{}
+	Proj PsBowerProject
+	Deps = map[string]*PsBowerProject{}
 	Flag struct {
 		NoPrefix      bool
 		Comments      bool
@@ -59,7 +59,7 @@ func checkIfDepDirHasBowerFile(reldirpath string) {
 		jsonfilepath = filepath.Join(reldirpath, "bower.json")
 	}
 	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
-		bproj := &BowerProject{
+		bproj := &PsBowerProject{
 			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
 		}
 		defer mapsmutex.Unlock()
@@ -68,19 +68,19 @@ func checkIfDepDirHasBowerFile(reldirpath string) {
 	}
 }
 
-func loadDepFromBowerFile(depname string, dep *BowerProject) {
+func loadDepFromBowerFile(depname string, dep *PsBowerProject) {
 	defer wg.Done()
 	if err = dep.LoadFromJsonFile(true); err != nil {
 		panic(err)
 	}
 }
 
-func loadGIrMetas(dep *BowerProject) {
+func loadGIrMetas(dep *PsBowerProject) {
 	defer wg.Done()
 	dep.EnsureModPkgGIrMetas()
 }
 
-func prepGIrAsts(dep *BowerProject) {
+func prepGIrAsts(dep *PsBowerProject) {
 	defer wg.Done()
 	dep.PrepModPkgGIrAsts()
 	if err = dep.WriteOutDirtyGIrMetas(false); err != nil {
@@ -88,7 +88,7 @@ func prepGIrAsts(dep *BowerProject) {
 	}
 }
 
-func reGenGIrAsts(dep *BowerProject) {
+func reGenGIrAsts(dep *PsBowerProject) {
 	defer wg.Done()
 	dep.ReGenModPkgGIrAsts()
 	if err = dep.WriteOutDirtyGIrMetas(true); err != nil {

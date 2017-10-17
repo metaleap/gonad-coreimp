@@ -17,7 +17,7 @@ type GonadIrAst struct {
 	GIrABlock `json:",omitempty"`
 
 	mod  *ModuleInfo
-	proj *BowerProject
+	proj *PsBowerProject
 	girM *GonadIrMeta
 }
 
