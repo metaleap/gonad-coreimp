@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -32,6 +31,26 @@ var (
 	wg             sync.WaitGroup
 	allpkgimppaths = map[string]bool{}
 )
+
+func countNumOfReGendModules() (numregen int) {
+	if Flag.ForceRegenAll {
+		numregen = len(allpkgimppaths)
+	} else {
+		for _, mod := range Proj.Modules {
+			if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+				numregen++
+			}
+		}
+		for _, dep := range Deps {
+			for _, mod := range dep.Modules {
+				if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+					numregen++
+				}
+			}
+		}
+	}
+	return
+}
 
 func checkIfDepDirHasBowerFile(reldirpath string) {
 	defer wg.Done()
@@ -63,7 +82,7 @@ func loadGIrMetas(dep *BowerProject) {
 
 func prepGIrAsts(dep *BowerProject) {
 	defer wg.Done()
-	dep.PrepOrReGenModPkgGIrAsts(true)
+	dep.PrepModPkgGIrAsts()
 	if err = dep.WriteOutDirtyGIrMetas(false); err != nil {
 		panic(err)
 	}
@@ -71,7 +90,7 @@ func prepGIrAsts(dep *BowerProject) {
 
 func reGenGIrAsts(dep *BowerProject) {
 	defer wg.Done()
-	dep.PrepOrReGenModPkgGIrAsts(false)
+	dep.ReGenModPkgGIrAsts()
 	if err = dep.WriteOutDirtyGIrMetas(true); err != nil {
 		panic(err)
 	}
@@ -79,7 +98,6 @@ func reGenGIrAsts(dep *BowerProject) {
 
 func main() {
 	starttime := time.Now()
-	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
 	pflag.StringVar(&Proj.DepsDirPath, "dependency-path", "bower_components", "Dependencies directory path")
 	pflag.StringVar(&Proj.JsonFilePath, "bower-file", "bower.json", "Project file path")
@@ -144,22 +162,7 @@ func main() {
 						}
 						wg.Add(1)
 						go reGenGIrAsts(&Proj)
-						numregen := 0
-						for _, mod := range Proj.Modules {
-							if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-								numregen++
-							}
-						}
-						for _, dep := range Deps {
-							for _, mod := range dep.Modules {
-								if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-									numregen++
-								}
-							}
-						}
-						if Flag.ForceRegenAll {
-							numregen = len(allpkgimppaths)
-						}
+						numregen := countNumOfReGendModules()
 						if wg.Wait(); err == nil {
 							dur := time.Now().Sub(starttime)
 							if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {

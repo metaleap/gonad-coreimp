@@ -140,9 +140,19 @@ func (me *BowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopk
 	}
 }
 
-func (me *BowerProject) EnsureModPkgGIrMetas() {
+func (me *BowerProject) ForAll(always bool, op func(*sync.WaitGroup, *ModuleInfo)) {
 	var wg sync.WaitGroup
-	ensuregirmeta := func(modinfo *ModuleInfo) {
+	for _, modinfo := range me.Modules {
+		if always || modinfo.reGenGIr || Flag.ForceRegenAll {
+			wg.Add(1)
+			go op(&wg, modinfo)
+		}
+	}
+	wg.Wait()
+}
+
+func (me *BowerProject) EnsureModPkgGIrMetas() {
+	me.ForAll(true, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		var err error
 		defer wg.Done()
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
@@ -155,42 +165,34 @@ func (me *BowerProject) EnsureModPkgGIrMetas() {
 		if err != nil {
 			panic(err)
 		}
-	}
-	for _, modinfo := range me.Modules {
-		wg.Add(1)
-		go ensuregirmeta(modinfo)
-	}
-	wg.Wait()
+	})
 }
 
-func (me *BowerProject) PrepOrReGenModPkgGIrAsts(prep bool) {
-	var wg sync.WaitGroup
-	regenorprep := func(modinfo *ModuleInfo) {
+func (me *BowerProject) PrepModPkgGIrAsts() {
+	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
-		fn := modinfo.prepGIrAst
-		if !prep {
-			fn = modinfo.reGenPkgGIrAst
-		}
-		if err := fn(); err != nil {
+		if err := modinfo.prepGIrAst(); err != nil {
 			panic(err)
 		}
-	}
-	for _, modinfo := range me.Modules {
-		if modinfo.reGenGIr || Flag.ForceRegenAll {
-			wg.Add(1)
-			go regenorprep(modinfo)
+	})
+}
+
+func (me *BowerProject) ReGenModPkgGIrAsts() {
+	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+		defer wg.Done()
+		if err := modinfo.reGenPkgGIrAst(); err != nil {
+			panic(err)
 		}
-	}
-	wg.Wait()
+	})
 }
 
 func (me *BowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
 	var buf bytes.Buffer
-	for _, m := range me.Modules {
-		isfirst := !isagain
-		dosave := (isagain && m.girMeta.save) ||
+	isfirst := !isagain
+	write := func(m *ModuleInfo) {
+		shouldwrite := (isagain && m.girMeta.save) ||
 			(isfirst && (m.reGenGIr || Flag.ForceRegenAll || m.girMeta.save))
-		if dosave {
+		if shouldwrite {
 			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
 				if err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes()); err == nil {
 					m.girMeta.save = false
@@ -198,9 +200,9 @@ func (me *BowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
 				buf.Reset()
 			}
 		}
-		if err != nil {
-			return
-		}
+	}
+	for _, m := range me.Modules {
+		write(m) // can `go` parallelize later here if beneficial
 	}
 	return
 }

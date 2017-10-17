@@ -80,7 +80,6 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 			}
 			for _, method := range gid.RefInterface.Methods {
 				mcopy := *method
-				mcopy.method.body = ªBlock(ªRet(nil))
 				mcopy.method.hasNoThis = true
 				gtd.Methods = append(gtd.Methods, &mcopy)
 			}
@@ -229,6 +228,9 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 			return false
 		})
 		if len(tcctors) > 0 {
+			if strings.Contains(me.mod.srcFilePath, "TClsImpl3") {
+				println("YEAH")
+			}
 			tcctor := tcctors[0].(*GIrAFunc)
 			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.Methods {
@@ -245,6 +247,10 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 						break
 					}
 				}
+			}
+		} else {
+			if strings.Contains(me.mod.srcFilePath, "TClsImpl3") {
+				println("NOEZ")
 			}
 		}
 		nuctor := ªO(&GIrANamedTypeRef{RefAlias: gtd.NameGo})
