@@ -105,7 +105,7 @@ func (me *GonadIrAst) prepForeigns() {
 		me.girM.ForeignImp = me.girM.Imports.AddIfHasnt(dot2underscore.Replace(qn), "github.com/metaleap/gonad/"+dot2slash.Replace(qn), qn)
 		me.girM.save = true
 		for _, f := range me.mod.coreimp.Foreign {
-			println(f.Ident)
+			println(f)
 		}
 	}
 }

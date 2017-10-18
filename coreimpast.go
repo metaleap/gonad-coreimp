@@ -12,11 +12,11 @@ var (
 )
 
 type CoreImp struct {
-	BuiltWith string        `json:"builtWith,omitempty"`
-	Imports   []string      `json:"imports,omitempty"`
-	Exports   []string      `json:"exports,omitempty"`
-	Foreign   []*PsExtIdent `json:"foreign,omitempty"`
-	Body      CoreImpAsts   `json:"body,omitempty"`
+	BuiltWith string      `json:"builtWith,omitempty"`
+	Imports   []string    `json:"imports,omitempty"`
+	Exports   []string    `json:"exports,omitempty"`
+	Foreign   []string    `json:"foreign,omitempty"`
+	Body      CoreImpAsts `json:"body,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
