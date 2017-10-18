@@ -115,7 +115,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 			}
 		case *GIrALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *GIrAComments, *GIrAPkgRef, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
+		case *GIrAComments, *GIrAPkgSym, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
 		default:
 			panic(fmt.Errorf("WALK not handling GIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
 		}

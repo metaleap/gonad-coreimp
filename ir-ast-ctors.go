@@ -152,8 +152,8 @@ func ªPanic(errarg GIrA) *GIrAPanic {
 	return a
 }
 
-func ªPkgRef(pkgname string, symbol string) *GIrAPkgRef {
-	a := &GIrAPkgRef{PkgName: pkgname, Symbol: symbol}
+func ªPkgSym(pkgname string, symbol string) *GIrAPkgSym {
+	a := &GIrAPkgSym{PkgName: pkgname, Symbol: symbol}
 	return a
 }
 

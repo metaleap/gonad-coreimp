@@ -12,11 +12,11 @@ var (
 )
 
 type CoreImp struct {
-	BuiltWith string      `json:"builtWith,omitempty"`
-	Imports   []string    `json:"imports,omitempty"`
-	Exports   []string    `json:"exports,omitempty"`
-	Foreign   []string    `json:"foreign,omitempty"`
-	Body      CoreImpAsts `json:"body,omitempty"`
+	BuiltWith string        `json:"builtWith,omitempty"`
+	Imports   []string      `json:"imports,omitempty"`
+	Exports   []string      `json:"exports,omitempty"`
+	Foreign   []*PsExtIdent `json:"foreign,omitempty"`
+	Body      CoreImpAsts   `json:"body,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
@@ -339,8 +339,7 @@ func (me *CoreImp) preProcessTopLevel() error {
 			//	module.exports = ..
 			ditch()
 		} else if a.AstTag == "VariableIntroduction" {
-			if a.AstRight != nil && a.AstRight.App != nil && a.AstRight.App.Var == "require" && len(a.AstRight.AstApplArgs) == 1 {
-				// println("Dropped top-level require()" )
+			if a.AstRight != nil && a.AstRight.App != nil && a.AstRight.App.Var == "require" && len(a.AstRight.AstApplArgs) == 1 && len(a.AstRight.AstApplArgs[0].StringLiteral) > 0 {
 				me.namedRequires[a.VariableIntroduction] = a.AstRight.AstApplArgs[0].StringLiteral
 				ditch()
 			} else if a.AstRight != nil && a.AstRight.AstTag == "Function" {

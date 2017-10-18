@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	nsPrefixDefaultFfiPkg = "Ps2GoFFI."
+	nsPrefixDefaultFfiPkg = "ps2goFFI."
 )
 
 type GonadIrAst struct {
@@ -35,6 +35,16 @@ type gIrABase struct {
 
 func (me *gIrABase) Base() *gIrABase {
 	return me
+}
+
+func (me *gIrABase) isParentOp() (isparentop bool) {
+	if me.parent != nil {
+		switch me.parent.(type) {
+		case *GIrAOp1, *GIrAOp2:
+			isparentop = true
+		}
+	}
+	return
 }
 
 func (me *gIrABase) Parent() GIrA {
@@ -221,7 +231,7 @@ type GIrAToType struct {
 	TypeName   string `json:",omitempty"`
 }
 
-type GIrAPkgRef struct {
+type GIrAPkgSym struct {
 	gIrABase
 	PkgName string `json:",omitempty"`
 	Symbol  string `json:",omitempty"`
@@ -235,7 +245,7 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 			case *GIrAOp1:
 				if a != nil && a.Op1 == "&" {
 					if oc, _ := a.Of.(*GIrACall); oc != nil {
-						return me.FixupAmpCtor(a, oc)
+						return me.postFixupAmpCtor(a, oc)
 					}
 				}
 			}
@@ -243,9 +253,9 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 		return ast
 	})
 
-	me.LinkTcInstFuncsToImplStructs()
-	dictfuncs := me.ClearTcDictFuncs()
-	me.MiscPostFixups(dictfuncs)
+	me.postLinkTcInstFuncsToImplStructs()
+	dictfuncs := me.postClearTcDictFuncs()
+	me.postMiscFixups(dictfuncs)
 	me.resolveAllArgTypes()
 	return
 }
@@ -257,10 +267,11 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	for _, cia := range me.mod.coreimp.Body {
 		me.Add(cia.ciAstToGIrAst())
 	}
-	me.FixupExportedNames()
-	me.AddNewExtraTypes()
-	nuglobals := me.AddEnumishAdtGlobals()
-	me.MiscPrepFixups(nuglobals)
+	me.prepForeigns()
+	me.prepFixupExportedNames()
+	me.prepAddNewExtraTypes()
+	nuglobals := me.prepAddEnumishAdtGlobals()
+	me.prepMiscFixups(nuglobals)
 	return
 }
 

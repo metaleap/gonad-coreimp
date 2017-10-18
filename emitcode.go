@@ -22,6 +22,16 @@ func codeEmitCommaIf(w io.Writer, i int) {
 	}
 }
 
+func codeEmitComments(w io.Writer, singlelineprefix string, comments ...*CoreImpComment) {
+	for _, c := range comments {
+		if len(c.BlockComment) > 0 {
+			fmt.Fprintf(w, "/*%s*/", c.BlockComment)
+		} else {
+			fmt.Fprintf(w, "%s//%s\n", singlelineprefix, c.LineComment)
+		}
+	}
+}
+
 func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 	if ast == nil {
 		return
@@ -52,7 +62,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		fmt.Fprint(w, "}")
 	case *GIrALitObj:
-		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, -999, trr)
+		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, -1, trr)
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			codeEmitCommaIf(w, i)
@@ -75,7 +85,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 			codeEmitAst(w, indent, a.VarVal, trr)
 			fmt.Fprint(w, "\n")
 		} else if len(a.NameGo) > 0 {
-			fmt.Fprintf(w, "%s", a.NameGo)
+			fmt.Fprint(w, a.NameGo)
 		}
 	case *GIrABlock:
 		if a == nil || len(a.Body) == 0 {
@@ -117,13 +127,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		codeEmitTypeDecl(w, &a.GIrANamedTypeRef, indent, trr)
 		codeEmitAst(w, indent, a.FuncImpl, trr)
 	case *GIrAComments:
-		for _, c := range a.Comments {
-			if len(c.BlockComment) > 0 {
-				fmt.Fprintf(w, "/*%s*/", c.BlockComment)
-			} else {
-				fmt.Fprintf(w, "%s//%s\n", tabs, c.LineComment)
-			}
-		}
+		codeEmitComments(w, tabs, a.Comments...)
 	case *GIrARet:
 		if a.RetArg == nil {
 			fmt.Fprintf(w, "%sreturn", tabs)
@@ -162,7 +166,7 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		}
 		codeEmitAst(w, indent, a.ExprToCast, trr)
 		fmt.Fprint(w, ")")
-	case *GIrAPkgRef:
+	case *GIrAPkgSym:
 		if len(a.PkgName) > 0 {
 			fmt.Fprintf(w, "%s.", a.PkgName)
 		}
@@ -178,57 +182,26 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 		codeEmitAst(w, indent, a.ToRight, trr)
 		fmt.Fprint(w, "\n")
 	case *GIrAOp1:
-		fmt.Fprintf(w, "(%s", a.Op1)
-		codeEmitAst(w, indent, a.Of, trr)
-		fmt.Fprint(w, ")")
-	case *GIrAOp2:
-		fmt.Fprint(w, "(")
-		codeEmitAst(w, indent, a.Left, trr)
-		switch a.Op2 {
-		case "Add", "+":
-			fmt.Fprint(w, " + ")
-		case "Subtract", "-":
-			fmt.Fprint(w, " - ")
-		case "Multiply", "*":
-			fmt.Fprint(w, " * ")
-		case "Divide", "/":
-			fmt.Fprint(w, " / ")
-		case "Modulus", "%":
-			fmt.Fprint(w, " % ")
-		case "EqualTo", "==":
-			fmt.Fprint(w, " == ")
-		case "NotEqualTo", "!=":
-			fmt.Fprint(w, " != ")
-		case "LessThan", "<":
-			fmt.Fprint(w, " < ")
-		case "LessThanOrEqualTo", "<=":
-			fmt.Fprint(w, " <= ")
-		case "GreaterThan", ">":
-			fmt.Fprint(w, " > ")
-		case "GreaterThanOrEqualTo", ">=":
-			fmt.Fprint(w, " >= ")
-		case "And", "&&":
-			fmt.Fprint(w, " && ")
-		case "Or", "||":
-			fmt.Fprint(w, " || ")
-		case "BitwiseAnd", "&":
-			fmt.Fprint(w, " & ")
-		case "BitwiseOr", "|":
-			fmt.Fprint(w, " | ")
-		case "BitwiseXor", "^":
-			fmt.Fprint(w, " ^ ")
-		case "ShiftLeft", "<<":
-			fmt.Fprint(w, " << ")
-		case "ShiftRight", ">>":
-			fmt.Fprint(w, " >> ")
-		case "ZeroFillShiftRight", "&^":
-			fmt.Fprint(w, " &^ ")
-		default:
-			fmt.Fprintf(w, " ?%s? ", a.Op2)
-			panic("unrecognized binary op '" + a.Op2 + "', please report!")
+		isinop := a.isParentOp()
+		if isinop {
+			fmt.Fprint(w, "(")
 		}
+		fmt.Fprint(w, a.Op1)
+		codeEmitAst(w, indent, a.Of, trr)
+		if isinop {
+			fmt.Fprint(w, ")")
+		}
+	case *GIrAOp2:
+		isinop := a.isParentOp()
+		if isinop {
+			fmt.Fprint(w, "(")
+		}
+		codeEmitAst(w, indent, a.Left, trr)
+		fmt.Fprintf(w, " %s ", a.Op2)
 		codeEmitAst(w, indent, a.Right, trr)
-		fmt.Fprint(w, ")")
+		if isinop {
+			fmt.Fprint(w, ")")
+		}
 	case *GIrANil:
 		fmt.Fprint(w, "nil")
 	case *GIrAFor:
@@ -480,7 +453,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
 	}
 	if toplevel && !isfuncwithbodynotjustsig {
-		fmt.Fprintln(w, "\n")
+		fmt.Fprint(w, "\n\n")
 	}
 }
 

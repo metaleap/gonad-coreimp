@@ -4,8 +4,8 @@ import (
 	"strings"
 )
 
-func (me *GonadIrAst) AddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) {
-	//	after we have also created additional structs/interfaces in AddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum-value")
+func (me *GonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) {
+	//	after we have also created additional structs/interfaces in prepAddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []GIrA{}
 	nuglobalsmap = map[string]*GIrAVar{}
 	for _, gtd := range me.girM.GoTypeDefs {
@@ -23,7 +23,7 @@ func (me *GonadIrAst) AddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) 
 	return
 }
 
-func (me *GonadIrAst) AddNewExtraTypes() {
+func (me *GonadIrAst) prepAddNewExtraTypes() {
 	//	detect unexported data-type constructors and add the missing structs implementing a newly added single unexported ADT umbrella interface type
 	newxtypedatadecl := &GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var newextratypes GIrANamedTypeRefs
@@ -77,7 +77,85 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 	}
 }
 
-func (me *GonadIrAst) ClearTcDictFuncs() (dictfuncs []GIrA) {
+func (me *GonadIrAst) prepFixupExportedNames() {
+	ensure := func(gntr *GIrANamedTypeRef) {
+		if gntr != nil {
+			for _, gvd := range me.girM.GoValDecls {
+				if gvd.NamePs == gntr.NamePs {
+					gntr.Export = true
+					gntr.NameGo = gvd.NameGo
+					break
+				}
+			}
+		}
+	}
+	me.topLevelDefs(func(a GIrA) bool {
+		if af, _ := a.(*GIrAFunc); af != nil {
+			ensure(&af.GIrANamedTypeRef)
+		} else if av, _ := a.(*GIrAVar); av != nil {
+			ensure(&av.GIrANamedTypeRef)
+		}
+		return false
+	})
+}
+
+func (me *GonadIrAst) prepForeigns() {
+	if reqforeign, _ := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
+		qn := nsPrefixDefaultFfiPkg + me.mod.qName
+		me.girM.ForeignImp = me.girM.Imports.AddIfHasnt(dot2underscore.Replace(qn), "github.com/metaleap/gonad/"+dot2slash.Replace(qn), qn)
+		me.girM.save = true
+		for _, f := range me.mod.coreimp.Foreign {
+			println(f.Ident)
+		}
+	}
+}
+
+func (me *GonadIrAst) prepMiscFixups(nuglobalsmap map[string]*GIrAVar) {
+	me.Walk(func(ast GIrA) GIrA {
+		if ast != nil {
+			switch a := ast.(type) {
+			case *GIrAOp2: // coreimp represents Ints JS-like as: expr|0 --- we ditch the |0 part
+				if opright, _ := a.Right.(*GIrALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
+					return a.Left
+				}
+			case *GIrADot:
+				if dl, _ := a.DotLeft.(*GIrAVar); dl != nil {
+					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
+						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
+						if dr.NameGo == "value" {
+							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
+								nuvarsym := ªSym("")
+								nuvarsym.GIrANamedTypeRef = nuglobalvar.GIrANamedTypeRef
+								nuvarsym.NameGo = nuglobalvar.NameGo
+								return nuvarsym
+							}
+						} else {
+							//	if the dot's LHS refers to a package, ensure the import is marked as in-use and switch out dot for pkgsym
+							for _, imp := range me.girM.Imports {
+								if imp.N == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.girM.ForeignImp) {
+									imp.used = true
+									dr.Export = true
+									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
+									return ªPkgSym(imp.N, dr.NameGo)
+								}
+							}
+						}
+					}
+				}
+			case *GIrAVar:
+				if a != nil && a.VarVal != nil {
+					if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
+						//	turn var=literal's into consts
+						return ªConst(&a.GIrANamedTypeRef, a.VarVal)
+					}
+				}
+			}
+		}
+		return ast
+	})
+}
+
+func (me *GonadIrAst) postClearTcDictFuncs() (dictfuncs []GIrA) {
 	//	ditch all: func tcmethodname(dict){return dict.tcmethodname}
 	dictfuncs = me.topLevelDefs(func(a GIrA) bool {
 		if fn, _ := a.(*GIrAFunc); fn != nil &&
@@ -98,7 +176,7 @@ func (me *GonadIrAst) ClearTcDictFuncs() (dictfuncs []GIrA) {
 	return
 }
 
-func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
+func (me *GonadIrAst) postFixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
 	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
 	var gtd *GIrANamedTypeRef
 	if ocdot, _ := oc.Callee.(*GIrADot); ocdot != nil {
@@ -143,12 +221,14 @@ func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
 				}
 				if len(oc.CallArgs) > 1 {
 					me.girM.Imports.AddIfHasnt("reflect", "reflect", "")
+					me.girM.save = true
 					oc.CallArgs[0].(*GIrALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
 				}
 			}
 		}
 		me.girM.Imports.AddIfHasnt("fmt", "fmt", "")
-		call := ªCall(ªPkgRef("fmt", "Errorf"), oc.CallArgs...)
+		me.girM.save = true
+		call := ªCall(ªPkgSym("fmt", "Errorf"), oc.CallArgs...)
 		return call
 	} else if ocv != nil {
 		println("TODO:\t" + me.mod.srcFilePath + "\t" + ocv.NamePs)
@@ -156,29 +236,7 @@ func (me *GonadIrAst) FixupAmpCtor(a *GIrAOp1, oc *GIrACall) GIrA {
 	return a
 }
 
-func (me *GonadIrAst) FixupExportedNames() {
-	ensure := func(gntr *GIrANamedTypeRef) {
-		if gntr != nil {
-			for _, gvd := range me.girM.GoValDecls {
-				if gvd.NamePs == gntr.NamePs {
-					gntr.Export = true
-					gntr.NameGo = gvd.NameGo
-					break
-				}
-			}
-		}
-	}
-	me.topLevelDefs(func(a GIrA) bool {
-		if af, _ := a.(*GIrAFunc); af != nil {
-			ensure(&af.GIrANamedTypeRef)
-		} else if av, _ := a.(*GIrAVar); av != nil {
-			ensure(&av.GIrANamedTypeRef)
-		}
-		return false
-	})
-}
-
-func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
+func (me *GonadIrAst) postLinkTcInstFuncsToImplStructs() {
 	instfuncvars := me.topLevelDefs(func(a GIrA) bool {
 		if v, _ := a.(*GIrAVar); v != nil {
 			if vv, _ := v.VarVal.(*GIrALitObj); vv != nil {
@@ -213,14 +271,14 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 			return false
 		})
 		for i := 0; i < len(tcctors); i++ {
-			switch x := tcctors[i].(type) {
+			switch av := tcctors[i].(type) {
 			case *GIrAVar:
-				tcctors[i] = x.VarVal.(*GIrAFunc)
+				tcctors[i] = av.VarVal.(*GIrAFunc)
 			}
 		}
 		ifo := ifv.VarVal.(*GIrALitObj) //  something like:  InterfaceName{funcs}
 		if len(tcctors) > 0 {
-			tcctor, _ := tcctors[0].(*GIrAFunc)
+			tcctor := tcctors[0].(*GIrAFunc)
 			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.Methods {
 					if gtdmethod.NamePs == instfuncarg.NamePs {
@@ -248,7 +306,7 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 	}
 }
 
-func (me *GonadIrAst) MiscPostFixups(dictfuncs []GIrA) {
+func (me *GonadIrAst) postMiscFixups(dictfuncs []GIrA) {
 	me.Walk(func(ast GIrA) GIrA {
 		switch a := ast.(type) {
 		case *GIrAFunc:
@@ -278,51 +336,6 @@ func (me *GonadIrAst) MiscPostFixups(dictfuncs []GIrA) {
 			}
 			// finally, add an empty-for-now 'unknown' (aka interface{}) return type
 			a.GIrANamedTypeRef.RefFunc.Rets = GIrANamedTypeRefs{&GIrANamedTypeRef{}}
-		}
-		return ast
-	})
-}
-
-func (me *GonadIrAst) MiscPrepFixups(nuglobalsmap map[string]*GIrAVar) {
-	me.Walk(func(ast GIrA) GIrA {
-		if ast != nil {
-			switch a := ast.(type) {
-			case *GIrAOp2: // coreimp represents Ints JS-like as: expr|0 --- we ditch the |0 part
-				if opright, _ := a.Right.(*GIrALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
-					return a.Left
-				}
-			case *GIrADot:
-				if dl, _ := a.DotLeft.(*GIrAVar); dl != nil {
-					if dr, _ := a.DotRight.(*GIrAVar); dr != nil {
-						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
-						if dr.NameGo == "value" {
-							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
-								nuvarsym := ªSym("")
-								nuvarsym.GIrANamedTypeRef = nuglobalvar.GIrANamedTypeRef
-								nuvarsym.NameGo = nuglobalvar.NameGo
-								return nuvarsym
-							}
-						} else {
-							//	if the dot's LHS refers to a package, ensure the import is marked as in-use
-							for _, imp := range me.girM.Imports {
-								if imp.N == dl.NameGo {
-									imp.used = true
-									dr.Export = true
-									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
-									break
-								}
-							}
-						}
-					}
-				}
-			case *GIrAVar:
-				if a != nil && a.VarVal != nil {
-					if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
-						//	turn var=literal's into consts
-						return ªConst(&a.GIrANamedTypeRef, a.VarVal)
-					}
-				}
-			}
 		}
 		return ast
 	})

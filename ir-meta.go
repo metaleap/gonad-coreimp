@@ -20,6 +20,7 @@ type GonadIrMeta struct {
 	ExtValDecls       []*GIrMNamedTypeRef  `json:",omitempty"`
 	GoTypeDefs        GIrANamedTypeRefs    `json:",omitempty"`
 	GoValDecls        GIrANamedTypeRefs    `json:",omitempty"`
+	ForeignImp        *GIrMPkgRef          `json:",omitempty"`
 
 	imports []*ModuleInfo
 
@@ -33,19 +34,22 @@ type GIrMPkgRefs []*GIrMPkgRef
 func (me GIrMPkgRefs) Len() int           { return len(me) }
 func (me GIrMPkgRefs) Less(i, j int) bool { return me[i].P < me[j].P }
 func (me GIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
-func (me *GIrMPkgRefs) AddIfHasnt(lname, imppath, qname string) {
-	if !me.Has(imppath) {
-		*me = append(*me, &GIrMPkgRef{used: true, N: lname, P: imppath, Q: qname})
-	}
 
+func (me *GIrMPkgRefs) AddIfHasnt(lname, imppath, qname string) (pkgref *GIrMPkgRef) {
+	if pkgref = me.ByImpPath(imppath); pkgref == nil {
+		pkgref = &GIrMPkgRef{used: true, N: lname, P: imppath, Q: qname}
+		*me = append(*me, pkgref)
+	}
+	return
 }
-func (me GIrMPkgRefs) Has(imppath string) bool {
+
+func (me GIrMPkgRefs) ByImpPath(imppath string) *GIrMPkgRef {
 	for _, imp := range me {
 		if imp.P == imppath {
-			return true
+			return imp
 		}
 	}
-	return false
+	return nil
 }
 
 type GIrMPkgRef struct {
