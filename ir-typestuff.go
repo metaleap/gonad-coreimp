@@ -58,10 +58,9 @@ type GIrANamedTypeRef struct {
 	Export         bool              `json:",omitempty"`
 	WasTypeFunc    bool              `json:",omitempty"`
 
-	method  GIrATypeMethod
-	ctor    *GIrMTypeDataCtor
-	comment *GIrAComments
-	instOf  string
+	method GIrATypeMethod
+	ctor   *GIrMTypeDataCtor
+	instOf string
 }
 
 type GIrATypeMethod struct {
@@ -314,7 +313,6 @@ func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []*GIrMTypeDataDecl, 
 					ctor.gtd = &GIrANamedTypeRef{Export: forexport, RefStruct: &GIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
-					ctor.gtd.comment = ctor.comment
 					for ia, ctorarg := range ctor.Args {
 						field := &GIrANamedTypeRef{}
 						field.setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))

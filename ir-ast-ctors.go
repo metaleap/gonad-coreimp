@@ -71,7 +71,8 @@ func ªCall(callee GIrA, callargs ...GIrA) *GIrACall {
 }
 
 func ªComments(comments ...*CoreImpComment) *GIrAComments {
-	a := &GIrAComments{Comments: comments}
+	a := &GIrAComments{}
+	a.Comments = comments
 	return a
 }
 

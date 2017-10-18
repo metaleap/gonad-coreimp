@@ -28,6 +28,7 @@ type GIrA interface {
 
 type gIrABase struct {
 	GIrANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
+	Comments         []*CoreImpComment   `json:",omitempty"`
 
 	parent GIrA
 }
@@ -104,8 +105,6 @@ func (me *GIrABlock) Add(asts ...GIrA) {
 
 type GIrAComments struct {
 	gIrABase
-	Comments     []*CoreImpComment `json:",omitempty"`
-	CommentsDecl GIrA              `json:",omitempty"`
 }
 
 type GIrAOp1 struct {
@@ -258,7 +257,6 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	for _, cia := range me.mod.coreimp.Body {
 		me.Add(cia.ciAstToGIrAst())
 	}
-
 	me.FixupExportedNames()
 	me.AddNewExtraTypes()
 	nuglobals := me.AddEnumishAdtGlobals()

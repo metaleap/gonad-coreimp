@@ -89,14 +89,6 @@ func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
 
 func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	istopleveldecl := (me.parent == nil)
-	if maybecomment := me.parent; maybecomment != nil {
-		for maybecomment.AstTag == "Comment" {
-			if maybecomment = maybecomment.parent; maybecomment == nil {
-				istopleveldecl = true
-				break
-			}
-		}
-	}
 	switch me.AstTag {
 	case "StringLiteral":
 		a = ªS(me.StringLiteral)
@@ -264,10 +256,6 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = o
 	case "Comment":
 		c := ªComments(me.Comment...)
-		if me.AstCommentDecl != nil {
-			c.CommentsDecl = me.AstCommentDecl.ciAstToGIrAst()
-			c.CommentsDecl.Base().parent = c
-		}
 		a = c
 	case "ObjectLiteral":
 		o := ªO(nil)
@@ -317,6 +305,9 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	default:
 		panic(fmt.Errorf("Just below %v: unrecognized CoreImp AST-tag, please report: %s", me.parent, me.AstTag))
 	}
+	if ab := a.Base(); ab != nil {
+		ab.Comments = me.Comment
+	}
 	return
 }
 
@@ -333,7 +324,7 @@ type CoreImpSourceSpan struct {
 
 func (me *CoreImp) preProcessTopLevel() error {
 	me.namedRequires = map[string]string{}
-	me.preProcessAsts(nil, me.Body...)
+	me.Body = me.preProcessAsts(nil, me.Body...)
 	i := 0
 	ditch := func() {
 		me.Body = append(me.Body[:i], me.Body[i+1:]...)
@@ -365,9 +356,21 @@ func (me *CoreImp) preProcessTopLevel() error {
 	return nil
 }
 
-func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) {
+func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) CoreImpAsts {
 	if parent != nil {
 		parent.root = me
+	}
+	for i := 0; i < len(asts); i++ {
+		if cia := asts[i]; cia != nil && cia.AstTag == "Comment" && cia.AstCommentDecl != nil {
+			if cia.AstCommentDecl.AstTag == "Comment" {
+				panic("Please report: encountered comments nesting.")
+			}
+			cdecl := cia.AstCommentDecl
+			cia.AstCommentDecl = nil
+			cdecl.Comment = cia.Comment
+			asts[i] = cdecl
+			i--
+		}
 	}
 	for _, a := range asts {
 		if a != nil {
@@ -391,32 +394,34 @@ func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) {
 
 			a.root = me
 			a.parent = parent
-			me.preProcessAsts(a, a.App)
-			me.preProcessAsts(a, a.ArrayLiteral...)
-			me.preProcessAsts(a, a.Assignment)
-			me.preProcessAsts(a, a.AstApplArgs...)
-			me.preProcessAsts(a, a.AstBody)
-			me.preProcessAsts(a, a.AstCommentDecl)
-			me.preProcessAsts(a, a.AstFor1)
-			me.preProcessAsts(a, a.AstFor2)
-			me.preProcessAsts(a, a.AstElse)
-			me.preProcessAsts(a, a.AstThen)
-			me.preProcessAsts(a, a.AstRight)
-			me.preProcessAsts(a, a.Binary)
-			me.preProcessAsts(a, a.Block...)
-			me.preProcessAsts(a, a.IfElse)
-			me.preProcessAsts(a, a.Indexer)
-			me.preProcessAsts(a, a.Assignment)
-			me.preProcessAsts(a, a.InstanceOf)
-			me.preProcessAsts(a, a.Return)
-			me.preProcessAsts(a, a.Throw)
-			me.preProcessAsts(a, a.Unary)
-			me.preProcessAsts(a, a.While)
-			for _, m := range a.ObjectLiteral {
-				for _, expr := range m {
-					me.preProcessAsts(a, expr)
+			a.App = me.preProcessAsts(a, a.App)[0]
+			a.ArrayLiteral = me.preProcessAsts(a, a.ArrayLiteral...)
+			a.Assignment = me.preProcessAsts(a, a.Assignment)[0]
+			a.AstApplArgs = me.preProcessAsts(a, a.AstApplArgs...)
+			a.AstBody = me.preProcessAsts(a, a.AstBody)[0]
+			a.AstCommentDecl = me.preProcessAsts(a, a.AstCommentDecl)[0]
+			a.AstFor1 = me.preProcessAsts(a, a.AstFor1)[0]
+			a.AstFor2 = me.preProcessAsts(a, a.AstFor2)[0]
+			a.AstElse = me.preProcessAsts(a, a.AstElse)[0]
+			a.AstThen = me.preProcessAsts(a, a.AstThen)[0]
+			a.AstRight = me.preProcessAsts(a, a.AstRight)[0]
+			a.Binary = me.preProcessAsts(a, a.Binary)[0]
+			a.Block = me.preProcessAsts(a, a.Block...)
+			a.IfElse = me.preProcessAsts(a, a.IfElse)[0]
+			a.Indexer = me.preProcessAsts(a, a.Indexer)[0]
+			a.Assignment = me.preProcessAsts(a, a.Assignment)[0]
+			a.InstanceOf = me.preProcessAsts(a, a.InstanceOf)[0]
+			a.Return = me.preProcessAsts(a, a.Return)[0]
+			a.Throw = me.preProcessAsts(a, a.Throw)[0]
+			a.Unary = me.preProcessAsts(a, a.Unary)[0]
+			a.While = me.preProcessAsts(a, a.While)[0]
+			for km, m := range a.ObjectLiteral {
+				for kx, expr := range m {
+					m[kx] = me.preProcessAsts(a, expr)[0]
 				}
+				a.ObjectLiteral[km] = m
 			}
 		}
 	}
+	return asts
 }

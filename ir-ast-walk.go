@@ -2,22 +2,13 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 )
 
 func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
 	for _, ast := range me.Body {
 		if okay(ast) {
 			defs = append(defs, ast)
-		} else if c, ok := ast.(*GIrAComments); ok {
-			var c2 *GIrAComments
-			for ok {
-				if c2, ok = c.CommentsDecl.(*GIrAComments); ok {
-					c = c2
-				}
-			}
-			if okay(c.CommentsDecl) {
-				defs = append(defs, ast)
-			}
 		}
 	}
 	return
@@ -41,8 +32,10 @@ func (me *GonadIrAst) Walk(on func(GIrA) GIrA) {
 func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 	if ast != nil {
 		switch a := ast.(type) {
+		// why extra nil checks some places below: we do have the rare case of ast!=nil and ast.(type) set and still holding a null-ptr
+		// why not everywhere: due to the nature of the ASTs constructed from coreimp, only those cases can potentially be nil if they exist at all
 		case *GIrABlock:
-			if a != nil { // odd that this would happen, given the above, but it did! (go1.7.6)
+			if a != nil {
 				for i, _ := range a.Body {
 					a.Body[i] = walk(a.Body[i], on)
 				}
@@ -52,10 +45,10 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 			for i, _ := range a.CallArgs {
 				a.CallArgs[i] = walk(a.CallArgs[i], on)
 			}
-		case *GIrAComments:
-			a.CommentsDecl = walk(a.CommentsDecl, on)
 		case *GIrAConst:
-			a.ConstVal = walk(a.ConstVal, on)
+			if !a.WasTypeFunc {
+				a.ConstVal = walk(a.ConstVal, on)
+			}
 		case *GIrADot:
 			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
 		case *GIrAFor:
@@ -77,8 +70,10 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 				}
 			}
 		case *GIrAFunc:
-			if tmp, _ := walk(a.FuncImpl, on).(*GIrABlock); tmp != nil {
-				a.FuncImpl = tmp
+			if !a.WasTypeFunc {
+				if tmp, _ := walk(a.FuncImpl, on).(*GIrABlock); tmp != nil {
+					a.FuncImpl = tmp
+				}
 			}
 		case *GIrAIf:
 			a.If = walk(a.If, on)
@@ -101,7 +96,7 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 		case *GIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
 		case *GIrAVar:
-			if a != nil { // odd that this would happen, given the above, but it did! (go1.7.6)
+			if a != nil && !a.WasTypeFunc {
 				a.VarVal = walk(a.VarVal, on)
 			}
 		case *GIrAIsType:
@@ -120,10 +115,9 @@ func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
 			}
 		case *GIrALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *GIrAPkgRef, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
+		case *GIrAComments, *GIrAPkgRef, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
 		default:
-			fmt.Printf("%v", ast)
-			panic("WALK not handling a GIrA type")
+			panic(fmt.Errorf("WALK not handling GIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {

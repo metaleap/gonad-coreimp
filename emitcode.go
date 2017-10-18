@@ -124,9 +124,6 @@ func codeEmitAst(w io.Writer, indent int, ast GIrA, trr goTypeRefResolver) {
 				fmt.Fprintf(w, "%s//%s\n", tabs, c.LineComment)
 			}
 		}
-		if a.CommentsDecl != nil {
-			codeEmitAst(w, indent, a.CommentsDecl, trr)
-		}
 	case *GIrARet:
 		if a.RetArg == nil {
 			fmt.Fprintf(w, "%sreturn", tabs)
@@ -295,22 +292,11 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []GIrA, trr 
 			return
 		}
 		for i, a := range asts {
-			if ac, ok := a.(*GIrAComments); ok {
-				decl := ac.CommentsDecl
-				val, name, typeref := valºnameºtype(decl)
-				ac.CommentsDecl = ªsetVarInGroup(name, val, typeref)
-				codeEmitAst(w, indent+1, ac, trr)
-				ac.CommentsDecl = decl
-				if i < (len(asts) - 1) {
+			val, name, typeref := valºnameºtype(a)
+			codeEmitAst(w, indent+1, ªsetVarInGroup(name, val, typeref), trr)
+			if i < (len(asts) - 1) {
+				if _, ok := asts[i+1].(*GIrAComments); ok {
 					fmt.Fprint(w, "\n")
-				}
-			} else {
-				val, name, typeref := valºnameºtype(a)
-				codeEmitAst(w, indent+1, ªsetVarInGroup(name, val, typeref), trr)
-				if i < (len(asts) - 1) {
-					if _, ok := asts[i+1].(*GIrAComments); ok {
-						fmt.Fprint(w, "\n")
-					}
 				}
 			}
 		}
@@ -387,9 +373,6 @@ func codeEmitTypeDecl(w io.Writer, gtd *GIrANamedTypeRef, indlevel int, typerefr
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.method.body != nil
-	if gtd.comment != nil {
-		codeEmitAst(w, indlevel, gtd.comment, typerefresolver)
-	}
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}

@@ -28,39 +28,26 @@ func (me *GonadIrAst) AddNewExtraTypes() {
 	newxtypedatadecl := &GIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var newextratypes GIrANamedTypeRefs
 	var av *GIrAVar
-	var ac *GIrAComments
+	var fn *GIrAFunc
 	for i := 0; i < len(me.Body); i++ {
-		if ac, _ = me.Body[i].(*GIrAComments); ac != nil && ac.CommentsDecl != nil {
-			for tmp, _ := ac.CommentsDecl.(*GIrAComments); tmp != nil; tmp, _ = ac.CommentsDecl.(*GIrAComments) {
-				ac = tmp
-			}
-			av, _ = ac.CommentsDecl.(*GIrAVar)
-		} else {
-			av, _ = me.Body[i].(*GIrAVar)
-		}
+		av, _ = me.Body[i].(*GIrAVar)
 		if av != nil && av.WasTypeFunc {
-			if ac != nil {
-				ac.CommentsDecl = nil
+			if fn, _ = av.VarVal.(*GIrAFunc); fn == nil {
+				fn = av.VarVal.(*GIrACall).Callee.(*GIrAFunc).FuncImpl.Body[0].(*GIrAFunc)
 			}
-			if fn, _ := av.VarVal.(*GIrAFunc); fn != nil {
-				// TODO catches type-classes but not all
-				// fmt.Printf("%v\t%s\t%s\t%s\n", len(fn.RefFunc.Args), av.NameGo, av.NamePs, me.mod.srcFilePath)
-				// me.Body = append(me.Body[:i], me.Body[i+1:]...)
-				// i--
-			} else {
-				fn := av.VarVal.(*GIrACall).Callee.(*GIrAFunc).FuncImpl.Body[0].(*GIrAFunc)
-				if gtd := me.girM.GoTypeDefByPsName(av.NamePs); gtd == nil {
-					nuctor := &GIrMTypeDataCtor{Name: av.NamePs, comment: ac}
-					for i := 0; i < len(fn.RefFunc.Args); i++ {
-						nuctor.Args = append(nuctor.Args, &GIrMTypeRef{})
-					}
-					newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
-				} else {
-					gtd.comment = ac
+			gtd := me.girM.GoTypeDefByPsName(av.NamePs)
+			if gtd != nil && gtd.RefInterface != nil {
+				continue
+			}
+			if gtd == nil {
+				nuctor := &GIrMTypeDataCtor{Name: av.NamePs}
+				for i := 0; i < len(fn.RefFunc.Args); i++ {
+					nuctor.Args = append(nuctor.Args, &GIrMTypeRef{})
 				}
-				me.Body = append(me.Body[:i], me.Body[i+1:]...)
-				i--
+				newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
 			}
+			me.Body = append(me.Body[:i], me.Body[i+1:]...)
+			i--
 		}
 	}
 	if len(newxtypedatadecl.Ctors) > 0 {
@@ -204,14 +191,10 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 	})
 	for _, ifx := range instfuncvars {
 		ifv, _ := ifx.(*GIrAVar)
-		if ifv == nil {
-			ifv = ifx.(*GIrAComments).CommentsDecl.(*GIrAVar)
-		}
 		gtd := me.girM.GoTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
 		gtdInstOf := findGoTypeByPsQName(gtd.instOf)
 		ifv.Export = gtdInstOf.Export
 		ifv.setBothNamesFromPsName(ifv.NamePs)
-		ifo := ifv.VarVal.(*GIrALitObj) //  something like:  InterfaceName{funcs}
 		var tcctors []GIrA
 		var mod *ModuleInfo
 		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.instOf, true)
@@ -221,13 +204,23 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 			mod = FindModuleByPName(pname)
 		}
 		tcctors = mod.girAst.topLevelDefs(func(a GIrA) bool {
-			if fn, _ := a.(*GIrAFunc); fn != nil {
-				return fn.WasTypeFunc && fn.NamePs == tcname
+			if afn, _ := a.(*GIrAFunc); afn != nil {
+				return afn.WasTypeFunc && afn.NamePs == tcname
+			}
+			if av, _ := a.(*GIrAVar); av != nil {
+				return av.WasTypeFunc && av.NamePs == tcname
 			}
 			return false
 		})
+		for i := 0; i < len(tcctors); i++ {
+			switch x := tcctors[i].(type) {
+			case *GIrAVar:
+				tcctors[i] = x.VarVal.(*GIrAFunc)
+			}
+		}
+		ifo := ifv.VarVal.(*GIrALitObj) //  something like:  InterfaceName{funcs}
 		if len(tcctors) > 0 {
-			tcctor := tcctors[0].(*GIrAFunc)
+			tcctor, _ := tcctors[0].(*GIrAFunc)
 			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.Methods {
 					if gtdmethod.NamePs == instfuncarg.NamePs {
@@ -245,7 +238,8 @@ func (me *GonadIrAst) LinkTcInstFuncsToImplStructs() {
 				}
 			}
 		} else {
-			println("NOEZ\t" + me.mod.srcFilePath)
+			if ifv.NamePs == "showBoolean" && strings.Contains(me.mod.srcFilePath, "Show") {
+			}
 		}
 		nuctor := ªO(&GIrANamedTypeRef{RefAlias: gtd.NameGo})
 		nuctor.parent = ifv
