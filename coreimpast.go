@@ -11,15 +11,33 @@ var (
 	strunprimer = strings.NewReplacer("$prime", "'")
 )
 
-type CoreImp struct {
-	BuiltWith string      `json:"builtWith,omitempty"`
-	Imports   []string    `json:"imports,omitempty"`
-	Exports   []string    `json:"exports,omitempty"`
-	Foreign   []string    `json:"foreign,omitempty"`
-	Body      CoreImpAsts `json:"body,omitempty"`
+type CoreImp struct { // saving some cycles, we comment-out what isn't used for now
+	BuiltWith string `json:"builtWith,omitempty"`
+	// ModuleName string            `json:"moduleName,omitempty"`
+	// ModulePath string            `json:"modulePath,omitempty"`
+	// Comments   []*CoreImpComment `json:"comments,omitempty"`
+	// Exports    []string          `json:"exports,omitempty"`
+	Foreign []string    `json:"foreign,omitempty"`
+	Imports []string    `json:"imports,omitempty"`
+	Body    CoreImpAsts `json:"body,omitempty"`
+	DeclAnns
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
+}
+
+type CoreImpComment struct {
+	LineComment  string `json:",omitempty"`
+	BlockComment string `json:",omitempty"`
+}
+
+type CoreImpDeclAnn struct {
+}
+
+type CoreImpSourceSpan struct {
+	Name  string `json:"name,omitempty"`
+	Start []int  `json:"start,omitempty"`
+	End   []int  `json:"end,omitempty"`
 }
 
 type CoreImpAsts []*CoreImpAst
@@ -309,17 +327,6 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		ab.Comments = me.Comment
 	}
 	return
-}
-
-type CoreImpComment struct {
-	LineComment  string `json:",omitempty"`
-	BlockComment string `json:",omitempty"`
-}
-
-type CoreImpSourceSpan struct {
-	Name  string `json:"name,omitempty"`
-	Start []int  `json:"start,omitempty"`
-	End   []int  `json:"end,omitempty"`
 }
 
 func (me *CoreImp) preProcessTopLevel() error {
