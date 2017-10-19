@@ -18,46 +18,13 @@ type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO ke
 	// Comments   []*CoreImpComment            `json:"comments,omitempty"`
 	// Exports    []string                     `json:"exports,omitempty"`
 	// Foreign    []string                     `json:"foreign,omitempty"`
-	Imps  [][]string     `json:"imports,omitempty"`
-	Body  CoreImpAsts    `json:"body,omitempty"`
-	Decls []*CoreImpDecl `json:"declAnns,omitempty"`
-	Env   *CoreImpEnv    `json:"decls,omitempty"`
+	Imps     [][]string     `json:"imports,omitempty"`
+	Body     CoreImpAsts    `json:"body,omitempty"`
+	DeclAnns []*CoreImpDecl `json:"declAnns,omitempty"`
+	DeclEnv  *CoreImpEnv    `json:"decls,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
-}
-
-type CoreImpEnv struct {
-	TypeSyns   interface{}                   `json:"typeSynonyms,omitempty"`
-	TypeDefs   map[string]*CoreImpEnvTypeDef `json:"types,omitempty"`
-	DataCtors  interface{}                   `json:"dataConstructors,omitempty"`
-	Classes    interface{}                   `json:"typeClasses,omitempty"`
-	ClassInsts interface{}                   `json:"typeClassDictionaries,omitempty"`
-	Names      map[string]*CoreImpEnvName    `json:"names,omitempty"`
-}
-
-type CoreImpEnvTypeData struct {
-	Args  map[string]*TaggedContents   `json:"args,omitempty"`
-	Ctors map[string][]*TaggedContents `json:"ctors,omitempty"`
-}
-
-type CoreImpEnvTypeDef struct {
-	Kind *TaggedContents     `json:"tKind,omitempty"`
-	Decl *CoreImpEnvTypeDecl `json:"tDecl,omitempty"`
-}
-
-type CoreImpEnvTypeDecl struct {
-	TypeSynonym       bool                `json:",omitempty"`
-	ExternData        bool                `json:",omitempty"`
-	LocalTypeVariable bool                `json:",omitempty"`
-	ScopedTypeVar     bool                `json:",omitempty"`
-	DataType          *CoreImpEnvTypeData `json:",omitempty"`
-}
-
-type CoreImpEnvName struct {
-	Vis  string          `json:"nVis,omitempty"`  // Environment.hs:Defined or Undefined
-	Kind string          `json:"nKind,omitempty"` // Environment.hs: Private or Public or External
-	Type *TaggedContents `json:"nType,omitempty"`
 }
 
 type CoreImpComment struct {
@@ -74,7 +41,7 @@ type CoreImpDecl struct {
 
 type CoreImpDeclAnn struct {
 	SourceSpan *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
-	Type       *TaggedContents    `json:"type,omitempty"`
+	Type       *CoreImpEnvTag     `json:"type,omitempty"`
 	Comments   []*CoreImpComment  `json:"comments,omitempty"`
 	Meta       struct {
 		MetaType   string   `json:"metaType,omitempty"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
