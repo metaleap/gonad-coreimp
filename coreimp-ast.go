@@ -21,10 +21,17 @@ type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO ke
 	Imps     [][]string     `json:"imports,omitempty"`
 	Body     CoreImpAsts    `json:"body,omitempty"`
 	DeclAnns []*CoreImpDecl `json:"declAnns,omitempty"`
-	DeclEnv  *CoreImpEnv    `json:"decls,omitempty"`
+	DeclEnv  CoreImpEnv     `json:"decls,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
+}
+
+func (me *CoreImp) prep() {
+	for _, da := range me.DeclAnns {
+		da.prep()
+	}
+	me.DeclEnv.prep()
 }
 
 type CoreImpComment struct {
@@ -39,9 +46,18 @@ type CoreImpDecl struct {
 	Expr     *CoreImpDeclExpr `json:"expression,omitempty"`
 }
 
+func (me *CoreImpDecl) prep() {
+	if me.Ann != nil {
+		me.Ann.prep()
+	}
+	if me.Expr != nil {
+		me.Expr.prep()
+	}
+}
+
 type CoreImpDeclAnn struct {
 	SourceSpan *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
-	Type       *CoreImpEnvTag     `json:"type,omitempty"`
+	Type       *CoreImpEnvTagType `json:"type,omitempty"`
 	Comments   []*CoreImpComment  `json:"comments,omitempty"`
 	Meta       struct {
 		MetaType   string   `json:"metaType,omitempty"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
@@ -50,12 +66,24 @@ type CoreImpDeclAnn struct {
 	} `json:"meta,omitempty"`
 }
 
+func (me *CoreImpDeclAnn) prep() {
+	if me.Type != nil {
+		me.Type.prep()
+	}
+}
+
 type CoreImpDeclExpr struct {
 	Ann        *CoreImpDeclAnn `json:"annotation,omitempty"`
 	ExprTag    string          `json:"type,omitempty"`            // Var or Literal or Abs or App or Let or Constructor (less likely: or Accessor or ObjectUpdate or Case)
 	CtorName   string          `json:"constructorName,omitempty"` // if ExprTag=Constructor
 	CtorType   string          `json:"typeName,omitempty"`        // if ExprTag=Constructor
 	CtorFields []string        `json:"fieldNames,omitempty"`      // if ExprTag=Constructor
+}
+
+func (me *CoreImpDeclExpr) prep() {
+	if me.Ann != nil {
+		me.Ann.prep()
+	}
 }
 
 type CoreImpSourceSpan struct {

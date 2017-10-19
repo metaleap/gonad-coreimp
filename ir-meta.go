@@ -360,6 +360,7 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 }
 
 func (me *GonadIrMeta) PopulateFromCoreImp() {
+	me.mod.coreimp.prep()
 	for _, imp := range me.mod.coreimp.Imps {
 		if impname := strings.Join(imp, "."); impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
 			me.imports = append(me.imports, FindModuleByQName(impname))
