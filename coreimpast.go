@@ -21,6 +21,7 @@ type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO ke
 	Imps  [][]string     `json:"imports,omitempty"`
 	Body  CoreImpAsts    `json:"body,omitempty"`
 	Decls []*CoreImpDecl `json:"declAnns,omitempty"`
+	Env   interface{}    `json:"env,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
@@ -44,17 +45,17 @@ type CoreImpDeclAnn struct {
 	Comments   []*CoreImpComment  `json:"comments,omitempty"`
 	Meta       struct {
 		MetaType   string   `json:"metaType,omitempty"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
-		CtorType   string   `json:"constructorType,omitempty"` // only if IsConstructor above: SumType or ProductType
-		CtorIdents []string `json:"identifiers,omitempty"`     // only if IsConstructor above
+		CtorType   string   `json:"constructorType,omitempty"` // if MetaType=IsConstructor: SumType or ProductType
+		CtorIdents []string `json:"identifiers,omitempty"`     // if MetaType=IsConstructor
 	} `json:"meta,omitempty"`
 }
 
 type CoreImpDeclExpr struct {
 	Ann        *CoreImpDeclAnn `json:"annotation,omitempty"`
-	ExprTag    string          `json:"type,omitempty"`
-	CtorName   string          `json:"constructorName,omitempty"`
-	CtorType   string          `json:"typeName,omitempty"`
-	CtorFields []string        `json:"fieldNames,omitempty"`
+	ExprTag    string          `json:"type,omitempty"`            // Var or Literal or Abs or App or Let or Constructor (less likely: or Accessor or ObjectUpdate or Case)
+	CtorName   string          `json:"constructorName,omitempty"` // if ExprTag=Constructor
+	CtorType   string          `json:"typeName,omitempty"`        // if ExprTag=Constructor
+	CtorFields []string        `json:"fieldNames,omitempty"`      // if ExprTag=Constructor
 }
 
 type CoreImpSourceSpan struct {
