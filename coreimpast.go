@@ -11,16 +11,16 @@ var (
 	strunprimer = strings.NewReplacer("$prime", "'")
 )
 
-type CoreImp struct { // saving some cycles, we comment-out what isn't used for now
-	BuiltWith string `json:"builtWith,omitempty"`
-	// ModuleName string            `json:"moduleName,omitempty"`
-	// ModulePath string            `json:"modulePath,omitempty"`
-	// Comments   []*CoreImpComment `json:"comments,omitempty"`
-	// Exports    []string          `json:"exports,omitempty"`
-	Foreign []string    `json:"foreign,omitempty"`
-	Imports []string    `json:"imports,omitempty"`
-	Body    CoreImpAsts `json:"body,omitempty"`
-	DeclAnns
+type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO keep these around as comments:
+	// BuiltWith  string                       `json:"builtWith,omitempty"`
+	// ModuleName string                       `json:"moduleName,omitempty"`
+	// ModulePath string                       `json:"modulePath,omitempty"`
+	// Comments   []*CoreImpComment            `json:"comments,omitempty"`
+	// Exports    []string                     `json:"exports,omitempty"`
+	// Foreign    []string                     `json:"foreign,omitempty"`
+	Imps  [][]string     `json:"imports,omitempty"`
+	Body  CoreImpAsts    `json:"body,omitempty"`
+	Decls []*CoreImpDecl `json:"declAnns,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
@@ -31,7 +31,30 @@ type CoreImpComment struct {
 	BlockComment string `json:",omitempty"`
 }
 
+type CoreImpDecl struct {
+	BindType string           `json:"bindType,omitempty"`
+	Ident    string           `json:"identifier,omitempty"`
+	Ann      *CoreImpDeclAnn  `json:"annotation,omitempty"`
+	Expr     *CoreImpDeclExpr `json:"expression,omitempty"`
+}
+
 type CoreImpDeclAnn struct {
+	SourceSpan *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
+	Type       *TaggedContents    `json:"type,omitempty"`
+	Comments   []*CoreImpComment  `json:"comments,omitempty"`
+	Meta       struct {
+		MetaType   string   `json:"metaType,omitempty"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
+		CtorType   string   `json:"constructorType,omitempty"` // only if IsConstructor above: SumType or ProductType
+		CtorIdents []string `json:"identifiers,omitempty"`     // only if IsConstructor above
+	} `json:"meta,omitempty"`
+}
+
+type CoreImpDeclExpr struct {
+	Ann        *CoreImpDeclAnn `json:"annotation,omitempty"`
+	ExprTag    string          `json:"type,omitempty"`
+	CtorName   string          `json:"constructorName,omitempty"`
+	CtorType   string          `json:"typeName,omitempty"`
+	CtorFields []string        `json:"fieldNames,omitempty"`
 }
 
 type CoreImpSourceSpan struct {
