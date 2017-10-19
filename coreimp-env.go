@@ -238,14 +238,32 @@ func (me *CoreImpEnvTagKind) prep() {
 type CoreImpEnvTagType struct {
 	coreImpEnvTag
 
-	typeVar string
+	unknown struct {
+		ok                  bool
+		unificationVariable int
+	}
+	typeVar struct {
+		ok   bool
+		name string
+	}
+	typeLevelString struct {
+		ok       bool
+		wildcard string
+	}
 }
 
 func (me *CoreImpEnvTagType) prep() {
 	if me != nil {
 		switch me.Tag {
+		case "TUnknown":
+			me.unknown.ok = true
+			me.unknown.unificationVariable = me.Contents.(int)
 		case "TypeVar":
-			me.typeVar = me.Contents.(string)
+			me.typeVar.ok = true
+			me.typeVar.name = me.Contents.(string)
+		case "TypeLevelString":
+			me.typeLevelString.ok = true
+			me.typeLevelString.wildcard = me.Contents.(string)
 		default:
 			println("TYPE:\t" + me.Tag)
 		}
