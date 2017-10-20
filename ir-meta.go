@@ -41,7 +41,7 @@ reprocess/reinterpret the original raw source coreimp.
 
 type GonadIrMeta struct {
 	Imports           GIrMPkgRefs          `json:",omitempty"`
-	ExtTypeAliases    []*GIrMNamedTypeRef  `json:",omitempty"`
+	EnvTypeSyns       []*GIrMNamedTypeRef  `json:",omitempty"`
 	ExtTypeClasses    []*GIrMTypeClass     `json:",omitempty"`
 	ExtTypeClassInsts []*GIrMTypeClassInst `json:",omitempty"`
 	ExtTypeDataDecls  []*GIrMTypeDataDecl  `json:",omitempty"`
@@ -224,6 +224,55 @@ func qNameFromExt(subArrAt0andStrAt1 []interface{}) (qname string) {
 	return
 }
 
+func (me *GonadIrMeta) newTypeRefFromEnvTag(tc *CoreImpEnvTagType) (tref *GIrMTypeRef) {
+	tref = &GIrMTypeRef{}
+	// switch tc.Tag {
+	// case "TypeConstructor":
+	// 	tref.TypeConstructor = qNameFromExt(tc.Contents.([]interface{}))
+	// case "TypeVar":
+	// 	tref.TypeVar = tc.Contents.(string)
+	// case "TUnknown":
+	// 	tref.TUnknown = tc.Contents.(int)
+	// case "REmpty":
+	// 	tref.REmpty = true
+	// case "RCons":
+	// 	disc := tc.Contents.([]interface{})
+	// 	tcdis, tcsub := disc[1].(map[string]interface{}), disc[2].(map[string]interface{})
+	// 	tref.RCons = &GIrMTypeRefRow{
+	// 		Label: disc[0].(string), Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
+	// case "ForAll":
+	// 	disc := tc.Contents.([]interface{})
+	// 	tcdis := disc[1].(map[string]interface{})
+	// 	tref.ForAll = &GIrMTypeRefExist{Name: disc[0].(string), Ref: me.newTypeRefFromExtTc(newTaggedContents(tcdis))}
+	// 	if len(disc) > 2 && disc[2] != nil {
+	// 		if i, ok := disc[2].(int); ok {
+	// 			tref.ForAll.SkolemScope = &i
+	// 		}
+	// 	}
+	// case "Skolem":
+	// 	disc := tc.Contents.([]interface{})
+	// 	tref.Skolem = &GIrMTypeRefSkolem{
+	// 		Name: disc[0].(string), Value: disc[1].(int), Scope: disc[2].(int)}
+	// case "TypeApp":
+	// 	disc := tc.Contents.([]interface{})
+	// 	tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
+	// 	tref.TypeApp = &GIrMTypeRefAppl{
+	// 		Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
+	// case "ConstrainedType":
+	// 	disc := tc.Contents.([]interface{})
+	// 	tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
+	// 	tref.ConstrainedType = &GIrMTypeRefConstr{
+	// 		Data: tcdis["constraintData"], Ref: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
+	// 	for _, tca := range tcdis["constraintArgs"].([]interface{}) {
+	// 		tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromExtTc(newTaggedContents(tca.(map[string]interface{}))))
+	// 	}
+	// 	tref.ConstrainedType.Class = qNameFromExt(tcdis["constraintClass"].([]interface{}))
+	// default:
+	// 	fmt.Printf("\n%s?!\n\t%v\n", tc.Tag, tc.Contents)
+	// }
+	return
+}
+
 func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef) {
 	tref = &GIrMTypeRef{}
 	switch tc.Tag {
@@ -321,14 +370,14 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 			} else if s_edTypeDeclarationKind, ok := d.EDType.DeclKind.(string); ok {
 				switch s_edTypeDeclarationKind {
 				case "TypeSynonym":
-				//	type-aliases handled separately in populateExtTypeAliases already, nothing to do here
+				//	type-aliases handled separately in populateEnvTypeSyns already, nothing to do here
 				case "ExternData":
 					if ufs.FileExists(me.mod.srcFilePath[:len(me.mod.srcFilePath)-len(".purs")] + ".go") {
 						//	type will be present to go build at compilation time --- the typical case
 					} else {
 						//	special case for official purescript core libs: alias to gonad's default ffi package
 						ta := &GIrMNamedTypeRef{Name: d.EDType.Name, Ref: &GIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + d.EDType.Name}}
-						me.ExtTypeAliases = append(me.ExtTypeAliases, ta)
+						me.EnvTypeSyns = append(me.EnvTypeSyns, ta)
 					}
 				default:
 					panic(me.mod.extFilePath + ": unrecognized edTypeDeclarationKind value of '" + s_edTypeDeclarationKind + "', please report!")
@@ -338,12 +387,13 @@ func (me *GonadIrMeta) populateExtTypeDataDecls() {
 	}
 }
 
-func (me *GonadIrMeta) populateExtTypeAliases() {
-	for _, d := range me.mod.ext.EfDecls {
-		if d.EDTypeSynonym != nil && d.EDTypeSynonym.Type != nil && len(d.EDTypeSynonym.Name) > 0 && me.mod.ext.findTypeClass(d.EDTypeSynonym.Name) == nil {
-			ta := &GIrMNamedTypeRef{Name: d.EDTypeSynonym.Name}
-			ta.Ref = me.newTypeRefFromExtTc(*d.EDTypeSynonym.Type)
-			me.ExtTypeAliases = append(me.ExtTypeAliases, ta)
+func (me *GonadIrMeta) populateEnvTypeSyns() {
+	me.EnvTypeSyns = make([]*GIrMNamedTypeRef, 0, len(me.mod.coreimp.DeclEnv.TypeSyns))
+	for tsname, tsdef := range me.mod.coreimp.DeclEnv.TypeSyns {
+		if _, istc := me.mod.coreimp.DeclEnv.Classes[tsname]; !istc {
+			ts := &GIrMNamedTypeRef{Name: tsname}
+			ts.Ref = me.newTypeRefFromEnvTag(tsdef.Type)
+			me.EnvTypeSyns = append(me.EnvTypeSyns, ts)
 		}
 	}
 }
@@ -394,7 +444,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() {
 			me.imports = append(me.imports, FindModuleByQName(impname))
 		}
 	}
-	me.populateExtTypeAliases()
+	me.populateEnvTypeSyns()
 	me.populateExtTypeClasses()
 	me.populateExtTypeDataDecls()
 	me.populateExtFuncsAndVals()

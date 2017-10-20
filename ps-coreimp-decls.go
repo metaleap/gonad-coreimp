@@ -304,6 +304,7 @@ func (me *CoreImpEnvTagType) prep() {
 	me.skolem, me.num = -1, -1
 	if me.isTUnknown() {
 		me.num = int(me.Contents.(float64))
+		panic(me.num)
 	} else if me.isTypeVar() {
 		me.text = me.Contents.(string)
 	} else if me.isForAll() {

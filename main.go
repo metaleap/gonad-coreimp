@@ -73,6 +73,7 @@ func reGenGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
 }
 
 func main() {
+	// runtime.SetGCPercent(-1) // turn off GC, we're a quickly-in-and-out-again program
 	starttime := time.Now()
 	// args partially match those of purs and/or pulp where there's overlap
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")

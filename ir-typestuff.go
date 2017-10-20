@@ -221,10 +221,10 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 	mdict := map[string][]string{}
 	var tdict map[string][]string
 
-	for _, ta := range me.ExtTypeAliases {
+	for _, ts := range me.EnvTypeSyns {
 		tdict = map[string][]string{}
-		gtd := &GIrANamedTypeRef{NamePs: ta.Name, NameGo: ta.Name, Export: true}
-		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ta.Ref))
+		gtd := &GIrANamedTypeRef{NamePs: ts.Name, NameGo: ts.Name, Export: true}
+		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 
