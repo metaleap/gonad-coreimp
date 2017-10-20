@@ -22,6 +22,7 @@ var (
 		NoPrefix      bool
 		Comments      bool
 		ForceRegenAll bool
+		DumpAst       bool
 		GoDirSrcPath  string
 		GoNamespace   string
 	}
@@ -81,6 +82,7 @@ func main() {
 	pflag.BoolVar(&Flag.NoPrefix, "no-prefix", false, "Do not include comment header")
 	pflag.BoolVar(&Flag.Comments, "comments", false, "Include comments in the generated code")
 	pflag.BoolVar(&Flag.ForceRegenAll, "force", false, "Force re-generating all applicable (coreimp dumps present) packages")
+	pflag.BoolVar(&Flag.DumpAst, "dump-ast", false, "Dumps a gonad.ast.json next to gonad.json")
 	for _, gopath := range ugo.GoPaths() {
 		if Flag.GoDirSrcPath = filepath.Join(gopath, "src"); ufs.DirExists(Flag.GoDirSrcPath) {
 			break

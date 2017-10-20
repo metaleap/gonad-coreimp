@@ -97,14 +97,13 @@ func (me *PsBowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, go
 	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
 		modinfo.pName = dot2underscore.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
-		modinfo.girMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonadmeta.json")
-		modinfo.girAstFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonadast.json")
+		modinfo.girMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.girAstFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
+		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
 			modinfo.reGenGIr = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
-				modinfo.girMetaFilePath, modinfo.girAstFilePath, modinfo.gopkgfilepath)
+				modinfo.girMetaFilePath, modinfo.gopkgfilepath)
 		} else {
 			modinfo.reGenGIr = true
 		}
@@ -112,21 +111,19 @@ func (me *PsBowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, go
 	}
 }
 
-func (me *PsBowerProject) ForAll(always bool, op func(*sync.WaitGroup, *ModuleInfo)) {
+func (me *PsBowerProject) ForAll(op func(*sync.WaitGroup, *ModuleInfo)) {
 	var wg sync.WaitGroup
 	for _, modinfo := range me.Modules {
-		if always || modinfo.reGenGIr || Flag.ForceRegenAll {
-			wg.Add(1)
-			go op(&wg, modinfo)
-		}
+		wg.Add(1)
+		go op(&wg, modinfo)
 	}
 	wg.Wait()
 }
 
 func (me *PsBowerProject) EnsureModPkgGIrMetas() {
-	me.ForAll(true, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
-		var err error
+	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
+		var err error
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
 			err = modinfo.reGenPkgGIrMeta()
 		} else if err = modinfo.loadPkgGIrMeta(); err != nil {
@@ -141,40 +138,44 @@ func (me *PsBowerProject) EnsureModPkgGIrMetas() {
 }
 
 func (me *PsBowerProject) PrepModPkgGIrAsts() {
-	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
-		if err := modinfo.prepGIrAst(); err != nil {
-			panic(err)
+		if modinfo.reGenGIr || Flag.ForceRegenAll {
+			if err := modinfo.prepGIrAst(); err != nil {
+				panic(err)
+			}
 		}
 	})
 }
 
 func (me *PsBowerProject) ReGenModPkgGIrAsts() {
-	me.ForAll(false, func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
 		defer wg.Done()
-		if err := modinfo.reGenPkgGIrAst(); err != nil {
-			panic(err)
+		if modinfo.reGenGIr || Flag.ForceRegenAll {
+			if err := modinfo.reGenPkgGIrAst(); err != nil {
+				panic(err)
+			}
 		}
 	})
 }
 
 func (me *PsBowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
-	var buf bytes.Buffer
 	isfirst := !isagain
-	write := func(m *ModuleInfo) {
+	me.ForAll(func(wg *sync.WaitGroup, m *ModuleInfo) {
+		defer wg.Done()
 		shouldwrite := (isagain && m.girMeta.save) ||
-			(isfirst && (m.reGenGIr || Flag.ForceRegenAll || m.girMeta.save))
+			(isfirst && (m.reGenGIr || m.girMeta.save || Flag.ForceRegenAll))
 		if shouldwrite {
+			var buf bytes.Buffer
 			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
 				if err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes()); err == nil {
 					m.girMeta.save = false
 				}
-				buf.Reset()
+			}
+			if err != nil {
+				panic(err)
 			}
 		}
-	}
-	for _, m := range me.Modules {
-		write(m) // can `go` parallelize later here if beneficial
-	}
+	})
 	return
 }
