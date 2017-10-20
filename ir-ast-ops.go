@@ -61,7 +61,7 @@ func (me *GonadIrAst) prepAddNewExtraTypes() {
 		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]*GIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
 	}
 	//	also turn type-class instances into 0-byte structs providing the corresponding interface-implementing method(s)
-	for _, tci := range me.girM.ExtTypeClassInsts {
+	for _, tci := range me.girM.EnvTypeClassInsts {
 		if gid := findGoTypeByPsQName(tci.ClassName); gid == nil {
 			panic(me.mod.srcFilePath + ": type-class " + tci.ClassName + " not found for instance " + tci.Name)
 		} else {

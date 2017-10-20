@@ -225,7 +225,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 
-	for _, tc := range me.ExtTypeClasses {
+	for _, tc := range me.EnvTypeClasses {
 		tdict = map[string][]string{}
 		gif := &GIrATypeRefInterface{xtc: tc}
 		for _, tcc := range tc.Constraints {
@@ -264,7 +264,7 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
 
-	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.ExtTypeDataDecls, mdict, true)...)
+	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.EnvTypeDataDecls, mdict, true)...)
 }
 
 func sanitizeSymbolForGo(name string, upper bool) string {
@@ -292,10 +292,10 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 	return sanitizer.Replace(name)
 }
 
-func (me *GonadIrMeta) toGIrADataTypeDefs(exttypedatadecls []*GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
+func (me *GonadIrMeta) toGIrADataTypeDefs(typedatadecls []*GIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds GIrANamedTypeRefs) {
 	const USE_LEGACY_METHODS_APPROACH = false
 	var tdict map[string][]string
-	for _, td := range exttypedatadecls {
+	for _, td := range typedatadecls {
 		tdict = map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
@@ -428,16 +428,7 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
 			return funtype
 		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
-			if len(tr.TypeApp.Right.TypeVar) > 0 {
-				//	`Maybe a`. for now:
-				return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
-			} else if len(tr.TypeApp.Right.TypeConstructor) > 0 {
-				//	`Maybe Int`. for now
-				return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
-			} else {
-				//	I'll deal with it when it occurs
-				panic(me.mod.srcFilePath + ": type-application of " + tr.TypeApp.Left.TypeConstructor + " to unrecognized right-hand side, please report! ")
-			}
+			return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
 		} else {
 			//	Nested stuff ie. (Either foo) bar
 		}

@@ -66,8 +66,11 @@ type CoreImpEnvClass struct {
 }
 
 func (me *CoreImpEnvClass) prep() {
-	for _, tca := range me.Args {
-		tca.prep()
+	for tcan, tca := range me.Args {
+		if tca != nil {
+			panic(coreImpEnvErr("tcArgs", tcan+"!=nil"))
+			tca.prep()
+		}
 	}
 	for _, tcm := range me.Members {
 		tcm.prep()
@@ -166,6 +169,12 @@ type CoreImpEnvTypeDecl struct {
 }
 
 func (me *CoreImpEnvTypeDecl) prep() {
+	if me.LocalTypeVariable {
+		panic(coreImpEnvErr("tDecl", "LocalTypeVariable"))
+	}
+	if me.ScopedTypeVar {
+		panic(coreImpEnvErr("tDecl", "ScopedTypeVar"))
+	}
 	if me.DataType != nil {
 		me.DataType.prep()
 	}
@@ -219,7 +228,14 @@ func (_ *coreImpEnvTag) ident2qname(identtuple []interface{}) (qname string) {
 	for _, m := range identtuple[0].([]interface{}) {
 		qname += (m.(string) + ".")
 	}
-	qname += identtuple[1].(string)
+	switch x := identtuple[1].(type) {
+	case map[string]string:
+		qname += x["Ident"]
+	case map[string]interface{}:
+		qname += x["Ident"].(string)
+	default:
+		qname += x.(string)
+	}
 	return
 }
 

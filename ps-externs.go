@@ -1,25 +1,22 @@
 package main
 
-type TaggedContents struct {
-	Tag      string      `json:"tag,omitempty"`
-	Contents interface{} `json:"contents,omitempty"`
-}
+/*
+We ignore most of the stuff in externs.json now, as it's
+provided in coreimp's DeclEnv for both exports & non-exports.
 
-func newTaggedContents(m map[string]interface{}) (tc TaggedContents) {
-	tc.Tag = m["tag"].(string)
-	tc.Contents = m["contents"]
-	return
-}
+BUT we make use of EfExports still, as coreimp's `exports`
+don't capture type synonyms.
+*/
 
 type PsExt struct {
 	modinfo *ModuleInfo
 
-	EfSourceSpan *CoreImpSourceSpan `json:"efSourceSpan,omitempty"`
-	EfVersion    string             `json:"efVersion,omitempty"`
-	EfModuleName []string           `json:"efModuleName,omitempty"`
-	EfExports    []*PsExtRefs       `json:"efExports,omitempty"`
-	EfImports    []*PsExtImport     `json:"efImports,omitempty"`
-	EfDecls      []*PsExtDecl       `json:"efDeclarations,omitempty"`
+	// EfSourceSpan *CoreImpSourceSpan `json:"efSourceSpan,omitempty"`
+	// EfVersion    string             `json:"efVersion,omitempty"`
+	// EfModuleName []string           `json:"efModuleName,omitempty"`
+	// EfDecls      []*PsExtDecl       `json:"efDeclarations,omitempty"`
+	// EfImports    []*PsExtImport     `json:"efImports,omitempty"`
+	EfExports []*PsExtRefs `json:"efExports,omitempty"`
 }
 
 type PsExtImport struct {
@@ -57,35 +54,35 @@ type PsExtIdent struct {
 }
 
 type PsExtVal struct {
-	Name PsExtIdent     `json:"edValueName"`
-	Type TaggedContents `json:"edValueType"`
+	Name PsExtIdent    `json:"edValueName"`
+	Type coreImpEnvTag `json:"edValueType"`
 }
 
 type PsExtType struct {
-	Name     string         `json:"edTypeName,omitempty"`
-	Kind     TaggedContents `json:"edTypeKind,omitempty"`
-	DeclKind interface{}    `json:"edTypeDeclarationKind,omitempty"`
+	Name     string        `json:"edTypeName,omitempty"`
+	Kind     coreImpEnvTag `json:"edTypeKind,omitempty"`
+	DeclKind interface{}   `json:"edTypeDeclarationKind,omitempty"`
 }
 
 type PsExtTypeAlias struct {
-	Name      string          `json:"edTypeSynonymName,omitempty"`
-	Arguments []interface{}   `json:"edTypeSynonymArguments,omitempty"`
-	Type      *TaggedContents `json:"edTypeSynonymType,omitempty"`
+	Name      string         `json:"edTypeSynonymName,omitempty"`
+	Arguments []interface{}  `json:"edTypeSynonymArguments,omitempty"`
+	Type      *coreImpEnvTag `json:"edTypeSynonymType,omitempty"`
 }
 
 type PsExtConstr struct {
-	Class []interface{}    `json:"constraintClass,omitempty"`
-	Args  []TaggedContents `json:"constraintArgs,omitempty"`
-	Data  []interface{}    `json:"constraintData,omitempty"`
+	Class []interface{}   `json:"constraintClass,omitempty"`
+	Args  []coreImpEnvTag `json:"constraintArgs,omitempty"`
+	Data  []interface{}   `json:"constraintData,omitempty"`
 }
 
 type PsExtInst struct {
-	ClassName   []interface{}    `json:"edInstanceClassName,omitempty"`
-	Name        PsExtIdent       `json:"edInstanceName,omitempty"`
-	Types       []TaggedContents `json:"edInstanceTypes,omitempty"`
-	Constraints []PsExtConstr    `json:"edInstanceConstraints,omitempty"`
-	Chain       [][]interface{}  `json:"edInstanceChain,omitempty"`
-	ChainIndex  int              `json:"edInstanceChainIndex,omitempty"`
+	ClassName   []interface{}   `json:"edInstanceClassName,omitempty"`
+	Name        PsExtIdent      `json:"edInstanceName,omitempty"`
+	Types       []coreImpEnvTag `json:"edInstanceTypes,omitempty"`
+	Constraints []PsExtConstr   `json:"edInstanceConstraints,omitempty"`
+	Chain       [][]interface{} `json:"edInstanceChain,omitempty"`
+	ChainIndex  int             `json:"edInstanceChainIndex,omitempty"`
 }
 
 type PsExtTypeClass struct {
@@ -97,14 +94,4 @@ type PsExtTypeClass struct {
 	} `json:"edFunctionalDependencies,omitempty"`
 	Members     [][]interface{} `json:"edClassMembers,omitempty"`
 	Constraints []PsExtConstr   `json:"edClassConstraints,omitempty"`
-}
-
-//
-func (me *PsExt) findTypeClass(name string) *PsExtTypeClass {
-	for _, decl := range me.EfDecls {
-		if decl.EDClass != nil && decl.EDClass.Name == name {
-			return decl.EDClass
-		}
-	}
-	return nil
 }
