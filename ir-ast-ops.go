@@ -12,7 +12,7 @@ and "post" ops are called from FinalizePostPrep.
 */
 
 func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrAVar) {
-	//	after we have also created additional structs/interfaces in prepAddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum-value")
+	//	add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []gIrA{}
 	nuglobalsmap = map[string]*gIrAVar{}
 	for _, gtd := range me.girM.GoTypeDefs {
@@ -31,36 +31,8 @@ func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrAV
 }
 
 func (me *gonadIrAst) prepAddNewExtraTypes() {
-	//	detect unexported data-type constructors and add the missing structs implementing a newly added single unexported ADT umbrella interface type
-	newxtypedatadecl := &gIrMTypeDataDecl{Name: "ª" + me.mod.lName}
 	var newextratypes gIrANamedTypeRefs
-	var av *gIrAVar
-	var fn *gIrAFunc
-	for i := 0; i < len(me.Body); i++ {
-		av, _ = me.Body[i].(*gIrAVar)
-		if av != nil && av.WasTypeFunc {
-			if fn, _ = av.VarVal.(*gIrAFunc); fn == nil {
-				fn = av.VarVal.(*gIrACall).Callee.(*gIrAFunc).FuncImpl.Body[0].(*gIrAFunc)
-			}
-			gtd := me.girM.goTypeDefByPsName(av.NamePs)
-			if gtd != nil && gtd.RefInterface != nil {
-				continue
-			}
-			if gtd == nil {
-				nuctor := &gIrMTypeDataCtor{Name: av.NamePs}
-				for i := 0; i < len(fn.RefFunc.Args); i++ {
-					nuctor.Args = append(nuctor.Args, &gIrMTypeRef{})
-				}
-				newxtypedatadecl.Ctors = append(newxtypedatadecl.Ctors, nuctor)
-			}
-			me.Body = append(me.Body[:i], me.Body[i+1:]...)
-			i--
-		}
-	}
-	if len(newxtypedatadecl.Ctors) > 0 {
-		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]*gIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{})...)
-	}
-	//	also turn type-class instances into 0-byte structs providing the corresponding interface-implementing method(s)
+	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.girM.EnvTypeClassInsts {
 		if gid := findGoTypeByPsQName(tci.ClassName); gid == nil {
 			panic(me.mod.srcFilePath + ": type-class " + tci.ClassName + " not found for instance " + tci.Name)
@@ -89,7 +61,7 @@ func (me *gonadIrAst) prepFixupExportedNames() {
 		if gntr != nil {
 			for _, gvd := range me.girM.GoValDecls {
 				if gvd.NamePs == gntr.NamePs {
-					gntr.Export = true
+					gntr.Export = gvd.Export
 					gntr.NameGo = gvd.NameGo
 					break
 				}

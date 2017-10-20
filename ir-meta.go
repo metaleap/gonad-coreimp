@@ -382,22 +382,19 @@ func (me *gonadIrMeta) populateFromLoaded() error {
 }
 
 func (me *gonadIrMeta) populateGoValDecls() {
-	mdict, m := map[string][]string{}, map[string]bool{}
+	mdict := map[string][]string{}
 	var tdict map[string][]string
 
 	for _, evd := range me.EnvValDecls {
 		tdict = map[string][]string{}
-		gvd := &gIrANamedTypeRef{Export: true}
+		gvd := &gIrANamedTypeRef{Export: me.hasExport(evd.Name)}
 		gvd.setBothNamesFromPsName(evd.Name)
-		for true {
-			_, funcexists := m[gvd.NameGo]
-			if gtd := me.goTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
-				gvd.NameGo += "ˇ"
-			} else {
-				break
-			}
+		for gtd := me.goTypeDefByGoName(gvd.NameGo); gtd != nil; gtd = me.goTypeDefByGoName(gvd.NameGo) {
+			gvd.NameGo += "º"
 		}
-		m[gvd.NameGo] = true
+		for gvd2 := me.goValDeclByGoName(gvd.NameGo); gvd2 != nil; gvd2 = me.goValDeclByGoName(gvd.NameGo) {
+			gvd.NameGo += "ª"
+		}
 		gvd.setRefFrom(me.toGIrATypeRef(mdict, tdict, evd.Ref))
 		me.GoValDecls = append(me.GoValDecls, gvd)
 	}

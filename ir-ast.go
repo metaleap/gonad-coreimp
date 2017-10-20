@@ -246,7 +246,6 @@ type gIrAPkgSym struct {
 }
 
 func (me *gonadIrAst) finalizePostPrep() (err error) {
-	return // temporarily
 	//	various fix-ups
 	me.walk(func(ast gIrA) gIrA {
 		if ast != nil {
@@ -270,7 +269,6 @@ func (me *gonadIrAst) finalizePostPrep() (err error) {
 }
 
 func (me *gonadIrAst) prepFromCoreImp() (err error) {
-	return // temporarily
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
@@ -298,13 +296,9 @@ func (me *gonadIrAst) writeAsJsonTo(w io.Writer) error {
 func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	var buf = &bytes.Buffer{}
 
+	sort.Sort(me.girM.GoTypeDefs)
 	for _, gtd := range me.girM.GoTypeDefs {
 		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRefFromPsQName)
-		if len(gtd.EnumConstNames) > 0 {
-			enumtypename := toGIrAEnumTypeName(gtd.NamePs)
-			codeEmitTypeAlias(buf, enumtypename, "int")
-			codeEmitEnumConsts(buf, gtd.EnumConstNames, enumtypename)
-		}
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
 

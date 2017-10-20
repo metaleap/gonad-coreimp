@@ -25,6 +25,12 @@ var (
 
 type gIrANamedTypeRefs []*gIrANamedTypeRef
 
+func (me gIrANamedTypeRefs) Len() int { return len(me) }
+func (me gIrANamedTypeRefs) Less(i, j int) bool {
+	return strings.ToLower(me[i].NameGo) < strings.ToLower(me[j].NameGo)
+}
+func (me gIrANamedTypeRefs) Swap(i, j int) { me[i], me[j] = me[j], me[i] }
+
 func (me gIrANamedTypeRefs) byPsName(psname string) *gIrANamedTypeRef {
 	for _, gntr := range me {
 		if gntr.NamePs == psname {
@@ -59,10 +65,9 @@ type gIrANamedTypeRef struct {
 	RefArray     *gIrATypeRefArray     `json:",omitempty"`
 	RefPtr       *gIrATypeRefPtr       `json:",omitempty"`
 
-	EnumConstNames []string          `json:",omitempty"`
-	Methods        gIrANamedTypeRefs `json:",omitempty"`
-	Export         bool              `json:",omitempty"`
-	WasTypeFunc    bool              `json:",omitempty"`
+	Methods     gIrANamedTypeRefs `json:",omitempty"`
+	Export      bool              `json:",omitempty"`
+	WasTypeFunc bool              `json:",omitempty"`
 
 	method gIrATypeMethod
 	ctor   *gIrMTypeDataCtor
@@ -188,29 +193,6 @@ type gIrATypeRefStruct struct {
 
 func (me *gIrATypeRefStruct) eq(cmp *gIrATypeRefStruct) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.eq(cmp.Fields))
-}
-
-func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname string) {
-	if ifaces4tvar := tdict[tvar]; !uslice.StrHas(ifaces4tvar, ifacetname) {
-		ifaces4tvar = append(ifaces4tvar, ifacetname)
-		tdict[tvar] = ifaces4tvar
-	}
-}
-
-func findGoTypeByPsQName(qname string) *gIrANamedTypeRef {
-	var pname, tname string
-	i := strings.LastIndex(qname, ".")
-	if tname = qname[i+1:]; i > 0 {
-		pname = qname[:i]
-		if mod := findModuleByQName(pname); mod == nil {
-			panic(fmt.Errorf("Unknown module qname %s", pname))
-		} else {
-			return mod.girMeta.goTypeDefByPsName(tname)
-		}
-	} else {
-		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")
-	}
-	return nil
 }
 
 func (me *gonadIrMeta) populateGoTypeDefs() {
@@ -365,6 +347,29 @@ func (me *gonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 	return nil
 }
 
+func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname string) {
+	if ifaces4tvar := tdict[tvar]; !uslice.StrHas(ifaces4tvar, ifacetname) {
+		ifaces4tvar = append(ifaces4tvar, ifacetname)
+		tdict[tvar] = ifaces4tvar
+	}
+}
+
+func findGoTypeByPsQName(qname string) *gIrANamedTypeRef {
+	var pname, tname string
+	i := strings.LastIndex(qname, ".")
+	if tname = qname[i+1:]; i > 0 {
+		pname = qname[:i]
+		if mod := findModuleByQName(pname); mod == nil {
+			panic(fmt.Errorf("Unknown module qname %s", pname))
+		} else {
+			return mod.girMeta.goTypeDefByPsName(tname)
+		}
+	} else {
+		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")
+	}
+	return nil
+}
+
 func sanitizeSymbolForGo(name string, upper bool) string {
 	if len(name) == 0 {
 		return name
@@ -388,14 +393,6 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		}
 	}
 	return strReplSanitizer.Replace(name)
-}
-
-func toGIrAEnumConstName(dataname string, ctorname string) string {
-	return "tag_" + dataname + "_" + ctorname
-}
-
-func toGIrAEnumTypeName(dataname string) string {
-	return "tags_" + dataname
 }
 
 func typeNameWithPkgName(pkgname string, typename string) (fullname string) {

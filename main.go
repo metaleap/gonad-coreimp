@@ -152,9 +152,7 @@ func main() {
 						}
 						if wg.Wait(); err == nil {
 							dur := time.Now().Sub(starttime)
-							if fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur); numregen > 0 {
-								fmt.Printf("\t(avg. %v per re-generated module)\n", dur/time.Duration(numregen))
-							}
+							fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
 							err = writeTestMainGo(allpkgimppaths)
 						}
 					}
