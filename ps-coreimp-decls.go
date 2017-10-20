@@ -277,35 +277,32 @@ type CoreImpEnvTagType struct {
 	constr *CoreImpEnvConstr
 }
 
-func (me *CoreImpEnvTagType) isTUnknown() bool            { return me.Tag == "TUnknown" }
-func (me *CoreImpEnvTagType) isTypeVar() bool             { return me.Tag == "TypeVar" }
-func (me *CoreImpEnvTagType) isTypeLevelString() bool     { return me.Tag == "TypeLevelString" }
-func (me *CoreImpEnvTagType) isTypeWildcard() bool        { return me.Tag == "TypeWildcard" }
-func (me *CoreImpEnvTagType) isTypeConstructor() bool     { return me.Tag == "TypeConstructor" }
-func (me *CoreImpEnvTagType) isTypeOp() bool              { return me.Tag == "TypeOp" }
-func (me *CoreImpEnvTagType) isTypeApp() bool             { return me.Tag == "TypeApp" }
-func (me *CoreImpEnvTagType) isForAll() bool              { return me.Tag == "ForAll" }
-func (me *CoreImpEnvTagType) isConstrainedType() bool     { return me.Tag == "ConstrainedType" }
-func (me *CoreImpEnvTagType) isSkolem() bool              { return me.Tag == "Skolem" }
-func (me *CoreImpEnvTagType) isREmpty() bool              { return me.Tag == "REmpty" }
-func (me *CoreImpEnvTagType) isRCons() bool               { return me.Tag == "RCons" }
-func (me *CoreImpEnvTagType) isProxyType() bool           { return me.Tag == "ProxyType" }
-func (me *CoreImpEnvTagType) isKindedType() bool          { return me.Tag == "KindedType" }
-func (me *CoreImpEnvTagType) isPrettyPrintFunction() bool { return me.Tag == "PrettyPrintFunction" }
-func (me *CoreImpEnvTagType) isPrettyPrintObject() bool   { return me.Tag == "PrettyPrintObject" }
-func (me *CoreImpEnvTagType) isPrettyPrintForAll() bool   { return me.Tag == "PrettyPrintForAll" }
-func (me *CoreImpEnvTagType) isBinaryNoParensType() bool  { return me.Tag == "BinaryNoParensType" }
-func (me *CoreImpEnvTagType) isParensInType() bool        { return me.Tag == "ParensInType" }
+// func (me *CoreImpEnvTagType) isTypeLevelString() bool     { return me.Tag == "TypeLevelString" }
+// func (me *CoreImpEnvTagType) isTypeWildcard() bool        { return me.Tag == "TypeWildcard" }
+// func (me *CoreImpEnvTagType) isTypeOp() bool              { return me.Tag == "TypeOp" }
+// func (me *CoreImpEnvTagType) isProxyType() bool           { return me.Tag == "ProxyType" }
+// func (me *CoreImpEnvTagType) isKindedType() bool          { return me.Tag == "KindedType" }
+// func (me *CoreImpEnvTagType) isPrettyPrintFunction() bool { return me.Tag == "PrettyPrintFunction" }
+// func (me *CoreImpEnvTagType) isPrettyPrintObject() bool   { return me.Tag == "PrettyPrintObject" }
+// func (me *CoreImpEnvTagType) isPrettyPrintForAll() bool   { return me.Tag == "PrettyPrintForAll" }
+// func (me *CoreImpEnvTagType) isBinaryNoParensType() bool  { return me.Tag == "BinaryNoParensType" }
+// func (me *CoreImpEnvTagType) isParensInType() bool        { return me.Tag == "ParensInType" }
+// func (me *CoreImpEnvTagType) isTUnknown() bool        { return me.Tag == "TUnknown" }
+func (me *CoreImpEnvTagType) isTypeVar() bool         { return me.Tag == "TypeVar" }
+func (me *CoreImpEnvTagType) isTypeConstructor() bool { return me.Tag == "TypeConstructor" }
+func (me *CoreImpEnvTagType) isSkolem() bool          { return me.Tag == "Skolem" }
+func (me *CoreImpEnvTagType) isREmpty() bool          { return me.Tag == "REmpty" }
+func (me *CoreImpEnvTagType) isRCons() bool           { return me.Tag == "RCons" }
+func (me *CoreImpEnvTagType) isTypeApp() bool         { return me.Tag == "TypeApp" }
+func (me *CoreImpEnvTagType) isForAll() bool          { return me.Tag == "ForAll" }
+func (me *CoreImpEnvTagType) isConstrainedType() bool { return me.Tag == "ConstrainedType" }
 func (me *CoreImpEnvTagType) new(tc map[string]interface{}) *CoreImpEnvTagType {
 	return &CoreImpEnvTagType{coreImpEnvTag: me.tagFrom(tc), num: -1, skolem: -1}
 }
 func (me *CoreImpEnvTagType) prep() {
 	//	no type assertions, arr-len checks or nil checks anywhere here: the panic signals us that the coreimp format has changed
 	me.skolem, me.num = -1, -1
-	if me.isTUnknown() {
-		me.num = int(me.Contents.(float64))
-		panic(me.num)
-	} else if me.isTypeVar() {
+	if me.isTypeVar() {
 		me.text = me.Contents.(string)
 	} else if me.isForAll() {
 		tuple := me.Contents.([]interface{})
@@ -346,8 +343,7 @@ func (me *CoreImpEnvTagType) prep() {
 		me.type0.prep()
 		me.type1 = me.new(tuple[2].(map[string]interface{}))
 		me.type1.prep()
-	} else if me.isREmpty() {
-		// nothing to do
+	} else if me.isREmpty() { // nothing to do
 	} else {
 		panic(coreImpEnvErr("tagged-type", me.Tag))
 	}

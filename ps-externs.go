@@ -44,12 +44,12 @@ type PsExtImportType struct {
 }
 
 type PsExtDecl struct {
-	EDClass       *PsExtTypeClass `json:",omitempty"`
-	EDType        *PsExtType      `json:",omitempty"`
-	EDTypeSynonym *PsExtTypeAlias `json:",omitempty"`
-	EDValue       *PsExtVal       `json:",omitempty"`
-	EDInstance    *PsExtInst      `json:",omitempty"`
-	// EDDataConstructor map[string]interface{} `json:",omitempty"`
+	EDClass           *PsExtTypeClass        `json:",omitempty"`
+	EDType            *PsExtType             `json:",omitempty"`
+	EDTypeSynonym     *PsExtTypeAlias        `json:",omitempty"`
+	EDValue           *PsExtVal              `json:",omitempty"`
+	EDInstance        *PsExtInst             `json:",omitempty"`
+	EDDataConstructor map[string]interface{} `json:",omitempty"`
 }
 
 type PsExtIdent struct {
@@ -99,6 +99,7 @@ type PsExtTypeClass struct {
 	Constraints []PsExtConstr   `json:"edClassConstraints,omitempty"`
 }
 
+//
 func (me *PsExt) findTypeClass(name string) *PsExtTypeClass {
 	for _, decl := range me.EfDecls {
 		if decl.EDClass != nil && decl.EDClass.Name == name {

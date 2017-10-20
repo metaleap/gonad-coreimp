@@ -40,6 +40,7 @@ reprocess/reinterpret the original raw source coreimp.
 */
 
 type GonadIrMeta struct {
+	Exports           []string             `json:",omitempty"`
 	Imports           GIrMPkgRefs          `json:",omitempty"`
 	EnvTypeSyns       []*GIrMNamedTypeRef  `json:",omitempty"`
 	ExtTypeClasses    []*GIrMTypeClass     `json:",omitempty"`
@@ -129,7 +130,6 @@ type GIrMTypeRef struct {
 	TypeConstructor string             `json:"tc,omitempty"`
 	TypeVar         string             `json:"tv,omitempty"`
 	REmpty          bool               `json:"re,omitempty"`
-	TUnknown        int                `json:"tu,omitempty"`
 	TypeApp         *GIrMTypeRefAppl   `json:"ta,omitempty"`
 	ConstrainedType *GIrMTypeRefConstr `json:"ct,omitempty"`
 	RCons           *GIrMTypeRefRow    `json:"rc,omitempty"`
@@ -140,7 +140,7 @@ type GIrMTypeRef struct {
 }
 
 func (me *GIrMTypeRef) Eq(cmp *GIrMTypeRef) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.TypeConstructor == cmp.TypeConstructor && me.TypeVar == cmp.TypeVar && me.REmpty == cmp.REmpty && me.TUnknown == cmp.TUnknown && me.TypeApp.Eq(cmp.TypeApp) && me.ConstrainedType.Eq(cmp.ConstrainedType) && me.RCons.Eq(cmp.RCons) && me.ForAll.Eq(cmp.ForAll) && me.Skolem.Eq(cmp.Skolem))
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.TypeConstructor == cmp.TypeConstructor && me.TypeVar == cmp.TypeVar && me.REmpty == cmp.REmpty && me.TypeApp.Eq(cmp.TypeApp) && me.ConstrainedType.Eq(cmp.ConstrainedType) && me.RCons.Eq(cmp.RCons) && me.ForAll.Eq(cmp.ForAll) && me.Skolem.Eq(cmp.Skolem))
 }
 
 func (me GIrMTypeRefs) Eq(cmp GIrMTypeRefs) bool {
@@ -176,13 +176,12 @@ func (me *GIrMTypeRefRow) Eq(cmp *GIrMTypeRefRow) bool {
 
 type GIrMTypeRefConstr struct {
 	Class string       `json:"cc,omitempty"`
-	Data  interface{}  `json:"cd,omitempty"` // when needed: Data = [[Text]] Bool
 	Args  GIrMTypeRefs `json:"ca,omitempty"`
 	Ref   *GIrMTypeRef `json:"cr,omitempty"`
 }
 
 func (me *GIrMTypeRefConstr) Eq(cmp *GIrMTypeRefConstr) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Data == cmp.Data && me.Ref.Eq(cmp.Ref) && me.Args.Eq(cmp.Args))
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Ref.Eq(cmp.Ref) && me.Args.Eq(cmp.Args))
 }
 
 type GIrMTypeRefExist struct {
@@ -226,50 +225,32 @@ func qNameFromExt(subArrAt0andStrAt1 []interface{}) (qname string) {
 
 func (me *GonadIrMeta) newTypeRefFromEnvTag(tc *CoreImpEnvTagType) (tref *GIrMTypeRef) {
 	tref = &GIrMTypeRef{}
-	// switch tc.Tag {
-	// case "TypeConstructor":
-	// 	tref.TypeConstructor = qNameFromExt(tc.Contents.([]interface{}))
-	// case "TypeVar":
-	// 	tref.TypeVar = tc.Contents.(string)
-	// case "TUnknown":
-	// 	tref.TUnknown = tc.Contents.(int)
-	// case "REmpty":
-	// 	tref.REmpty = true
-	// case "RCons":
-	// 	disc := tc.Contents.([]interface{})
-	// 	tcdis, tcsub := disc[1].(map[string]interface{}), disc[2].(map[string]interface{})
-	// 	tref.RCons = &GIrMTypeRefRow{
-	// 		Label: disc[0].(string), Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-	// case "ForAll":
-	// 	disc := tc.Contents.([]interface{})
-	// 	tcdis := disc[1].(map[string]interface{})
-	// 	tref.ForAll = &GIrMTypeRefExist{Name: disc[0].(string), Ref: me.newTypeRefFromExtTc(newTaggedContents(tcdis))}
-	// 	if len(disc) > 2 && disc[2] != nil {
-	// 		if i, ok := disc[2].(int); ok {
-	// 			tref.ForAll.SkolemScope = &i
-	// 		}
-	// 	}
-	// case "Skolem":
-	// 	disc := tc.Contents.([]interface{})
-	// 	tref.Skolem = &GIrMTypeRefSkolem{
-	// 		Name: disc[0].(string), Value: disc[1].(int), Scope: disc[2].(int)}
-	// case "TypeApp":
-	// 	disc := tc.Contents.([]interface{})
-	// 	tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
-	// 	tref.TypeApp = &GIrMTypeRefAppl{
-	// 		Left: me.newTypeRefFromExtTc(newTaggedContents(tcdis)), Right: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-	// case "ConstrainedType":
-	// 	disc := tc.Contents.([]interface{})
-	// 	tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
-	// 	tref.ConstrainedType = &GIrMTypeRefConstr{
-	// 		Data: tcdis["constraintData"], Ref: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
-	// 	for _, tca := range tcdis["constraintArgs"].([]interface{}) {
-	// 		tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromExtTc(newTaggedContents(tca.(map[string]interface{}))))
-	// 	}
-	// 	tref.ConstrainedType.Class = qNameFromExt(tcdis["constraintClass"].([]interface{}))
-	// default:
-	// 	fmt.Printf("\n%s?!\n\t%v\n", tc.Tag, tc.Contents)
-	// }
+	if tc.isTypeConstructor() {
+		tref.TypeConstructor = tc.text
+	} else if tc.isTypeVar() {
+		tref.TypeVar = tc.text
+	} else if tc.isREmpty() {
+		tref.REmpty = true
+	} else if tc.isRCons() {
+		tref.RCons = &GIrMTypeRefRow{
+			Label: tc.text, Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
+	} else if tc.isForAll() {
+		tref.ForAll = &GIrMTypeRefExist{Name: tc.text, Ref: me.newTypeRefFromEnvTag(tc.type0)}
+		if tc.skolem >= 0 {
+			tref.ForAll.SkolemScope = &tc.skolem
+		}
+	} else if tc.isSkolem() {
+		tref.Skolem = &GIrMTypeRefSkolem{Name: tc.text, Value: tc.num, Scope: tc.skolem}
+	} else if tc.isTypeApp() {
+		tref.TypeApp = &GIrMTypeRefAppl{Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
+	} else if tc.isConstrainedType() {
+		tref.ConstrainedType = &GIrMTypeRefConstr{Ref: me.newTypeRefFromEnvTag(tc.type0), Class: tc.constr.Class}
+		for _, tca := range tc.constr.Args {
+			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromEnvTag(tca))
+		}
+	} else {
+		panic(coreImpEnvErr("tagged-type", tc.Tag))
+	}
 	return
 }
 
@@ -280,8 +261,6 @@ func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef
 		tref.TypeConstructor = qNameFromExt(tc.Contents.([]interface{}))
 	case "TypeVar":
 		tref.TypeVar = tc.Contents.(string)
-	case "TUnknown":
-		tref.TUnknown = tc.Contents.(int)
 	case "REmpty":
 		tref.REmpty = true
 	case "RCons":
@@ -310,8 +289,7 @@ func (me *GonadIrMeta) newTypeRefFromExtTc(tc TaggedContents) (tref *GIrMTypeRef
 	case "ConstrainedType":
 		disc := tc.Contents.([]interface{})
 		tcdis, tcsub := disc[0].(map[string]interface{}), disc[1].(map[string]interface{})
-		tref.ConstrainedType = &GIrMTypeRefConstr{
-			Data: tcdis["constraintData"], Ref: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
+		tref.ConstrainedType = &GIrMTypeRefConstr{Ref: me.newTypeRefFromExtTc(newTaggedContents(tcsub))}
 		for _, tca := range tcdis["constraintArgs"].([]interface{}) {
 			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromExtTc(newTaggedContents(tca.(map[string]interface{}))))
 		}
@@ -401,7 +379,7 @@ func (me *GonadIrMeta) populateEnvTypeSyns() {
 func (me *GonadIrMeta) populateExtTypeClasses() {
 	populateconstraints := func(xconstrs []PsExtConstr) (mconstrs []*GIrMTypeRefConstr) {
 		for _, constr := range xconstrs {
-			trc := &GIrMTypeRefConstr{Class: qNameFromExt(constr.Class), Data: constr.Data}
+			trc := &GIrMTypeRefConstr{Class: qNameFromExt(constr.Class)}
 			for _, carg := range constr.Args {
 				trc.Args = append(trc.Args, me.newTypeRefFromExtTc(carg))
 			}
@@ -439,6 +417,17 @@ func (me *GonadIrMeta) populateExtTypeClasses() {
 
 func (me *GonadIrMeta) PopulateFromCoreImp() {
 	me.mod.coreimp.prep()
+	for _, exp := range me.mod.ext.EfExports {
+		if len(exp.TypeRef) > 1 {
+			me.Exports = append(me.Exports, exp.TypeRef[1].(string))
+		} else if len(exp.TypeClassRef) > 1 {
+			me.Exports = append(me.Exports, exp.TypeClassRef[1].(string))
+		} else if len(exp.ValueRef) > 1 {
+			me.Exports = append(me.Exports, exp.ValueRef[1].(map[string]interface{})["Ident"].(string))
+		} else if len(exp.TypeInstanceRef) > 1 {
+			me.Exports = append(me.Exports, exp.TypeInstanceRef[1].(map[string]interface{})["Ident"].(string))
+		}
+	}
 	for _, imp := range me.mod.coreimp.Imps {
 		if impname := strings.Join(imp, "."); impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
 			me.imports = append(me.imports, FindModuleByQName(impname))

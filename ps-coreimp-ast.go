@@ -26,8 +26,8 @@ type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO ke
 	// ModuleName string                       `json:"moduleName,omitempty"`
 	// ModulePath string                       `json:"modulePath,omitempty"`
 	// Comments   []*CoreImpComment            `json:"comments,omitempty"`
-	// Exports    []string                     `json:"exports,omitempty"`
 	// Foreign    []string                     `json:"foreign,omitempty"`
+	// Exports    []string                     `json:"exports,omitempty"`
 	Imps     [][]string     `json:"imports,omitempty"`
 	Body     CoreImpAsts    `json:"body,omitempty"`
 	DeclAnns []*CoreImpDecl `json:"declAnns,omitempty"`

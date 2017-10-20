@@ -19,10 +19,6 @@ is embedded both in declarations that have a name and/or a type
 More details in ir-meta.go.
 */
 
-const (
-	saniUpperToLowerPrefix = "µˇ"
-)
-
 var (
 	sanitizer = strings.NewReplacer("'", "ˇ", "$", "Ø")
 )
@@ -223,7 +219,8 @@ func (me *GonadIrMeta) populateGoTypeDefs() {
 
 	for _, ts := range me.EnvTypeSyns {
 		tdict = map[string][]string{}
-		gtd := &GIrANamedTypeRef{NamePs: ts.Name, NameGo: ts.Name, Export: true}
+		gtd := &GIrANamedTypeRef{Export: uslice.StrHas(me.Exports, ts.Name)}
+		gtd.setBothNamesFromPsName(ts.Name)
 		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
@@ -280,7 +277,9 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		name = string(runes)
 	} else {
 		if ustr.BeginsUpper(name) {
-			name = saniUpperToLowerPrefix + name
+			runes := []rune(name)
+			runes[0] = unicode.ToLower(runes[0])
+			name = string(runes)
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
@@ -390,8 +389,6 @@ func (me *GonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		return tr.TypeConstructor
 	} else if tr.REmpty {
 		return nil
-	} else if tr.TUnknown > 0 {
-		return tr.TUnknown
 	} else if len(tr.TypeVar) > 0 {
 		embeds := tdict[tr.TypeVar]
 		if len(embeds) == 1 {

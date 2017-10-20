@@ -246,6 +246,7 @@ type GIrAPkgSym struct {
 }
 
 func (me *GonadIrAst) FinalizePostPrep() (err error) {
+	return // temporarily
 	//	various fix-ups
 	me.Walk(func(ast GIrA) GIrA {
 		if ast != nil {
@@ -277,6 +278,7 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	}
 	me.prepForeigns()
 	me.prepFixupExportedNames()
+	return // temporarily
 	me.prepAddNewExtraTypes()
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)
