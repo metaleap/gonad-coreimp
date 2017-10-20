@@ -31,7 +31,7 @@ type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO ke
 	Imps     [][]string     `json:"imports,omitempty"`
 	Body     CoreImpAsts    `json:"body,omitempty"`
 	DeclAnns []*CoreImpDecl `json:"declAnns,omitempty"`
-	DeclEnv  CoreImpEnv     `json:"decls,omitempty"`
+	DeclEnv  CoreImpEnv     `json:"declEnv,omitempty"`
 
 	namedRequires map[string]string
 	mod           *ModuleInfo
