@@ -324,6 +324,7 @@ func (me *GonadIrMeta) populateExtFuncsAndVals() {
 }
 
 func (me *GonadIrMeta) populateExtTypeDataDecls() {
+	return
 	for _, d := range me.mod.ext.EfDecls {
 		if d.EDType != nil && d.EDType.DeclKind != nil {
 			if m_edTypeDeclarationKind, ok := d.EDType.DeclKind.(map[string]interface{}); ok && m_edTypeDeclarationKind != nil {
