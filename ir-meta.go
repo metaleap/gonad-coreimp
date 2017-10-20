@@ -11,6 +11,34 @@ import (
 	"github.com/metaleap/go-util-fs"
 )
 
+/*
+Essentially the intermediate representation that we
+place as gonadmeta.json next to the purs compiler's
+outputs (coreimp.json and externs.json).
+
+This is so all that info can be looked up when the
+module/package doesn't need to be re-generated but
+is referred to from one that does.
+
+Represents "top-level declarations" (type-defs, plus
+top-level consts/vars and funcs) both as the original
+PureScript defs and the Golang equivalents.
+
+Somehow it evolved that the former have names prefixed
+with GIrM (meta) and the latter with GIrA (AST). Both
+are held in the GonadIrMeta struct / gonadmeta.json.
+(The former defined throughout ir-meta.go and the latter
+mostly in ir-typestuff.go.)
+
+This is all synthesized from the raw-JSON representations
+we first load into ps-coreimp-*.go structures, but those
+are unwieldy to operate on directly, hence we form this
+sanitized "intermediate representation". When it's later
+looked-up as another module/package is regenerated, the
+format can be readily-deserialized without needing to
+reprocess/reinterpret the original raw source coreimp.
+*/
+
 type GonadIrMeta struct {
 	Imports           GIrMPkgRefs          `json:",omitempty"`
 	ExtTypeAliases    []*GIrMNamedTypeRef  `json:",omitempty"`

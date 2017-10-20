@@ -5,6 +5,11 @@ import (
 	"reflect"
 )
 
+/*
+Golang intermediate-representation AST:
+traversals of the abstract syntax tree
+*/
+
 func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
 	for _, ast := range me.Body {
 		if okay(ast) {

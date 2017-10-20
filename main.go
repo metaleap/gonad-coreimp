@@ -73,6 +73,7 @@ func reGenGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
 
 func main() {
 	starttime := time.Now()
+	// args partially match those of purs and/or pulp where there's overlap
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
 	pflag.StringVar(&Proj.DepsDirPath, "dependency-path", "bower_components", "Dependencies directory path")
 	pflag.StringVar(&Proj.JsonFilePath, "bower-file", "bower.json", "Project file path")

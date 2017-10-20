@@ -1,5 +1,11 @@
 package main
 
+/*
+Golang intermediate-representation AST:
+handy constructors for expressions and blocks
+except type declarations (ie. "actual code")
+*/
+
 func ªA(exprs ...GIrA) *GIrALitArr {
 	a := &GIrALitArr{ArrVals: exprs}
 	a.RefArray = &GIrATypeRefArray{}

@@ -10,6 +10,16 @@ import (
 	"github.com/metaleap/go-util-str"
 )
 
+/*
+Emitting Go code.
+Ultimately (not 100% yet) in a go-fmt like format,
+to save users that additional parse-codegen round-trip.
+Looked briefly at using go/ast but that seemed more
+ergonomic for dealing with parsed ASTs than synthesizing them.
+By now we have our own intermediate-representation AST anyway
+(ir-ast-*.go), allowing for all our transform needs.
+*/
+
 type goTypeRefResolver func(tref string, markused bool) (pname string, tname string)
 
 const (

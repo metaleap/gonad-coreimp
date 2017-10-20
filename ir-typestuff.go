@@ -9,6 +9,16 @@ import (
 	"github.com/metaleap/go-util-str"
 )
 
+/*
+Intermediate-representation:
+of Golang named-and-typed declarations. This GIrANamedTypeRef
+is embedded both in declarations that have a name and/or a type
+(such as vars, args, consts, funcs etc) and in actual type-defs
+(covered by the 'GIrATypeRefFoo' types in this it-typestuff.go).
+
+More details in ir-meta.go.
+*/
+
 const (
 	saniUpperToLowerPrefix = "µˇ"
 )

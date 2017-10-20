@@ -10,23 +10,30 @@ import (
 	"github.com/metaleap/go-util-fs"
 )
 
+/*
+Representation of a PureScript module from which a
+Golang package will be generated. Hence 'modpkg'..
+
+Holds intermediate representations in girMeta and girAst.
+*/
+
 type ModuleInfo struct {
 	reGenGIr        bool
-	qName           string //	eg	Control.Monad.Eff.Uncurried
-	lName           string //	eg	Uncurried
-	pName           string //	eg	Control_Monad_Eff_Uncurried
-	srcFilePath     string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs
-	impFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json
-	extFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/externs.json
-	girMetaFilePath string //	eg	output/Control.Monad.Eff.Uncurried/gonadmeta.json
-	girAstFilePath  string //	eg	output/Control.Monad.Eff.Uncurried/gonadast.json
-	goOutDirPath    string //	eg	Control/Monad/Eff/Uncurried
-	goOutFilePath   string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go
+	qName           string //	eg	Control.Monad.Eff.Uncurried, My.Main etc
+	lName           string //	eg	Uncurried, Main etc
+	pName           string //	eg	Control_Monad_Eff_Uncurried, My_Main etc
+	srcFilePath     string //	eg	bower_components/purescript-eff/src/Control/Monad/Eff/Uncurried.purs or src/My/Main.purs etc
+	impFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/coreimp.json, output/My.Main/coreimp.json etc
+	extFilePath     string //	eg	output/Control.Monad.Eff.Uncurried/externs.json, output/My.Main/externs.json etc
+	girMetaFilePath string //	eg	output/Control.Monad.Eff.Uncurried/gonadmeta.json, output/My.Main/gonadmeta.json etc
+	girAstFilePath  string //	eg	output/Control.Monad.Eff.Uncurried/gonadast.json, output/My.Main/gonadast.json etc
+	goOutDirPath    string //	eg	Control/Monad/Eff/Uncurried, My/Main etc
+	goOutFilePath   string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go, My/Main/Main.go etc
 
 	girMeta       *GonadIrMeta
 	girAst        *GonadIrAst
-	proj          *PsBowerProject
-	gopkgfilepath string //	full target file path (not necessarily absolute but starting with the applicable gopath)
+	proj          *PsBowerProject // parent
+	gopkgfilepath string          // full target file path (not necessarily absolute but starting with the given gopath)
 	ext           *PsExt
 	coreimp       *CoreImp
 }

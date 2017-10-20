@@ -13,6 +13,14 @@ const (
 	nsPrefixDefaultFfiPkg = "ps2goFFI."
 )
 
+/*
+Golang intermediate-representation AST:
+represents the code in a generated Go package, minus
+"IR meta stuff" that is, imports & type declarations
+(see ir-meta & ir-typestuff), also struct methods.
+This latter 'design accident' should probably be revamped.
+*/
+
 type GonadIrAst struct {
 	GIrABlock `json:",omitempty"`
 

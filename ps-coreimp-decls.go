@@ -4,6 +4,13 @@ import (
 	"fmt"
 )
 
+/*
+Representations of PureScript top-level declarations:
+type-alias defs, data-type defs, data-type constructors,
+type-classes, type-class instances, and the signatures
+of top-level functions.
+*/
+
 const (
 	msgfmt = "Encountered (previously unknown or unneeded) %s '%s',\n\tplease report the case with the *.purs code(base) so that we can support it."
 )
@@ -18,7 +25,7 @@ type CoreImpEnv struct {
 	DataCtors  map[string]*CoreImpEnvTypeCtor          `json:"dataConstructors"`
 	Classes    map[string]*CoreImpEnvClass             `json:"typeClasses"`
 	ClassDicts []map[string]map[string]*CoreImpEnvInst `json:"typeClassDictionaries"`
-	Names      map[string]*CoreImpEnvName              `json:"names"`
+	Functions  map[string]*CoreImpEnvName              `json:"names"`
 }
 
 func (me *CoreImpEnv) prep() {
@@ -41,8 +48,8 @@ func (me *CoreImpEnv) prep() {
 			}
 		}
 	}
-	for _, n := range me.Names {
-		n.prep()
+	for _, fn := range me.Functions {
+		fn.prep()
 	}
 }
 

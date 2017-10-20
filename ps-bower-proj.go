@@ -11,6 +11,11 @@ import (
 	"github.com/metaleap/go-util-fs"
 )
 
+/*
+Represents either the given PureScript main `src` project
+or one of its dependency libs usually found in `bower_components`.
+*/
+
 type PsBowerProject struct {
 	JsonFilePath     string
 	SrcDirPath       string

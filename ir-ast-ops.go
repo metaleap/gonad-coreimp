@@ -4,6 +4,13 @@ import (
 	"strings"
 )
 
+/*
+Golang intermediate-representation AST:
+various transforms and operations on the AST,
+"prep" ops are called from PrepFromCoreImp
+and "post" ops are called from FinalizePostPrep.
+*/
+
 func (me *GonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*GIrAVar) {
 	//	after we have also created additional structs/interfaces in prepAddNewExtraTypes, add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []GIrA{}
