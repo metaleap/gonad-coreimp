@@ -6,41 +6,41 @@ handy constructors for expressions and blocks
 except type declarations (ie. "actual code")
 */
 
-func ªA(exprs ...GIrA) *GIrALitArr {
-	a := &GIrALitArr{ArrVals: exprs}
-	a.RefArray = &GIrATypeRefArray{}
+func ªA(exprs ...gIrA) *gIrALitArr {
+	a := &gIrALitArr{ArrVals: exprs}
+	a.RefArray = &gIrATypeRefArray{}
 	typefound := false
 	for _, expr := range a.ArrVals {
 		eb := expr.Base()
-		if eb.parent = a; !typefound && eb.HasTypeInfo() {
-			a.RefArray.Of = &eb.GIrANamedTypeRef
+		if eb.parent = a; !typefound && eb.hasTypeInfo() {
+			a.RefArray.Of = &eb.gIrANamedTypeRef
 		}
 	}
 	return a
 }
 
-func ªB(literal bool) *GIrALitBool {
-	a := &GIrALitBool{LitBool: literal}
+func ªB(literal bool) *gIrALitBool {
+	a := &gIrALitBool{LitBool: literal}
 	a.RefAlias = "Prim.Boolean"
 	return a
 }
 
-func ªF(literal float64) *GIrALitDouble {
-	a := &GIrALitDouble{LitDouble: literal}
+func ªF(literal float64) *gIrALitDouble {
+	a := &gIrALitDouble{LitDouble: literal}
 	a.RefAlias = "Prim.Number"
 	return a
 }
 
-func ªI(literal int) *GIrALitInt {
-	a := &GIrALitInt{LitInt: literal}
+func ªI(literal int) *gIrALitInt {
+	a := &gIrALitInt{LitInt: literal}
 	a.RefAlias = "Prim.Int"
 	return a
 }
 
-func ªO(typeref *GIrANamedTypeRef, fields ...*GIrALitObjField) *GIrALitObj {
-	a := &GIrALitObj{ObjFields: fields}
+func ªO(typeref *gIrANamedTypeRef, fields ...*gIrALitObjField) *gIrALitObj {
+	a := &gIrALitObj{ObjFields: fields}
 	if typeref != nil {
-		a.GIrANamedTypeRef = *typeref
+		a.gIrANamedTypeRef = *typeref
 	}
 	for _, of := range a.ObjFields {
 		of.parent = a
@@ -48,27 +48,27 @@ func ªO(typeref *GIrANamedTypeRef, fields ...*GIrALitObjField) *GIrALitObj {
 	return a
 }
 
-func ªOFld(fieldval GIrA) *GIrALitObjField {
-	a := &GIrALitObjField{FieldVal: fieldval}
+func ªOFld(fieldval gIrA) *gIrALitObjField {
+	a := &gIrALitObjField{FieldVal: fieldval}
 	return a
 }
 
-func ªS(literal string) *GIrALitStr {
-	a := &GIrALitStr{LitStr: literal}
+func ªS(literal string) *gIrALitStr {
+	a := &gIrALitStr{LitStr: literal}
 	a.RefAlias = "Prim.String"
 	return a
 }
 
-func ªBlock(asts ...GIrA) *GIrABlock {
-	a := &GIrABlock{Body: asts}
+func ªBlock(asts ...gIrA) *gIrABlock {
+	a := &gIrABlock{Body: asts}
 	for _, expr := range a.Body {
 		expr.Base().parent = a
 	}
 	return a
 }
 
-func ªCall(callee GIrA, callargs ...GIrA) *GIrACall {
-	a := &GIrACall{Callee: callee, CallArgs: callargs}
+func ªCall(callee gIrA, callargs ...gIrA) *gIrACall {
+	a := &gIrACall{Callee: callee, CallArgs: callargs}
 	a.Callee.Base().parent = a
 	for _, expr := range callargs {
 		expr.Base().parent = a
@@ -76,135 +76,135 @@ func ªCall(callee GIrA, callargs ...GIrA) *GIrACall {
 	return a
 }
 
-func ªComments(comments ...*CoreImpComment) *GIrAComments {
-	a := &GIrAComments{}
+func ªComments(comments ...*coreImpComment) *gIrAComments {
+	a := &gIrAComments{}
 	a.Comments = comments
 	return a
 }
 
-func ªConst(name *GIrANamedTypeRef, val GIrA) *GIrAConst {
-	a, v := &GIrAConst{ConstVal: val}, val.Base()
-	v.parent, a.GIrANamedTypeRef = a, v.GIrANamedTypeRef
+func ªConst(name *gIrANamedTypeRef, val gIrA) *gIrAConst {
+	a, v := &gIrAConst{ConstVal: val}, val.Base()
+	v.parent, a.gIrANamedTypeRef = a, v.gIrANamedTypeRef
 	a.NameGo, a.NamePs = name.NameGo, name.NamePs
 	return a
 }
 
-func ªDot(left GIrA, right GIrA) *GIrADot {
-	a := &GIrADot{DotLeft: left, DotRight: right}
+func ªDot(left gIrA, right gIrA) *gIrADot {
+	a := &gIrADot{DotLeft: left, DotRight: right}
 	a.DotLeft.Base().parent, a.DotRight.Base().parent = a, a
 	return a
 }
 
-func ªDotNamed(left string, right string) *GIrADot {
+func ªDotNamed(left string, right string) *gIrADot {
 	return ªDot(ªSym(left), ªSym(right))
 }
 
-func ªEq(left GIrA, right GIrA) *GIrAOp2 {
-	a := &GIrAOp2{Op2: "==", Left: left, Right: right}
+func ªEq(left gIrA, right gIrA) *gIrAOp2 {
+	a := &gIrAOp2{Op2: "==", Left: left, Right: right}
 	a.Left.Base().parent, a.Right.Base().parent = a, a
 	return a
 }
 
-func ªFor() *GIrAFor {
-	a := &GIrAFor{ForDo: ªBlock()}
+func ªFor() *gIrAFor {
+	a := &gIrAFor{ForDo: ªBlock()}
 	a.ForDo.parent = a
 	return a
 }
 
-func ªFunc() *GIrAFunc {
-	a := &GIrAFunc{FuncImpl: ªBlock()}
+func ªFunc() *gIrAFunc {
+	a := &gIrAFunc{FuncImpl: ªBlock()}
 	a.FuncImpl.parent = a
 	return a
 }
 
-func ªIf(cond GIrA) *GIrAIf {
-	a := &GIrAIf{If: cond, Then: ªBlock()}
+func ªIf(cond gIrA) *gIrAIf {
+	a := &gIrAIf{If: cond, Then: ªBlock()}
 	a.If.Base().parent, a.Then.parent = a, a
 	return a
 }
 
-func ªIndex(left GIrA, right GIrA) *GIrAIndex {
-	a := &GIrAIndex{IdxLeft: left, IdxRight: right}
+func ªIndex(left gIrA, right gIrA) *gIrAIndex {
+	a := &gIrAIndex{IdxLeft: left, IdxRight: right}
 	a.IdxLeft.Base().parent, a.IdxRight.Base().parent = a, a
 	return a
 }
 
-func ªIs(expr GIrA, typeexpr string) *GIrAIsType {
-	a := &GIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
+func ªIs(expr gIrA, typeexpr string) *gIrAIsType {
+	a := &gIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
 	a.ExprToTest.Base().parent = a
 	return a
 }
 
-func ªNil() *GIrANil {
-	a := &GIrANil{}
+func ªNil() *gIrANil {
+	a := &gIrANil{}
 	return a
 }
 
-func ªO1(op string, operand GIrA) *GIrAOp1 {
-	a := &GIrAOp1{Op1: op, Of: operand}
+func ªO1(op string, operand gIrA) *gIrAOp1 {
+	a := &gIrAOp1{Op1: op, Of: operand}
 	a.Of.Base().parent = a
 	return a
 }
 
-func ªO2(left GIrA, op string, right GIrA) *GIrAOp2 {
-	a := &GIrAOp2{Op2: op, Left: left, Right: right}
+func ªO2(left gIrA, op string, right gIrA) *gIrAOp2 {
+	a := &gIrAOp2{Op2: op, Left: left, Right: right}
 	a.Left.Base().parent, a.Right.Base().parent = a, a
 	return a
 }
 
-func ªPanic(errarg GIrA) *GIrAPanic {
-	a := &GIrAPanic{PanicArg: errarg}
+func ªPanic(errarg gIrA) *gIrAPanic {
+	a := &gIrAPanic{PanicArg: errarg}
 	a.PanicArg.Base().parent = a
 	return a
 }
 
-func ªPkgSym(pkgname string, symbol string) *GIrAPkgSym {
-	a := &GIrAPkgSym{PkgName: pkgname, Symbol: symbol}
+func ªPkgSym(pkgname string, symbol string) *gIrAPkgSym {
+	a := &gIrAPkgSym{PkgName: pkgname, Symbol: symbol}
 	return a
 }
 
-func ªRet(retarg GIrA) *GIrARet {
-	a := &GIrARet{RetArg: retarg}
+func ªRet(retarg gIrA) *gIrARet {
+	a := &gIrARet{RetArg: retarg}
 	if a.RetArg != nil {
 		a.RetArg.Base().parent = a
 	}
 	return a
 }
 
-func ªSet(left GIrA, right GIrA) *GIrASet {
-	a := &GIrASet{SetLeft: left, ToRight: right}
+func ªSet(left gIrA, right gIrA) *gIrASet {
+	a := &gIrASet{SetLeft: left, ToRight: right}
 	a.SetLeft.Base().parent, a.ToRight.Base().parent = a, a
-	if rb := right.Base(); rb.HasTypeInfo() {
-		a.GIrANamedTypeRef = rb.GIrANamedTypeRef
+	if rb := right.Base(); rb.hasTypeInfo() {
+		a.gIrANamedTypeRef = rb.gIrANamedTypeRef
 	}
 	return a
 }
 
-func ªsetVarInGroup(name string, right GIrA, typespec *GIrANamedTypeRef) *GIrASet {
+func ªsetVarInGroup(name string, right gIrA, typespec *gIrANamedTypeRef) *gIrASet {
 	a := ªSet(ªSym(name), right)
-	if typespec != nil && typespec.HasTypeInfo() {
-		a.GIrANamedTypeRef = *typespec
+	if typespec != nil && typespec.hasTypeInfo() {
+		a.gIrANamedTypeRef = *typespec
 	}
 	a.isInVarGroup = true
 	return a
 }
 
-func ªSym(name string) *GIrAVar {
+func ªSym(name string) *gIrAVar {
 	return ªVar(name, "", nil)
 }
 
-func ªTo(expr GIrA, pname string, tname string) *GIrAToType {
-	a := &GIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
+func ªTo(expr gIrA, pname string, tname string) *gIrAToType {
+	a := &gIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
 	a.ExprToCast.Base().parent = a
 	return a
 }
 
-func ªVar(namego string, nameps string, val GIrA) *GIrAVar {
-	a := &GIrAVar{VarVal: val}
+func ªVar(namego string, nameps string, val gIrA) *gIrAVar {
+	a := &gIrAVar{VarVal: val}
 	if val != nil {
 		vb := val.Base()
 		vb.parent = a
-		a.GIrANamedTypeRef = vb.GIrANamedTypeRef
+		a.gIrANamedTypeRef = vb.gIrANamedTypeRef
 	}
 	if len(a.NameGo) == 0 && len(nameps) > 0 {
 		a.setBothNamesFromPsName(nameps)

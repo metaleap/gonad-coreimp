@@ -8,24 +8,22 @@ BUT we make use of EfExports still, as coreimp's `exports`
 don't capture type synonyms.
 */
 
-type PsExt struct {
-	modinfo *ModuleInfo
-
-	// EfSourceSpan *CoreImpSourceSpan `json:"efSourceSpan,omitempty"`
-	// EfVersion    string             `json:"efVersion,omitempty"`
-	// EfModuleName []string           `json:"efModuleName,omitempty"`
-	// EfDecls      []*PsExtDecl       `json:"efDeclarations,omitempty"`
-	// EfImports    []*PsExtImport     `json:"efImports,omitempty"`
-	EfExports []*PsExtRefs `json:"efExports,omitempty"`
+type psExt struct {
+	// EfSourceSpan *coreImpSourceSpan `json:"efSourceSpan"`
+	// EfVersion    string             `json:"efVersion"`
+	// EfModuleName []string           `json:"efModuleName"`
+	// EfDecls      []*psExtDecl       `json:"efDeclarations"`
+	// EfImports    []*psExtImport     `json:"efImports"`
+	EfExports []*psExtRefs `json:"efExports"`
 }
 
-type PsExtImport struct {
-	EiModule     []string         `json:"eiModule,omitempty"`
-	EiImportType *PsExtImportType `json:"eiImportType,omitempty"`
-	EiImportedAs []string         `json:"eiImportedAs,omitempty"`
+type psExtImport struct {
+	EiModule     []string         `json:"eiModule"`
+	EiImportType *psExtImportType `json:"eiImportType"`
+	EiImportedAs []string         `json:"eiImportedAs"`
 }
 
-type PsExtRefs struct {
+type psExtRefs struct {
 	TypeRef         []interface{}
 	TypeClassRef    []interface{}
 	TypeInstanceRef []interface{}
@@ -35,63 +33,63 @@ type PsExtRefs struct {
 	ReExportRef     []interface{}
 }
 
-type PsExtImportType struct {
+type psExtImportType struct {
 	Implicit []interface{}
-	Explicit []*PsExtRefs
+	Explicit []*psExtRefs
 }
 
-type PsExtDecl struct {
-	EDClass           *PsExtTypeClass        `json:",omitempty"`
-	EDType            *PsExtType             `json:",omitempty"`
-	EDTypeSynonym     *PsExtTypeAlias        `json:",omitempty"`
-	EDValue           *PsExtVal              `json:",omitempty"`
-	EDInstance        *PsExtInst             `json:",omitempty"`
-	EDDataConstructor map[string]interface{} `json:",omitempty"`
+type psExtDecl struct {
+	EDClass           *psExtTypeClass
+	EDType            *psExtType
+	EDTypeSynonym     *psExtTypeAlias
+	EDValue           *psExtVal
+	EDInstance        *psExtInst
+	EDDataConstructor map[string]interface{}
 }
 
-type PsExtIdent struct {
-	Ident string `json:",omitempty"`
+type psExtIdent struct {
+	Ident string
 }
 
-type PsExtVal struct {
-	Name PsExtIdent    `json:"edValueName"`
+type psExtVal struct {
+	Name psExtIdent    `json:"edValueName"`
 	Type coreImpEnvTag `json:"edValueType"`
 }
 
-type PsExtType struct {
-	Name     string        `json:"edTypeName,omitempty"`
-	Kind     coreImpEnvTag `json:"edTypeKind,omitempty"`
-	DeclKind interface{}   `json:"edTypeDeclarationKind,omitempty"`
+type psExtType struct {
+	Name     string        `json:"edTypeName"`
+	Kind     coreImpEnvTag `json:"edTypeKind"`
+	DeclKind interface{}   `json:"edTypeDeclarationKind"`
 }
 
-type PsExtTypeAlias struct {
-	Name      string         `json:"edTypeSynonymName,omitempty"`
-	Arguments []interface{}  `json:"edTypeSynonymArguments,omitempty"`
-	Type      *coreImpEnvTag `json:"edTypeSynonymType,omitempty"`
+type psExtTypeAlias struct {
+	Name      string         `json:"edTypeSynonymName"`
+	Arguments []interface{}  `json:"edTypeSynonymArguments"`
+	Type      *coreImpEnvTag `json:"edTypeSynonymType"`
 }
 
-type PsExtConstr struct {
-	Class []interface{}   `json:"constraintClass,omitempty"`
-	Args  []coreImpEnvTag `json:"constraintArgs,omitempty"`
-	Data  []interface{}   `json:"constraintData,omitempty"`
+type psExtConstr struct {
+	Class []interface{}   `json:"constraintClass"`
+	Args  []coreImpEnvTag `json:"constraintArgs"`
+	Data  []interface{}   `json:"constraintData"`
 }
 
-type PsExtInst struct {
-	ClassName   []interface{}   `json:"edInstanceClassName,omitempty"`
-	Name        PsExtIdent      `json:"edInstanceName,omitempty"`
-	Types       []coreImpEnvTag `json:"edInstanceTypes,omitempty"`
-	Constraints []PsExtConstr   `json:"edInstanceConstraints,omitempty"`
-	Chain       [][]interface{} `json:"edInstanceChain,omitempty"`
-	ChainIndex  int             `json:"edInstanceChainIndex,omitempty"`
+type psExtInst struct {
+	ClassName   []interface{}   `json:"edInstanceClassName"`
+	Name        psExtIdent      `json:"edInstanceName"`
+	Types       []coreImpEnvTag `json:"edInstanceTypes"`
+	Constraints []psExtConstr   `json:"edInstanceConstraints"`
+	Chain       [][]interface{} `json:"edInstanceChain"`
+	ChainIndex  int             `json:"edInstanceChainIndex"`
 }
 
-type PsExtTypeClass struct {
-	Name           string          `json:"edClassName,omitempty"`
-	TypeArgs       [][]interface{} `json:"edClassTypeArguments,omitempty"`
+type psExtTypeClass struct {
+	Name           string          `json:"edClassName"`
+	TypeArgs       [][]interface{} `json:"edClassTypeArguments"`
 	FunctionalDeps []struct {
-		Determiners []int `json:"determiners,omitempty"`
-		Determined  []int `json:"determined,omitempty"`
-	} `json:"edFunctionalDependencies,omitempty"`
-	Members     [][]interface{} `json:"edClassMembers,omitempty"`
-	Constraints []PsExtConstr   `json:"edClassConstraints,omitempty"`
+		Determiners []int `json:"determiners"`
+		Determined  []int `json:"determined"`
+	} `json:"edFunctionalDependencies"`
+	Members     [][]interface{} `json:"edClassMembers"`
+	Constraints []psExtConstr   `json:"edClassConstraints"`
 }

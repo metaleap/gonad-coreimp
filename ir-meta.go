@@ -24,8 +24,8 @@ top-level consts/vars and funcs) both as the original
 PureScript defs and the Golang equivalents.
 
 Somehow it evolved that the former have names prefixed
-with GIrM (meta) and the latter with GIrA (AST). Both
-are held in the GonadIrMeta struct / gonadmeta.json.
+with gIrM (meta) and the latter with gIrA (AST). Both
+are held in the gonadIrMeta struct / gonadmeta.json.
 (The former defined throughout ir-meta.go and the latter
 mostly in ir-typestuff.go.)
 
@@ -38,40 +38,40 @@ format can be readily-deserialized without needing to
 reprocess/reinterpret the original raw source coreimp.
 */
 
-type GonadIrMeta struct {
+type gonadIrMeta struct {
 	Exports           []string             `json:",omitempty"`
-	Imports           GIrMPkgRefs          `json:",omitempty"`
-	EnvTypeSyns       []*GIrMNamedTypeRef  `json:",omitempty"`
-	EnvTypeClasses    []*GIrMTypeClass     `json:",omitempty"`
-	EnvTypeClassInsts []*GIrMTypeClassInst `json:",omitempty"`
-	EnvTypeDataDecls  []*GIrMTypeDataDecl  `json:",omitempty"`
-	EnvValDecls       []*GIrMNamedTypeRef  `json:",omitempty"`
-	GoTypeDefs        GIrANamedTypeRefs    `json:",omitempty"`
-	GoValDecls        GIrANamedTypeRefs    `json:",omitempty"`
-	ForeignImp        *GIrMPkgRef          `json:",omitempty"`
+	Imports           gIrMPkgRefs          `json:",omitempty"`
+	EnvTypeSyns       []*gIrMNamedTypeRef  `json:",omitempty"`
+	EnvTypeClasses    []*gIrMTypeClass     `json:",omitempty"`
+	EnvTypeClassInsts []*gIrMTypeClassInst `json:",omitempty"`
+	EnvTypeDataDecls  []*gIrMTypeDataDecl  `json:",omitempty"`
+	EnvValDecls       []*gIrMNamedTypeRef  `json:",omitempty"`
+	GoTypeDefs        gIrANamedTypeRefs    `json:",omitempty"`
+	GoValDecls        gIrANamedTypeRefs    `json:",omitempty"`
+	ForeignImp        *gIrMPkgRef          `json:",omitempty"`
 
-	imports []*ModuleInfo
+	imports []*modPkg
 
-	mod  *ModuleInfo
-	proj *PsBowerProject
+	mod  *modPkg
+	proj *psBowerProject
 	save bool
 }
 
-type GIrMPkgRefs []*GIrMPkgRef
+type gIrMPkgRefs []*gIrMPkgRef
 
-func (me GIrMPkgRefs) Len() int           { return len(me) }
-func (me GIrMPkgRefs) Less(i, j int) bool { return me[i].P < me[j].P }
-func (me GIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
+func (me gIrMPkgRefs) Len() int           { return len(me) }
+func (me gIrMPkgRefs) Less(i, j int) bool { return me[i].P < me[j].P }
+func (me gIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
 
-func (me *GIrMPkgRefs) AddIfHasnt(lname, imppath, qname string) (pkgref *GIrMPkgRef) {
-	if pkgref = me.ByImpPath(imppath); pkgref == nil {
-		pkgref = &GIrMPkgRef{used: true, N: lname, P: imppath, Q: qname}
+func (me *gIrMPkgRefs) addIfHasnt(lname, imppath, qname string) (pkgref *gIrMPkgRef) {
+	if pkgref = me.byImpPath(imppath); pkgref == nil {
+		pkgref = &gIrMPkgRef{used: true, N: lname, P: imppath, Q: qname}
 		*me = append(*me, pkgref)
 	}
 	return
 }
 
-func (me GIrMPkgRefs) ByImpPath(imppath string) *GIrMPkgRef {
+func (me gIrMPkgRefs) byImpPath(imppath string) *gIrMPkgRef {
 	for _, imp := range me {
 		if imp.P == imppath {
 			return imp
@@ -80,7 +80,7 @@ func (me GIrMPkgRefs) ByImpPath(imppath string) *GIrMPkgRef {
 	return nil
 }
 
-type GIrMPkgRef struct {
+type gIrMPkgRef struct {
 	N string
 	Q string
 	P string
@@ -88,124 +88,124 @@ type GIrMPkgRef struct {
 	used bool
 }
 
-type GIrMNamedTypeRef struct {
-	Name string       `json:"tnn"`
-	Ref  *GIrMTypeRef `json:"tnr,omitempty"`
+type gIrMNamedTypeRef struct {
+	Name string       `json:"tnn,omitempty"`
+	Ref  *gIrMTypeRef `json:"tnr,omitempty"`
 }
 
-type GIrMTypeClass struct {
-	Name        string               `json:"tcn"`
+type gIrMTypeClass struct {
+	Name        string               `json:"tcn,omitempty"`
 	Args        []string             `json:"tca,omitempty"`
-	Constraints []*GIrMTypeRefConstr `json:"tcc,omitempty"`
-	Members     []GIrMNamedTypeRef   `json:"tcm,omitempty"`
+	Constraints []*gIrMTypeRefConstr `json:"tcc,omitempty"`
+	Members     []gIrMNamedTypeRef   `json:"tcm,omitempty"`
 }
 
-type GIrMTypeClassInst struct {
-	Name      string       `json:"tcin"`
+type gIrMTypeClassInst struct {
+	Name      string       `json:"tcin,omitempty"`
 	ClassName string       `json:"tcicn,omitempty"`
-	InstTypes GIrMTypeRefs `json:"tcit,omitempty"`
+	InstTypes gIrMTypeRefs `json:"tcit,omitempty"`
 }
 
-type GIrMTypeDataDecl struct {
-	Name  string              `json:"tdn"`
-	Ctors []*GIrMTypeDataCtor `json:"tdc,omitempty"`
+type gIrMTypeDataDecl struct {
+	Name  string              `json:"tdn,omitempty"`
+	Ctors []*gIrMTypeDataCtor `json:"tdc,omitempty"`
 	Args  []string            `json:"tda,omitempty"`
 }
 
-type GIrMTypeDataCtor struct {
-	Name string       `json:"tdcn"`
-	Args GIrMTypeRefs `json:"tdca,omitempty"`
+type gIrMTypeDataCtor struct {
+	Name string       `json:"tdcn,omitempty"`
+	Args gIrMTypeRefs `json:"tdca,omitempty"`
 
-	gtd     *GIrANamedTypeRef
-	comment *GIrAComments
+	gtd     *gIrANamedTypeRef
+	comment *gIrAComments
 }
 
-type GIrMTypeRefs []*GIrMTypeRef
+type gIrMTypeRefs []*gIrMTypeRef
 
-type GIrMTypeRef struct {
+type gIrMTypeRef struct {
 	TypeConstructor string             `json:"tc,omitempty"`
 	TypeVar         string             `json:"tv,omitempty"`
 	REmpty          bool               `json:"re,omitempty"`
-	TypeApp         *GIrMTypeRefAppl   `json:"ta,omitempty"`
-	ConstrainedType *GIrMTypeRefConstr `json:"ct,omitempty"`
-	RCons           *GIrMTypeRefRow    `json:"rc,omitempty"`
-	ForAll          *GIrMTypeRefExist  `json:"fa,omitempty"`
-	Skolem          *GIrMTypeRefSkolem `json:"sk,omitempty"`
+	TypeApp         *gIrMTypeRefAppl   `json:"ta,omitempty"`
+	ConstrainedType *gIrMTypeRefConstr `json:"ct,omitempty"`
+	RCons           *gIrMTypeRefRow    `json:"rc,omitempty"`
+	ForAll          *gIrMTypeRefExist  `json:"fa,omitempty"`
+	Skolem          *gIrMTypeRefSkolem `json:"sk,omitempty"`
 
-	tmp_assoc *GIrANamedTypeRef
+	tmp_assoc *gIrANamedTypeRef
 }
 
-func (me *GIrMTypeRef) Eq(cmp *GIrMTypeRef) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.TypeConstructor == cmp.TypeConstructor && me.TypeVar == cmp.TypeVar && me.REmpty == cmp.REmpty && me.TypeApp.Eq(cmp.TypeApp) && me.ConstrainedType.Eq(cmp.ConstrainedType) && me.RCons.Eq(cmp.RCons) && me.ForAll.Eq(cmp.ForAll) && me.Skolem.Eq(cmp.Skolem))
+func (me *gIrMTypeRef) eq(cmp *gIrMTypeRef) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.TypeConstructor == cmp.TypeConstructor && me.TypeVar == cmp.TypeVar && me.REmpty == cmp.REmpty && me.TypeApp.eq(cmp.TypeApp) && me.ConstrainedType.eq(cmp.ConstrainedType) && me.RCons.eq(cmp.RCons) && me.ForAll.eq(cmp.ForAll) && me.Skolem.eq(cmp.Skolem))
 }
 
-func (me GIrMTypeRefs) Eq(cmp GIrMTypeRefs) bool {
+func (me gIrMTypeRefs) eq(cmp gIrMTypeRefs) bool {
 	if len(me) != len(cmp) {
 		return false
 	}
 	for i, _ := range me {
-		if !me[i].Eq(cmp[i]) {
+		if !me[i].eq(cmp[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-type GIrMTypeRefAppl struct {
-	Left  *GIrMTypeRef `json:"t1,omitempty"`
-	Right *GIrMTypeRef `json:"t2,omitempty"`
+type gIrMTypeRefAppl struct {
+	Left  *gIrMTypeRef `json:"t1,omitempty"`
+	Right *gIrMTypeRef `json:"t2,omitempty"`
 }
 
-func (me *GIrMTypeRefAppl) Eq(cmp *GIrMTypeRefAppl) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Left.Eq(cmp.Left) && me.Right.Eq(cmp.Right))
+func (me *gIrMTypeRefAppl) eq(cmp *gIrMTypeRefAppl) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Left.eq(cmp.Left) && me.Right.eq(cmp.Right))
 }
 
-type GIrMTypeRefRow struct {
+type gIrMTypeRefRow struct {
 	Label string       `json:"rl,omitempty"`
-	Left  *GIrMTypeRef `json:"r1,omitempty"`
-	Right *GIrMTypeRef `json:"r2,omitempty"`
+	Left  *gIrMTypeRef `json:"r1,omitempty"`
+	Right *gIrMTypeRef `json:"r2,omitempty"`
 }
 
-func (me *GIrMTypeRefRow) Eq(cmp *GIrMTypeRefRow) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Label == cmp.Label && me.Left.Eq(cmp.Left) && me.Right.Eq(cmp.Right))
+func (me *gIrMTypeRefRow) eq(cmp *gIrMTypeRefRow) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Label == cmp.Label && me.Left.eq(cmp.Left) && me.Right.eq(cmp.Right))
 }
 
-type GIrMTypeRefConstr struct {
+type gIrMTypeRefConstr struct {
 	Class string       `json:"cc,omitempty"`
-	Args  GIrMTypeRefs `json:"ca,omitempty"`
-	Ref   *GIrMTypeRef `json:"cr,omitempty"`
+	Args  gIrMTypeRefs `json:"ca,omitempty"`
+	Ref   *gIrMTypeRef `json:"cr,omitempty"`
 }
 
-func (me *GIrMTypeRefConstr) Eq(cmp *GIrMTypeRefConstr) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Ref.Eq(cmp.Ref) && me.Args.Eq(cmp.Args))
+func (me *gIrMTypeRefConstr) eq(cmp *gIrMTypeRefConstr) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Ref.eq(cmp.Ref) && me.Args.eq(cmp.Args))
 }
 
-type GIrMTypeRefExist struct {
+type gIrMTypeRefExist struct {
 	Name        string       `json:"en,omitempty"`
-	Ref         *GIrMTypeRef `json:"er,omitempty"`
+	Ref         *gIrMTypeRef `json:"er,omitempty"`
 	SkolemScope *int         `json:"es,omitempty"`
 }
 
-func (me *GIrMTypeRefExist) Eq(cmp *GIrMTypeRefExist) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Ref.Eq(cmp.Ref) && me.SkolemScope == cmp.SkolemScope)
+func (me *gIrMTypeRefExist) eq(cmp *gIrMTypeRefExist) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Ref.eq(cmp.Ref) && me.SkolemScope == cmp.SkolemScope)
 }
 
-type GIrMTypeRefSkolem struct {
+type gIrMTypeRefSkolem struct {
 	Name  string `json:"sn,omitempty"`
 	Value int    `json:"sv,omitempty"`
 	Scope int    `json:"ss,omitempty"`
 }
 
-func (me *GIrMTypeRefSkolem) Eq(cmp *GIrMTypeRefSkolem) bool {
+func (me *gIrMTypeRefSkolem) eq(cmp *gIrMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
 }
 
-func newModImp(impmod *ModuleInfo) *GIrMPkgRef {
-	return &GIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
+func newModImp(impmod *modPkg) *gIrMPkgRef {
+	return &gIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
 }
 
-func (me *GonadIrMeta) newTypeRefFromEnvTag(tc *CoreImpEnvTagType) (tref *GIrMTypeRef) {
-	tref = &GIrMTypeRef{}
+func (me *gonadIrMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *gIrMTypeRef) {
+	tref = &gIrMTypeRef{}
 	if tc.isTypeConstructor() {
 		tref.TypeConstructor = tc.text
 	} else if tc.isTypeVar() {
@@ -213,19 +213,19 @@ func (me *GonadIrMeta) newTypeRefFromEnvTag(tc *CoreImpEnvTagType) (tref *GIrMTy
 	} else if tc.isREmpty() {
 		tref.REmpty = true
 	} else if tc.isRCons() {
-		tref.RCons = &GIrMTypeRefRow{
+		tref.RCons = &gIrMTypeRefRow{
 			Label: tc.text, Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
 	} else if tc.isForAll() {
-		tref.ForAll = &GIrMTypeRefExist{Name: tc.text, Ref: me.newTypeRefFromEnvTag(tc.type0)}
+		tref.ForAll = &gIrMTypeRefExist{Name: tc.text, Ref: me.newTypeRefFromEnvTag(tc.type0)}
 		if tc.skolem >= 0 {
 			tref.ForAll.SkolemScope = &tc.skolem
 		}
 	} else if tc.isSkolem() {
-		tref.Skolem = &GIrMTypeRefSkolem{Name: tc.text, Value: tc.num, Scope: tc.skolem}
+		tref.Skolem = &gIrMTypeRefSkolem{Name: tc.text, Value: tc.num, Scope: tc.skolem}
 	} else if tc.isTypeApp() {
-		tref.TypeApp = &GIrMTypeRefAppl{Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
+		tref.TypeApp = &gIrMTypeRefAppl{Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
 	} else if tc.isConstrainedType() {
-		tref.ConstrainedType = &GIrMTypeRefConstr{Ref: me.newTypeRefFromEnvTag(tc.type0), Class: tc.constr.Class}
+		tref.ConstrainedType = &gIrMTypeRefConstr{Ref: me.newTypeRefFromEnvTag(tc.type0), Class: tc.constr.Class}
 		for _, tca := range tc.constr.Args {
 			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromEnvTag(tca))
 		}
@@ -235,13 +235,13 @@ func (me *GonadIrMeta) newTypeRefFromEnvTag(tc *CoreImpEnvTagType) (tref *GIrMTy
 	return
 }
 
-func (me *GonadIrMeta) populateEnvFuncsAndVals() {
+func (me *gonadIrMeta) populateEnvFuncsAndVals() {
 	for fname, fdef := range me.mod.coreimp.DeclEnv.Functions {
-		me.EnvValDecls = append(me.EnvValDecls, &GIrMNamedTypeRef{Name: fname, Ref: me.newTypeRefFromEnvTag(fdef.Type)})
+		me.EnvValDecls = append(me.EnvValDecls, &gIrMNamedTypeRef{Name: fname, Ref: me.newTypeRefFromEnvTag(fdef.Type)})
 	}
 }
 
-func (me *GonadIrMeta) populateEnvTypeDataDecls() {
+func (me *gonadIrMeta) populateEnvTypeDataDecls() {
 	for tdefname, tdef := range me.mod.coreimp.DeclEnv.TypeDefs {
 		if tdef.Decl.TypeSynonym {
 			//	type-aliases handled separately in populateEnvTypeSyns already, nothing to do here
@@ -250,16 +250,16 @@ func (me *GonadIrMeta) populateEnvTypeDataDecls() {
 				panic("Time to handle FFI " + ffigofilepath)
 			} else {
 				//	special case for official purescript core libs: alias to applicable struct from gonad's default ffi packages
-				ta := &GIrMNamedTypeRef{Name: tdefname, Ref: &GIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + tdefname}}
+				ta := &gIrMNamedTypeRef{Name: tdefname, Ref: &gIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + tdefname}}
 				me.EnvTypeSyns = append(me.EnvTypeSyns, ta)
 			}
 		} else {
-			dt := &GIrMTypeDataDecl{Name: tdefname}
+			dt := &gIrMTypeDataDecl{Name: tdefname}
 			for dtargname, _ := range tdef.Decl.DataType.Args {
 				dt.Args = append(dt.Args, dtargname)
 			}
 			for dcname, dcargtypes := range tdef.Decl.DataType.Ctors {
-				dtc := &GIrMTypeDataCtor{Name: dcname}
+				dtc := &gIrMTypeDataCtor{Name: dcname}
 				for _, dcargtype := range dcargtypes {
 					dtc.Args = append(dtc.Args, me.newTypeRefFromEnvTag(dcargtype))
 				}
@@ -270,28 +270,28 @@ func (me *GonadIrMeta) populateEnvTypeDataDecls() {
 	}
 }
 
-func (me *GonadIrMeta) populateEnvTypeSyns() {
+func (me *gonadIrMeta) populateEnvTypeSyns() {
 	for tsname, tsdef := range me.mod.coreimp.DeclEnv.TypeSyns {
 		if _, istc := me.mod.coreimp.DeclEnv.Classes[tsname]; !istc {
-			ts := &GIrMNamedTypeRef{Name: tsname}
+			ts := &gIrMNamedTypeRef{Name: tsname}
 			ts.Ref = me.newTypeRefFromEnvTag(tsdef.Type)
 			me.EnvTypeSyns = append(me.EnvTypeSyns, ts)
 		}
 	}
 }
 
-func (me *GonadIrMeta) populateEnvTypeClasses() {
+func (me *gonadIrMeta) populateEnvTypeClasses() {
 	for tcname, tcdef := range me.mod.coreimp.DeclEnv.Classes {
-		tc := &GIrMTypeClass{Name: tcname}
+		tc := &gIrMTypeClass{Name: tcname}
 		for tcarg, _ := range tcdef.Args {
 			tc.Args = append(tc.Args, tcarg)
 		}
 		for tcmname, tcmdef := range tcdef.Members {
 			tref := me.newTypeRefFromEnvTag(tcmdef)
-			tc.Members = append(tc.Members, GIrMNamedTypeRef{Name: tcmname, Ref: tref})
+			tc.Members = append(tc.Members, gIrMNamedTypeRef{Name: tcmname, Ref: tref})
 		}
 		for _, tcsc := range tcdef.Superclasses {
-			c := &GIrMTypeRefConstr{Class: tcsc.Class}
+			c := &gIrMTypeRefConstr{Class: tcsc.Class}
 			for _, tcsca := range tcsc.Args {
 				c.Args = append(c.Args, me.newTypeRefFromEnvTag(tcsca))
 			}
@@ -302,7 +302,7 @@ func (me *GonadIrMeta) populateEnvTypeClasses() {
 	for _, m := range me.mod.coreimp.DeclEnv.ClassDicts {
 		for tciclass, tcinsts := range m {
 			for tciname, tcidef := range tcinsts {
-				tci := &GIrMTypeClassInst{Name: tciname, ClassName: tciclass}
+				tci := &gIrMTypeClassInst{Name: tciname, ClassName: tciclass}
 				for _, tcit := range tcidef.InstanceTypes {
 					tci.InstTypes = append(tci.InstTypes, me.newTypeRefFromEnvTag(tcit))
 				}
@@ -312,7 +312,7 @@ func (me *GonadIrMeta) populateEnvTypeClasses() {
 	}
 }
 
-func (me *GonadIrMeta) PopulateFromCoreImp() {
+func (me *gonadIrMeta) populateFromCoreImp() {
 	me.mod.coreimp.prep()
 	for _, exp := range me.mod.ext.EfExports {
 		if len(exp.TypeRef) > 1 {
@@ -327,7 +327,7 @@ func (me *GonadIrMeta) PopulateFromCoreImp() {
 	}
 	for _, imp := range me.mod.coreimp.Imps {
 		if impname := strings.Join(imp, "."); impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
-			me.imports = append(me.imports, FindModuleByQName(impname))
+			me.imports = append(me.imports, findModuleByQName(impname))
 		}
 	}
 	me.populateEnvTypeSyns()
@@ -343,11 +343,11 @@ func (me *GonadIrMeta) PopulateFromCoreImp() {
 	return
 }
 
-func (me *GonadIrMeta) PopulateFromLoaded() error {
+func (me *gonadIrMeta) populateFromLoaded() error {
 	me.imports = nil
 	for _, imp := range me.Imports {
 		if !strings.HasPrefix(imp.Q, nsPrefixDefaultFfiPkg) {
-			if impmod := FindModuleByQName(imp.Q); impmod == nil {
+			if impmod := findModuleByQName(imp.Q); impmod == nil {
 				return errors.New("Bad import " + imp.Q)
 			} else {
 				me.imports = append(me.imports, impmod)
@@ -357,17 +357,17 @@ func (me *GonadIrMeta) PopulateFromLoaded() error {
 	return nil
 }
 
-func (me *GonadIrMeta) populateGoValDecls() {
+func (me *gonadIrMeta) populateGoValDecls() {
 	mdict, m := map[string][]string{}, map[string]bool{}
 	var tdict map[string][]string
 
 	for _, evd := range me.EnvValDecls {
 		tdict = map[string][]string{}
-		gvd := &GIrANamedTypeRef{Export: true}
+		gvd := &gIrANamedTypeRef{Export: true}
 		gvd.setBothNamesFromPsName(evd.Name)
 		for true {
 			_, funcexists := m[gvd.NameGo]
-			if gtd := me.GoTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
+			if gtd := me.goTypeDefByGoName(gvd.NameGo); funcexists || gtd != nil {
 				gvd.NameGo += "ˇ"
 			} else {
 				break
@@ -379,7 +379,7 @@ func (me *GonadIrMeta) populateGoValDecls() {
 	}
 }
 
-func (me *GonadIrMeta) GoValDeclByGoName(goname string) *GIrANamedTypeRef {
+func (me *gonadIrMeta) goValDeclByGoName(goname string) *gIrANamedTypeRef {
 	for _, gvd := range me.GoValDecls {
 		if gvd.NameGo == goname {
 			return gvd
@@ -388,7 +388,7 @@ func (me *GonadIrMeta) GoValDeclByGoName(goname string) *GIrANamedTypeRef {
 	return nil
 }
 
-func (me *GonadIrMeta) GoValDeclByPsName(psname string) *GIrANamedTypeRef {
+func (me *gonadIrMeta) goValDeclByPsName(psname string) *gIrANamedTypeRef {
 	for _, gvd := range me.GoValDecls {
 		if gvd.NamePs == psname {
 			return gvd
@@ -397,7 +397,7 @@ func (me *GonadIrMeta) GoValDeclByPsName(psname string) *GIrANamedTypeRef {
 	return nil
 }
 
-func (me *GonadIrMeta) GoTypeDefByGoName(goname string) *GIrANamedTypeRef {
+func (me *gonadIrMeta) goTypeDefByGoName(goname string) *gIrANamedTypeRef {
 	for _, gtd := range me.GoTypeDefs {
 		if gtd.NameGo == goname {
 			return gtd
@@ -406,7 +406,7 @@ func (me *GonadIrMeta) GoTypeDefByGoName(goname string) *GIrANamedTypeRef {
 	return nil
 }
 
-func (me *GonadIrMeta) GoTypeDefByPsName(psname string) *GIrANamedTypeRef {
+func (me *gonadIrMeta) goTypeDefByPsName(psname string) *gIrANamedTypeRef {
 	for _, gtd := range me.GoTypeDefs {
 		if gtd.NamePs == psname {
 			return gtd
@@ -415,7 +415,7 @@ func (me *GonadIrMeta) GoTypeDefByPsName(psname string) *GIrANamedTypeRef {
 	return nil
 }
 
-func (me *GonadIrMeta) WriteAsJsonTo(w io.Writer) error {
+func (me *gonadIrMeta) writeAsJsonTo(w io.Writer) error {
 	jsonenc := json.NewEncoder(w)
 	jsonenc.SetIndent("", "\t")
 	return jsonenc.Encode(me)

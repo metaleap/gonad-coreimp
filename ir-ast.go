@@ -21,24 +21,25 @@ represents the code in a generated Go package, minus
 This latter 'design accident' should probably be revamped.
 */
 
-type GonadIrAst struct {
-	GIrABlock `json:",omitempty"`
+type gonadIrAst struct {
+	gIrABlock `json:",omitempty"`
 
-	mod  *ModuleInfo
-	proj *PsBowerProject
-	girM *GonadIrMeta
+	mod  *modPkg
+	proj *psBowerProject
+	girM *gonadIrMeta
 }
 
-type GIrA interface {
+type gIrA interface {
 	Base() *gIrABase
-	Parent() GIrA
+	Parent() gIrA
 }
 
 type gIrABase struct {
-	GIrANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
-	Comments         []*CoreImpComment   `json:",omitempty"`
+	gIrANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
 
-	parent GIrA
+	Comments []*coreImpComment `json:",omitempty"`
+
+	parent gIrA
 }
 
 func (me *gIrABase) Base() *gIrABase {
@@ -48,104 +49,103 @@ func (me *gIrABase) Base() *gIrABase {
 func (me *gIrABase) isParentOp() (isparentop bool) {
 	if me.parent != nil {
 		switch me.parent.(type) {
-		case *GIrAOp1, *GIrAOp2:
+		case *gIrAOp1, *gIrAOp2:
 			isparentop = true
 		}
 	}
 	return
 }
 
-func (me *gIrABase) Parent() GIrA {
+func (me *gIrABase) Parent() gIrA {
 	return me.parent
 }
 
 type gIrAConstable interface {
-	GIrA
 	isConstable() bool
 }
 
-type GIrAConst struct {
+type gIrAConst struct {
 	gIrABase
-	ConstVal GIrA `json:",omitempty"`
+	ConstVal gIrA `json:",omitempty"`
 }
 
-type GIrAVar struct {
+type gIrAVar struct {
 	gIrABase
-	VarVal GIrA `json:",omitempty"`
+	VarVal gIrA `json:",omitempty"`
 }
 
-type GIrAFunc struct {
+type gIrAFunc struct {
 	gIrABase
-	FuncImpl *GIrABlock `json:",omitempty"`
+	FuncImpl *gIrABlock `json:",omitempty"`
 }
 
-type GIrALitStr struct {
+type gIrALitStr struct {
 	gIrABase
 	LitStr string
 }
 
-func (me *GIrALitStr) isConstable() bool {
+func (me *gIrALitStr) isConstable() bool {
 	return true
 }
 
-type GIrALitBool struct {
+type gIrALitBool struct {
 	gIrABase
 	LitBool bool
 }
 
-func (_ GIrALitBool) isConstable() bool { return true }
+func (_ gIrALitBool) isConstable() bool { return true }
 
-type GIrALitDouble struct {
+type gIrALitDouble struct {
 	gIrABase
 	LitDouble float64
 }
 
-func (_ GIrALitDouble) isConstable() bool { return true }
+func (_ gIrALitDouble) isConstable() bool { return true }
 
-type GIrALitInt struct {
+type gIrALitInt struct {
 	gIrABase
 	LitInt int
 }
 
-func (_ GIrALitInt) isConstable() bool { return true }
+func (_ gIrALitInt) isConstable() bool { return true }
 
-type GIrABlock struct {
+type gIrABlock struct {
 	gIrABase
-	Body []GIrA `json:",omitempty"`
+	Body []gIrA `json:",omitempty"`
 }
 
-func (me *GIrABlock) Add(asts ...GIrA) {
+func (me *gIrABlock) Add(asts ...gIrA) {
 	for _, a := range asts {
 		a.Base().parent = me
 	}
 	me.Body = append(me.Body, asts...)
 }
 
-type GIrAComments struct {
+type gIrAComments struct {
 	gIrABase
 }
 
-type GIrAOp1 struct {
+type gIrAOp1 struct {
 	gIrABase
 	Op1 string `json:",omitempty"`
-	Of  GIrA   `json:",omitempty"`
+	Of  gIrA   `json:",omitempty"`
 }
 
-func (me GIrAOp1) isConstable() bool {
+func (me gIrAOp1) isConstable() bool {
 	if c, ok := me.Of.(gIrAConstable); ok {
 		return c.isConstable()
 	}
 	return false
 }
 
-type GIrAOp2 struct {
+type gIrAOp2 struct {
 	gIrABase
-	Left  GIrA   `json:",omitempty"`
+	Left  gIrA   `json:",omitempty"`
 	Op2   string `json:",omitempty"`
-	Right GIrA   `json:",omitempty"`
+	Right gIrA   `json:",omitempty"`
 }
 
-func (me GIrAOp2) isConstable() bool {
+func (me gIrAOp2) isConstable() bool {
 	if c, _ := me.Left.(gIrAConstable); c != nil && c.isConstable() {
 		if c, _ := me.Right.(gIrAConstable); c != nil {
 			return c.isConstable()
@@ -154,106 +154,106 @@ func (me GIrAOp2) isConstable() bool {
 	return false
 }
 
-type GIrASet struct {
+type gIrASet struct {
 	gIrABase
-	SetLeft GIrA `json:",omitempty"`
-	ToRight GIrA `json:",omitempty"`
+	SetLeft gIrA `json:",omitempty"`
+	ToRight gIrA `json:",omitempty"`
 
 	isInVarGroup bool
 }
 
-type GIrAFor struct {
+type gIrAFor struct {
 	gIrABase
-	ForDo    *GIrABlock `json:",omitempty"`
-	ForCond  GIrA       `json:",omitempty"`
-	ForInit  []*GIrASet `json:",omitempty"`
-	ForStep  []*GIrASet `json:",omitempty"`
-	ForRange *GIrAVar   `json:",omitempty"`
+	ForDo    *gIrABlock `json:",omitempty"`
+	ForCond  gIrA       `json:",omitempty"`
+	ForInit  []*gIrASet `json:",omitempty"`
+	ForStep  []*gIrASet `json:",omitempty"`
+	ForRange *gIrAVar   `json:",omitempty"`
 }
 
-type GIrAIf struct {
+type gIrAIf struct {
 	gIrABase
-	If   GIrA       `json:",omitempty"`
-	Then *GIrABlock `json:",omitempty"`
-	Else *GIrABlock `json:",omitempty"`
+	If   gIrA       `json:",omitempty"`
+	Then *gIrABlock `json:",omitempty"`
+	Else *gIrABlock `json:",omitempty"`
 }
 
-type GIrACall struct {
+type gIrACall struct {
 	gIrABase
-	Callee   GIrA   `json:",omitempty"`
-	CallArgs []GIrA `json:",omitempty"`
+	Callee   gIrA   `json:",omitempty"`
+	CallArgs []gIrA `json:",omitempty"`
 }
 
-type GIrALitObj struct {
+type gIrALitObj struct {
 	gIrABase
-	ObjFields []*GIrALitObjField `json:",omitempty"`
+	ObjFields []*gIrALitObjField `json:",omitempty"`
 }
 
-type GIrALitObjField struct {
+type gIrALitObjField struct {
 	gIrABase
-	FieldVal GIrA `json:",omitempty"`
+	FieldVal gIrA `json:",omitempty"`
 }
 
-type GIrANil struct {
+type gIrANil struct {
 	gIrABase
 	Nil interface{} // useless except we want to see it in the gonadast.json
 }
 
-type GIrARet struct {
+type gIrARet struct {
 	gIrABase
-	RetArg GIrA `json:",omitempty"`
+	RetArg gIrA `json:",omitempty"`
 }
 
-type GIrAPanic struct {
+type gIrAPanic struct {
 	gIrABase
-	PanicArg GIrA `json:",omitempty"`
+	PanicArg gIrA `json:",omitempty"`
 }
 
-type GIrALitArr struct {
+type gIrALitArr struct {
 	gIrABase
-	ArrVals []GIrA `json:",omitempty"`
+	ArrVals []gIrA `json:",omitempty"`
 }
 
-type GIrAIndex struct {
+type gIrAIndex struct {
 	gIrABase
-	IdxLeft  GIrA `json:",omitempty"`
-	IdxRight GIrA `json:",omitempty"`
+	IdxLeft  gIrA `json:",omitempty"`
+	IdxRight gIrA `json:",omitempty"`
 }
 
-type GIrADot struct {
+type gIrADot struct {
 	gIrABase
-	DotLeft  GIrA `json:",omitempty"`
-	DotRight GIrA `json:",omitempty"`
+	DotLeft  gIrA `json:",omitempty"`
+	DotRight gIrA `json:",omitempty"`
 }
 
-type GIrAIsType struct {
+type gIrAIsType struct {
 	gIrABase
-	ExprToTest GIrA   `json:",omitempty"`
+	ExprToTest gIrA   `json:",omitempty"`
 	TypeToTest string `json:",omitempty"`
 }
 
-type GIrAToType struct {
+type gIrAToType struct {
 	gIrABase
-	ExprToCast GIrA   `json:",omitempty"`
+	ExprToCast gIrA   `json:",omitempty"`
 	TypePkg    string `json:",omitempty"`
 	TypeName   string `json:",omitempty"`
 }
 
-type GIrAPkgSym struct {
+type gIrAPkgSym struct {
 	gIrABase
 	PkgName string `json:",omitempty"`
 	Symbol  string `json:",omitempty"`
 }
 
-func (me *GonadIrAst) FinalizePostPrep() (err error) {
+func (me *gonadIrAst) finalizePostPrep() (err error) {
 	return // temporarily
 	//	various fix-ups
-	me.Walk(func(ast GIrA) GIrA {
+	me.walk(func(ast gIrA) gIrA {
 		if ast != nil {
 			switch a := ast.(type) {
-			case *GIrAOp1:
+			case *gIrAOp1:
 				if a != nil && a.Op1 == "&" {
-					if oc, _ := a.Of.(*GIrACall); oc != nil {
+					if oc, _ := a.Of.(*gIrACall); oc != nil {
 						return me.postFixupAmpCtor(a, oc)
 					}
 				}
@@ -269,7 +269,7 @@ func (me *GonadIrAst) FinalizePostPrep() (err error) {
 	return
 }
 
-func (me *GonadIrAst) PrepFromCoreImp() (err error) {
+func (me *gonadIrAst) prepFromCoreImp() (err error) {
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
@@ -285,17 +285,17 @@ func (me *GonadIrAst) PrepFromCoreImp() (err error) {
 	return
 }
 
-func (me *GonadIrAst) resolveAllArgTypes() {
+func (me *gonadIrAst) resolveAllArgTypes() {
 	//	first pass: walk all literals and propagate to parent expressions
 }
 
-func (me *GonadIrAst) WriteAsJsonTo(w io.Writer) error {
+func (me *gonadIrAst) writeAsJsonTo(w io.Writer) error {
 	jsonenc := json.NewEncoder(w)
 	jsonenc.SetIndent("", "\t")
 	return jsonenc.Encode(me)
 }
 
-func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
+func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	var buf = &bytes.Buffer{}
 
 	for _, gtd := range me.girM.GoTypeDefs {
@@ -308,14 +308,14 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
 
-	toplevelconsts := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAConst); return ok })
-	toplevelvars := me.topLevelDefs(func(a GIrA) bool { _, ok := a.(*GIrAVar); return ok })
+	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { _, ok := a.(*gIrAConst); return ok })
+	toplevelvars := me.topLevelDefs(func(a gIrA) bool { _, ok := a.(*gIrAVar); return ok })
 
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
 
-	toplevelctorfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAVar); return ok && c.WasTypeFunc })
-	toplevelfuncs := me.topLevelDefs(func(a GIrA) bool { c, ok := a.(*GIrAFunc); return ok && !c.WasTypeFunc })
+	toplevelctorfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAVar); return ok && c.WasTypeFunc })
+	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAFunc); return ok && !c.WasTypeFunc })
 	for _, ast := range toplevelctorfuncs {
 		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
 		fmt.Fprint(buf, "\n\n")
@@ -332,8 +332,8 @@ func (me *GonadIrAst) WriteAsGoTo(writer io.Writer) (err error) {
 	return
 }
 
-func (me *GonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (pname string, tname string) {
-	var mod *ModuleInfo
+func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (pname string, tname string) {
+	var mod *modPkg
 	wasprim := false
 	i := strings.LastIndex(tref, ".")
 	if tname = tref[i+1:]; i > 0 {
@@ -358,9 +358,9 @@ func (me *GonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 		} else {
 			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
 			if isffi {
-				pname = dot2underscore.Replace(pname)
+				pname = strReplDot2Underscore.Replace(pname)
 			} else {
-				if mod = FindModuleByQName(pname); mod == nil {
+				if mod = findModuleByQName(pname); mod == nil {
 					panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
 				}
 				pname = mod.pName
@@ -374,9 +374,9 @@ func (me *GonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 				}
 			}
 			if !foundimport {
-				var imp *GIrMPkgRef
+				var imp *gIrMPkgRef
 				if isffi {
-					imp = &GIrMPkgRef{P: "github.com/metaleap/gonad/" + dot2slash.Replace(qn), Q: qn, N: pname}
+					imp = &gIrMPkgRef{P: "github.com/metaleap/gonad/" + strReplDot2Slash.Replace(qn), Q: qn, N: pname}
 				} else {
 					imp = newModImp(mod)
 				}
@@ -389,8 +389,8 @@ func (me *GonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 		mod = me.mod
 	}
 	if (!wasprim) && mod != nil {
-		if tref := mod.girMeta.GoTypeDefByPsName(tname); tref != nil {
-			tname = mod.girMeta.GoTypeDefByPsName(tname).NameGo
+		if tref := mod.girMeta.goTypeDefByPsName(tname); tref != nil {
+			tname = mod.girMeta.goTypeDefByPsName(tname).NameGo
 		}
 	}
 	return

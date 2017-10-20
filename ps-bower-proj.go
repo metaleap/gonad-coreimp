@@ -16,19 +16,19 @@ Represents either the given PureScript main `src` project
 or one of its dependency libs usually found in `bower_components`.
 */
 
-type PsBowerProject struct {
+type psBowerProject struct {
 	JsonFilePath     string
 	SrcDirPath       string
 	DepsDirPath      string
 	DumpsDirProjPath string
 	JsonFile         udevbower.BowerFile
-	Modules          []*ModuleInfo
+	Modules          []*modPkg
 	GoOut            struct {
 		PkgDirPath string
 	}
 }
 
-func (me *PsBowerProject) EnsureOutDirs() (err error) {
+func (me *psBowerProject) ensureOutDirs() (err error) {
 	dirpath := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 	if err = ufs.EnsureDirExists(dirpath); err == nil {
 		for _, depmod := range me.Modules {
@@ -40,7 +40,7 @@ func (me *PsBowerProject) EnsureOutDirs() (err error) {
 	return
 }
 
-func (me *PsBowerProject) ModuleByQName(qname string) *ModuleInfo {
+func (me *psBowerProject) moduleByQName(qname string) *modPkg {
 	for _, m := range me.Modules {
 		if m.qName == qname {
 			return m
@@ -49,7 +49,7 @@ func (me *PsBowerProject) ModuleByQName(qname string) *ModuleInfo {
 	return nil
 }
 
-func (me *PsBowerProject) ModuleByPName(pname string) *ModuleInfo {
+func (me *psBowerProject) moduleByPName(pname string) *modPkg {
 	for _, m := range me.Modules {
 		if m.pName == pname {
 			return m
@@ -58,7 +58,7 @@ func (me *PsBowerProject) ModuleByPName(pname string) *ModuleInfo {
 	return nil
 }
 
-func (me *PsBowerProject) LoadFromJsonFile(isdep bool) (err error) {
+func (me *psBowerProject) loadFromJsonFile(isdep bool) (err error) {
 	if err = udevbower.LoadFromFile(me.JsonFilePath, &me.JsonFile); err == nil {
 		me.GoOut.PkgDirPath = Flag.GoNamespace
 		if repourl := me.JsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {
@@ -77,7 +77,7 @@ func (me *PsBowerProject) LoadFromJsonFile(isdep bool) (err error) {
 		gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
 		ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
 			if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-				me.AddModuleInfoFromPsSrcFileIfCoreimp(relpath, gopkgdir)
+				me.addModPkgFromPsSrcFileIfCoreimp(relpath, gopkgdir)
 			}
 			return true
 		})
@@ -88,14 +88,14 @@ func (me *PsBowerProject) LoadFromJsonFile(isdep bool) (err error) {
 	return
 }
 
-func (me *PsBowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
+func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
 	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
-	modinfo := &ModuleInfo{
+	modinfo := &modPkg{
 		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
-		qName: slash2dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
+		qName: strReplSlash2Dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
 	}
 	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
-		modinfo.pName = dot2underscore.Replace(modinfo.qName)
+		modinfo.pName = strReplDot2Underscore.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
 		modinfo.girMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
@@ -111,7 +111,7 @@ func (me *PsBowerProject) AddModuleInfoFromPsSrcFileIfCoreimp(relpath string, go
 	}
 }
 
-func (me *PsBowerProject) ForAll(op func(*sync.WaitGroup, *ModuleInfo)) {
+func (me *psBowerProject) forAll(op func(*sync.WaitGroup, *modPkg)) {
 	var wg sync.WaitGroup
 	for _, modinfo := range me.Modules {
 		wg.Add(1)
@@ -120,8 +120,8 @@ func (me *PsBowerProject) ForAll(op func(*sync.WaitGroup, *ModuleInfo)) {
 	wg.Wait()
 }
 
-func (me *PsBowerProject) EnsureModPkgGIrMetas() {
-	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+func (me *psBowerProject) ensureModPkgGIrMetas() {
+	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		var err error
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
@@ -137,8 +137,8 @@ func (me *PsBowerProject) EnsureModPkgGIrMetas() {
 	})
 }
 
-func (me *PsBowerProject) PrepModPkgGIrAsts() {
-	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+func (me *psBowerProject) prepModPkgGIrAsts() {
+	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
 			if err := modinfo.prepGIrAst(); err != nil {
@@ -148,8 +148,8 @@ func (me *PsBowerProject) PrepModPkgGIrAsts() {
 	})
 }
 
-func (me *PsBowerProject) ReGenModPkgGIrAsts() {
-	me.ForAll(func(wg *sync.WaitGroup, modinfo *ModuleInfo) {
+func (me *psBowerProject) reGenModPkgGIrAsts() {
+	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
 			if err := modinfo.reGenPkgGIrAst(); err != nil {
@@ -159,15 +159,15 @@ func (me *PsBowerProject) ReGenModPkgGIrAsts() {
 	})
 }
 
-func (me *PsBowerProject) WriteOutDirtyGIrMetas(isagain bool) (err error) {
+func (me *psBowerProject) writeOutDirtyGIrMetas(isagain bool) (err error) {
 	isfirst := !isagain
-	me.ForAll(func(wg *sync.WaitGroup, m *ModuleInfo) {
+	me.forAll(func(wg *sync.WaitGroup, m *modPkg) {
 		defer wg.Done()
 		shouldwrite := (isagain && m.girMeta.save) ||
 			(isfirst && (m.reGenGIr || m.girMeta.save || Flag.ForceRegenAll))
 		if shouldwrite {
 			var buf bytes.Buffer
-			if err = m.girMeta.WriteAsJsonTo(&buf); err == nil {
+			if err = m.girMeta.writeAsJsonTo(&buf); err == nil {
 				if err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes()); err == nil {
 					m.girMeta.save = false
 				}

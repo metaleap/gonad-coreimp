@@ -19,16 +19,16 @@ func coreImpEnvErr(cat string, name string) error {
 	return fmt.Errorf(msgfmt, cat, name)
 }
 
-type CoreImpEnv struct {
-	TypeSyns   map[string]*CoreImpEnvTypeSyn           `json:"typeSynonyms"`
-	TypeDefs   map[string]*CoreImpEnvTypeDef           `json:"types"`
-	DataCtors  map[string]*CoreImpEnvTypeCtor          `json:"dataConstructors"`
-	Classes    map[string]*CoreImpEnvClass             `json:"typeClasses"`
-	ClassDicts []map[string]map[string]*CoreImpEnvInst `json:"typeClassDictionaries"`
-	Functions  map[string]*CoreImpEnvName              `json:"names"`
+type coreImpEnv struct {
+	TypeSyns   map[string]*coreImpEnvTypeSyn           `json:"typeSynonyms"`
+	TypeDefs   map[string]*coreImpEnvTypeDef           `json:"types"`
+	DataCtors  map[string]*coreImpEnvTypeCtor          `json:"dataConstructors"`
+	Classes    map[string]*coreImpEnvClass             `json:"typeClasses"`
+	ClassDicts []map[string]map[string]*coreImpEnvInst `json:"typeClassDictionaries"`
+	Functions  map[string]*coreImpEnvName              `json:"names"`
 }
 
-func (me *CoreImpEnv) prep() {
+func (me *coreImpEnv) prep() {
 	for _, ts := range me.TypeSyns {
 		ts.prep()
 	}
@@ -53,19 +53,19 @@ func (me *CoreImpEnv) prep() {
 	}
 }
 
-type CoreImpEnvClass struct {
+type coreImpEnvClass struct {
 	CoveringSets   [][]int                       `json:"tcCoveringSets"`
 	DeterminedArgs []int                         `json:"tcDeterminedArgs"`
-	Args           map[string]*CoreImpEnvTagKind `json:"tcArgs"`
-	Members        map[string]*CoreImpEnvTagType `json:"tcMembers"`
-	Superclasses   []*CoreImpEnvConstr           `json:"tcSuperclasses"`
+	Args           map[string]*coreImpEnvTagKind `json:"tcArgs"`
+	Members        map[string]*coreImpEnvTagType `json:"tcMembers"`
+	Superclasses   []*coreImpEnvConstr           `json:"tcSuperclasses"`
 	Dependencies   []struct {
 		Determiners []int `json:"determiners"`
 		Determined  []int `json:"determined"`
 	} `json:"tcDependencies"`
 }
 
-func (me *CoreImpEnvClass) prep() {
+func (me *coreImpEnvClass) prep() {
 	for tcan, tca := range me.Args {
 		if tca != nil {
 			panic(coreImpEnvErr("tcArgs", tcan+"!=nil"))
@@ -80,17 +80,17 @@ func (me *CoreImpEnvClass) prep() {
 	}
 }
 
-type CoreImpEnvInst struct {
+type coreImpEnvInst struct {
 	Chain         []string             `json:"tcdChain"`
 	Index         int                  `json:"tcdIndex"`
 	Value         string               `json:"tcdValue"`
 	Path          map[string]int       `json:"tcdPath"`
 	ClassName     string               `json:"tcdClassName"`
-	InstanceTypes []*CoreImpEnvTagType `json:"tcdInstanceTypes"`
-	Dependencies  []*CoreImpEnvConstr  `json:"tcdDependencies"`
+	InstanceTypes []*coreImpEnvTagType `json:"tcdInstanceTypes"`
+	Dependencies  []*coreImpEnvConstr  `json:"tcdDependencies"`
 }
 
-func (me *CoreImpEnvInst) prep() {
+func (me *coreImpEnvInst) prep() {
 	for _, it := range me.InstanceTypes {
 		it.prep()
 	}
@@ -99,13 +99,13 @@ func (me *CoreImpEnvInst) prep() {
 	}
 }
 
-type CoreImpEnvConstr struct {
+type coreImpEnvConstr struct {
 	Class string               `json:"constraintClass"`
-	Args  []*CoreImpEnvTagType `json:"constraintArgs"`
+	Args  []*coreImpEnvTagType `json:"constraintArgs"`
 	Data  interface{}          `json:"constraintData"`
 }
 
-func (me *CoreImpEnvConstr) prep() {
+func (me *coreImpEnvConstr) prep() {
 	if me.Data != nil {
 		panic(coreImpEnvErr("constraintData", fmt.Sprintf("%v", me.Data)))
 	}
@@ -114,12 +114,12 @@ func (me *CoreImpEnvConstr) prep() {
 	}
 }
 
-type CoreImpEnvTypeSyn struct {
-	Args map[string]*CoreImpEnvTagKind `json:"tsArgs"`
-	Type *CoreImpEnvTagType            `json:"tsType"`
+type coreImpEnvTypeSyn struct {
+	Args map[string]*coreImpEnvTagKind `json:"tsArgs"`
+	Type *coreImpEnvTagType            `json:"tsType"`
 }
 
-func (me *CoreImpEnvTypeSyn) prep() {
+func (me *coreImpEnvTypeSyn) prep() {
 	if me.Type != nil {
 		me.Type.prep()
 	}
@@ -128,30 +128,30 @@ func (me *CoreImpEnvTypeSyn) prep() {
 	}
 }
 
-type CoreImpEnvTypeCtor struct {
+type coreImpEnvTypeCtor struct {
 	Decl string             `json:"cDecl"`
 	Type string             `json:"cType"`
-	Ctor *CoreImpEnvTagType `json:"cCtor"`
+	Ctor *coreImpEnvTagType `json:"cCtor"`
 	Args []string           `json:"cArgs"` // value0, value1 ..etc.
 }
 
-func (me *CoreImpEnvTypeCtor) isDeclData() bool    { return me.Decl == "data" }
-func (me *CoreImpEnvTypeCtor) isDeclNewtype() bool { return me.Decl == "newtype" }
-func (me *CoreImpEnvTypeCtor) prep() {
+func (me *coreImpEnvTypeCtor) isDeclData() bool    { return me.Decl == "data" }
+func (me *coreImpEnvTypeCtor) isDeclNewtype() bool { return me.Decl == "newtype" }
+func (me *coreImpEnvTypeCtor) prep() {
 	if !(me.isDeclData() || me.isDeclNewtype()) {
-		panic(coreImpEnvErr("CoreImpEnvTypeCtor.Decl", me.Decl))
+		panic(coreImpEnvErr("coreImpEnvTypeCtor.Decl", me.Decl))
 	}
 	if me.Ctor != nil {
 		me.Ctor.prep()
 	}
 }
 
-type CoreImpEnvTypeDef struct {
-	Kind *CoreImpEnvTagKind  `json:"tKind"`
-	Decl *CoreImpEnvTypeDecl `json:"tDecl"`
+type coreImpEnvTypeDef struct {
+	Kind *coreImpEnvTagKind  `json:"tKind"`
+	Decl *coreImpEnvTypeDecl `json:"tDecl"`
 }
 
-func (me *CoreImpEnvTypeDef) prep() {
+func (me *coreImpEnvTypeDef) prep() {
 	if me.Kind != nil {
 		me.Kind.prep()
 	}
@@ -160,15 +160,15 @@ func (me *CoreImpEnvTypeDef) prep() {
 	}
 }
 
-type CoreImpEnvTypeDecl struct {
-	TypeSynonym       bool                `json:""`
-	ExternData        bool                `json:""`
-	LocalTypeVariable bool                `json:""`
-	ScopedTypeVar     bool                `json:""`
-	DataType          *CoreImpEnvTypeData `json:""`
+type coreImpEnvTypeDecl struct {
+	TypeSynonym       bool
+	ExternData        bool
+	LocalTypeVariable bool
+	ScopedTypeVar     bool
+	DataType          *coreImpEnvTypeData
 }
 
-func (me *CoreImpEnvTypeDecl) prep() {
+func (me *coreImpEnvTypeDecl) prep() {
 	if me.LocalTypeVariable {
 		panic(coreImpEnvErr("tDecl", "LocalTypeVariable"))
 	}
@@ -180,12 +180,12 @@ func (me *CoreImpEnvTypeDecl) prep() {
 	}
 }
 
-type CoreImpEnvTypeData struct {
-	Args  map[string]*CoreImpEnvTagKind   `json:"args"`
-	Ctors map[string][]*CoreImpEnvTagType `json:"ctors"`
+type coreImpEnvTypeData struct {
+	Args  map[string]*coreImpEnvTagKind   `json:"args"`
+	Ctors map[string][]*coreImpEnvTagType `json:"ctors"`
 }
 
-func (me *CoreImpEnvTypeData) prep() {
+func (me *coreImpEnvTypeData) prep() {
 	for _, tda := range me.Args {
 		tda.prep()
 	}
@@ -196,23 +196,23 @@ func (me *CoreImpEnvTypeData) prep() {
 	}
 }
 
-type CoreImpEnvName struct {
+type coreImpEnvName struct {
 	Vis  string             `json:"nVis"`
 	Kind string             `json:"nKind"`
-	Type *CoreImpEnvTagType `json:"nType"`
+	Type *coreImpEnvTagType `json:"nType"`
 }
 
-func (me *CoreImpEnvName) isVisDefined() bool   { return me.Vis == "Defined" }
-func (me *CoreImpEnvName) isVisUndefined() bool { return me.Vis == "Undefined" }
-func (me *CoreImpEnvName) isKindPrivate() bool  { return me.Kind == "Private" }
-func (me *CoreImpEnvName) isKindPublic() bool   { return me.Kind == "Public" }
-func (me *CoreImpEnvName) isKindExternal() bool { return me.Kind == "External" }
-func (me *CoreImpEnvName) prep() {
+func (me *coreImpEnvName) isVisDefined() bool   { return me.Vis == "Defined" }
+func (me *coreImpEnvName) isVisUndefined() bool { return me.Vis == "Undefined" }
+func (me *coreImpEnvName) isKindPrivate() bool  { return me.Kind == "Private" }
+func (me *coreImpEnvName) isKindPublic() bool   { return me.Kind == "Public" }
+func (me *coreImpEnvName) isKindExternal() bool { return me.Kind == "External" }
+func (me *coreImpEnvName) prep() {
 	if !(me.isVisDefined() || me.isVisUndefined()) {
-		panic(coreImpEnvErr("CoreImpEnvName.Vis", me.Vis))
+		panic(coreImpEnvErr("coreImpEnvName.Vis", me.Vis))
 	}
 	if !(me.isKindPublic() || me.isKindPrivate() || me.isKindExternal()) {
-		panic(coreImpEnvErr("CoreImpEnvName.Kind", me.Kind))
+		panic(coreImpEnvErr("coreImpEnvName.Kind", me.Kind))
 	}
 	if me.Type != nil {
 		me.Type.prep()
@@ -243,23 +243,23 @@ func (_ *coreImpEnvTag) tagFrom(tc map[string]interface{}) coreImpEnvTag {
 	return coreImpEnvTag{Tag: tc["tag"].(string), Contents: tc["contents"]}
 }
 
-type CoreImpEnvTagKind struct {
+type coreImpEnvTagKind struct {
 	coreImpEnvTag
 
 	num   int
 	text  string
-	kind0 *CoreImpEnvTagKind
-	kind1 *CoreImpEnvTagKind
+	kind0 *coreImpEnvTagKind
+	kind1 *coreImpEnvTagKind
 }
 
-func (me *CoreImpEnvTagKind) isRow() bool       { return me.Tag == "Row" }
-func (me *CoreImpEnvTagKind) isKUnknown() bool  { return me.Tag == "KUnknown" }
-func (me *CoreImpEnvTagKind) isFunKind() bool   { return me.Tag == "FunKind" }
-func (me *CoreImpEnvTagKind) isNamedKind() bool { return me.Tag == "NamedKind" }
-func (me *CoreImpEnvTagKind) new(tc map[string]interface{}) *CoreImpEnvTagKind {
-	return &CoreImpEnvTagKind{coreImpEnvTag: me.tagFrom(tc), num: -1}
+func (me *coreImpEnvTagKind) isRow() bool       { return me.Tag == "Row" }
+func (me *coreImpEnvTagKind) isKUnknown() bool  { return me.Tag == "KUnknown" }
+func (me *coreImpEnvTagKind) isFunKind() bool   { return me.Tag == "FunKind" }
+func (me *coreImpEnvTagKind) isNamedKind() bool { return me.Tag == "NamedKind" }
+func (me *coreImpEnvTagKind) new(tc map[string]interface{}) *coreImpEnvTagKind {
+	return &coreImpEnvTagKind{coreImpEnvTag: me.tagFrom(tc), num: -1}
 }
-func (me *CoreImpEnvTagKind) prep() {
+func (me *coreImpEnvTagKind) prep() {
 	if me != nil {
 		//	no type assertions, arr-len checks or nil checks anywhere here: the panic signals us that the coreimp format has changed
 		me.num = -1
@@ -282,40 +282,40 @@ func (me *CoreImpEnvTagKind) prep() {
 	}
 }
 
-type CoreImpEnvTagType struct {
+type coreImpEnvTagType struct {
 	coreImpEnvTag
 
 	num    int
 	skolem int
 	text   string
-	type0  *CoreImpEnvTagType
-	type1  *CoreImpEnvTagType
-	constr *CoreImpEnvConstr
+	type0  *coreImpEnvTagType
+	type1  *coreImpEnvTagType
+	constr *coreImpEnvConstr
 }
 
-// func (me *CoreImpEnvTagType) isTypeLevelString() bool     { return me.Tag == "TypeLevelString" }
-// func (me *CoreImpEnvTagType) isTypeWildcard() bool        { return me.Tag == "TypeWildcard" }
-// func (me *CoreImpEnvTagType) isTypeOp() bool              { return me.Tag == "TypeOp" }
-// func (me *CoreImpEnvTagType) isProxyType() bool           { return me.Tag == "ProxyType" }
-// func (me *CoreImpEnvTagType) isKindedType() bool          { return me.Tag == "KindedType" }
-// func (me *CoreImpEnvTagType) isPrettyPrintFunction() bool { return me.Tag == "PrettyPrintFunction" }
-// func (me *CoreImpEnvTagType) isPrettyPrintObject() bool   { return me.Tag == "PrettyPrintObject" }
-// func (me *CoreImpEnvTagType) isPrettyPrintForAll() bool   { return me.Tag == "PrettyPrintForAll" }
-// func (me *CoreImpEnvTagType) isBinaryNoParensType() bool  { return me.Tag == "BinaryNoParensType" }
-// func (me *CoreImpEnvTagType) isParensInType() bool        { return me.Tag == "ParensInType" }
-// func (me *CoreImpEnvTagType) isTUnknown() bool        { return me.Tag == "TUnknown" }
-func (me *CoreImpEnvTagType) isTypeVar() bool         { return me.Tag == "TypeVar" }
-func (me *CoreImpEnvTagType) isTypeConstructor() bool { return me.Tag == "TypeConstructor" }
-func (me *CoreImpEnvTagType) isSkolem() bool          { return me.Tag == "Skolem" }
-func (me *CoreImpEnvTagType) isREmpty() bool          { return me.Tag == "REmpty" }
-func (me *CoreImpEnvTagType) isRCons() bool           { return me.Tag == "RCons" }
-func (me *CoreImpEnvTagType) isTypeApp() bool         { return me.Tag == "TypeApp" }
-func (me *CoreImpEnvTagType) isForAll() bool          { return me.Tag == "ForAll" }
-func (me *CoreImpEnvTagType) isConstrainedType() bool { return me.Tag == "ConstrainedType" }
-func (me *CoreImpEnvTagType) new(tc map[string]interface{}) *CoreImpEnvTagType {
-	return &CoreImpEnvTagType{coreImpEnvTag: me.tagFrom(tc), num: -1, skolem: -1}
+// func (me *coreImpEnvTagType) isTypeLevelString() bool     { return me.Tag == "TypeLevelString" }
+// func (me *coreImpEnvTagType) isTypeWildcard() bool        { return me.Tag == "TypeWildcard" }
+// func (me *coreImpEnvTagType) isTypeOp() bool              { return me.Tag == "TypeOp" }
+// func (me *coreImpEnvTagType) isProxyType() bool           { return me.Tag == "ProxyType" }
+// func (me *coreImpEnvTagType) isKindedType() bool          { return me.Tag == "KindedType" }
+// func (me *coreImpEnvTagType) isPrettyPrintFunction() bool { return me.Tag == "PrettyPrintFunction" }
+// func (me *coreImpEnvTagType) isPrettyPrintObject() bool   { return me.Tag == "PrettyPrintObject" }
+// func (me *coreImpEnvTagType) isPrettyPrintForAll() bool   { return me.Tag == "PrettyPrintForAll" }
+// func (me *coreImpEnvTagType) isBinaryNoParensType() bool  { return me.Tag == "BinaryNoParensType" }
+// func (me *coreImpEnvTagType) isParensInType() bool        { return me.Tag == "ParensInType" }
+// func (me *coreImpEnvTagType) isTUnknown() bool        { return me.Tag == "TUnknown" }
+func (me *coreImpEnvTagType) isTypeVar() bool         { return me.Tag == "TypeVar" }
+func (me *coreImpEnvTagType) isTypeConstructor() bool { return me.Tag == "TypeConstructor" }
+func (me *coreImpEnvTagType) isSkolem() bool          { return me.Tag == "Skolem" }
+func (me *coreImpEnvTagType) isREmpty() bool          { return me.Tag == "REmpty" }
+func (me *coreImpEnvTagType) isRCons() bool           { return me.Tag == "RCons" }
+func (me *coreImpEnvTagType) isTypeApp() bool         { return me.Tag == "TypeApp" }
+func (me *coreImpEnvTagType) isForAll() bool          { return me.Tag == "ForAll" }
+func (me *coreImpEnvTagType) isConstrainedType() bool { return me.Tag == "ConstrainedType" }
+func (me *coreImpEnvTagType) new(tc map[string]interface{}) *coreImpEnvTagType {
+	return &coreImpEnvTagType{coreImpEnvTag: me.tagFrom(tc), num: -1, skolem: -1}
 }
-func (me *CoreImpEnvTagType) prep() {
+func (me *coreImpEnvTagType) prep() {
 	//	no type assertions, arr-len checks or nil checks anywhere here: the panic signals us that the coreimp format has changed
 	me.skolem, me.num = -1, -1
 	if me.isTypeVar() {
@@ -341,7 +341,7 @@ func (me *CoreImpEnvTagType) prep() {
 		me.type0 = me.new(tuple[1].(map[string]interface{}))
 		me.type0.prep()
 		constr := tuple[0].(map[string]interface{})
-		me.constr = &CoreImpEnvConstr{Data: constr["constraintData"], Class: me.ident2qname(constr["constraintClass"].([]interface{}))}
+		me.constr = &coreImpEnvConstr{Data: constr["constraintData"], Class: me.ident2qname(constr["constraintClass"].([]interface{}))}
 		for _, ca := range constr["constraintArgs"].([]interface{}) {
 			carg := me.new(ca.(map[string]interface{}))
 			me.constr.Args = append(me.constr.Args, carg)
@@ -359,7 +359,8 @@ func (me *CoreImpEnvTagType) prep() {
 		me.type0.prep()
 		me.type1 = me.new(tuple[2].(map[string]interface{}))
 		me.type1.prep()
-	} else if me.isREmpty() { // nothing to do
+	} else if me.isREmpty() {
+		// nothing to do
 	} else {
 		panic(coreImpEnvErr("tagged-type", me.Tag))
 	}

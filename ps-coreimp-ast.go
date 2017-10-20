@@ -18,45 +18,45 @@ signatures) are mostly handled in ps-coreimp-decls.go.
 */
 
 var (
-	strunprimer = strings.NewReplacer("$prime", "'")
+	strReplUnprime = strings.NewReplacer("$prime", "'")
 )
 
-type CoreImp struct { // we skip unmarshaling what isn't used for now, but DO keep these around commented-out:
-	// BuiltWith  string                       `json:"builtWith,omitempty"`
-	// ModuleName string                       `json:"moduleName,omitempty"`
-	// ModulePath string                       `json:"modulePath,omitempty"`
-	// Comments   []*CoreImpComment            `json:"comments,omitempty"`
-	// Foreign    []string                     `json:"foreign,omitempty"`
-	// Exports    []string                     `json:"exports,omitempty"`
-	Imps     [][]string     `json:"imports,omitempty"`
-	Body     CoreImpAsts    `json:"body,omitempty"`
-	DeclAnns []*CoreImpDecl `json:"declAnns,omitempty"`
-	DeclEnv  CoreImpEnv     `json:"declEnv,omitempty"`
+type coreImp struct { // we skip unmarshaling what isn't used for now, but DO keep these around commented-out:
+	// BuiltWith  string            `json:"builtWith"`
+	// ModuleName string            `json:"moduleName"`
+	// ModulePath string            `json:"modulePath"`
+	// Comments   []*coreImpComment `json:"comments"`
+	// Foreign    []string          `json:"foreign"`
+	// Exports    []string          `json:"exports"`
+	Imps     [][]string     `json:"imports"`
+	Body     coreImpAsts    `json:"body"`
+	DeclAnns []*coreImpDecl `json:"declAnns"`
+	DeclEnv  coreImpEnv     `json:"declEnv"`
 
 	namedRequires map[string]string
-	mod           *ModuleInfo
+	mod           *modPkg
 }
 
-func (me *CoreImp) prep() {
+func (me *coreImp) prep() {
 	for _, da := range me.DeclAnns {
 		da.prep()
 	}
 	me.DeclEnv.prep()
 }
 
-type CoreImpComment struct {
-	LineComment  string `json:",omitempty"`
-	BlockComment string `json:",omitempty"`
+type coreImpComment struct {
+	LineComment  string
+	BlockComment string
 }
 
-type CoreImpDecl struct {
-	BindType string           `json:"bindType,omitempty"`
-	Ident    string           `json:"identifier,omitempty"`
-	Ann      *CoreImpDeclAnn  `json:"annotation,omitempty"`
-	Expr     *CoreImpDeclExpr `json:"expression,omitempty"`
+type coreImpDecl struct {
+	BindType string           `json:"bindType"`
+	Ident    string           `json:"identifier"`
+	Ann      *coreImpDeclAnn  `json:"annotation"`
+	Expr     *coreImpDeclExpr `json:"expression"`
 }
 
-func (me *CoreImpDecl) prep() {
+func (me *coreImpDecl) prep() {
 	if me.Ann != nil {
 		me.Ann.prep()
 	}
@@ -65,99 +65,91 @@ func (me *CoreImpDecl) prep() {
 	}
 }
 
-type CoreImpDeclAnn struct {
-	SourceSpan *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
-	Type       *CoreImpEnvTagType `json:"type,omitempty"`
-	Comments   []*CoreImpComment  `json:"comments,omitempty"`
+type coreImpDeclAnn struct {
+	SourceSpan *coreImpSourceSpan `json:"sourceSpan"`
+	Type       *coreImpEnvTagType `json:"type"`
+	Comments   []*coreImpComment  `json:"comments"`
 	Meta       struct {
-		MetaType   string   `json:"metaType,omitempty"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
-		CtorType   string   `json:"constructorType,omitempty"` // if MetaType=IsConstructor: SumType or ProductType
-		CtorIdents []string `json:"identifiers,omitempty"`     // if MetaType=IsConstructor
-	} `json:"meta,omitempty"`
+		MetaType   string   `json:"metaType"`        // IsConstructor or IsNewtype or IsTypeClassConstructor or IsForeign
+		CtorType   string   `json:"constructorType"` // if MetaType=IsConstructor: SumType or ProductType
+		CtorIdents []string `json:"identifiers"`     // if MetaType=IsConstructor
+	} `json:"meta"`
 }
 
-func (me *CoreImpDeclAnn) prep() {
+func (me *coreImpDeclAnn) prep() {
 	if me.Type != nil {
 		me.Type.prep()
 	}
 }
 
-type CoreImpDeclExpr struct {
-	Ann        *CoreImpDeclAnn `json:"annotation,omitempty"`
-	ExprTag    string          `json:"type,omitempty"`            // Var or Literal or Abs or App or Let or Constructor (less likely: or Accessor or ObjectUpdate or Case)
-	CtorName   string          `json:"constructorName,omitempty"` // if ExprTag=Constructor
-	CtorType   string          `json:"typeName,omitempty"`        // if ExprTag=Constructor
-	CtorFields []string        `json:"fieldNames,omitempty"`      // if ExprTag=Constructor
+type coreImpDeclExpr struct {
+	Ann        *coreImpDeclAnn `json:"annotation"`
+	ExprTag    string          `json:"type"`            // Var or Literal or Abs or App or Let or Constructor (less likely: or Accessor or ObjectUpdate or Case)
+	CtorName   string          `json:"constructorName"` // if ExprTag=Constructor
+	CtorType   string          `json:"typeName"`        // if ExprTag=Constructor
+	CtorFields []string        `json:"fieldNames"`      // if ExprTag=Constructor
 }
 
-func (me *CoreImpDeclExpr) prep() {
+func (me *coreImpDeclExpr) prep() {
 	if me.Ann != nil {
 		me.Ann.prep()
 	}
 }
 
-type CoreImpSourceSpan struct {
-	Name  string `json:"name,omitempty"`
-	Start []int  `json:"start,omitempty"`
-	End   []int  `json:"end,omitempty"`
+type coreImpSourceSpan struct {
+	Name  string `json:"name"`
+	Start []int  `json:"start"`
+	End   []int  `json:"end"`
 }
 
-type CoreImpAsts []*CoreImpAst
+type coreImpAsts []*coreImpAst
 
-func (me *CoreImpAsts) InsertAt(cia *CoreImpAst, at int) {
-	sl := *me
-	tail := append(CoreImpAsts{}, sl[at:]...)
-	prep := append(sl[:at], cia)
-	sl = append(prep, tail...)
-	*me = sl
+type coreImpAst struct {
+	AstSourceSpan  *coreImpSourceSpan `json:"sourceSpan"`
+	AstTag         string             `json:"tag"`
+	AstBody        *coreImpAst        `json:"body"`
+	AstRight       *coreImpAst        `json:"rhs"`
+	AstCommentDecl *coreImpAst        `json:"decl"`
+	AstApplArgs    coreImpAsts        `json:"args"`
+	AstOp          string             `json:"op"`
+	AstFuncParams  []string           `json:"params"`
+	AstFor1        *coreImpAst        `json:"for1"`
+	AstFor2        *coreImpAst        `json:"for2"`
+	AstThen        *coreImpAst        `json:"then"`
+	AstElse        *coreImpAst        `json:"else"`
+
+	Function               string
+	StringLiteral          string
+	BooleanLiteral         bool
+	NumericLiteral_Integer int
+	NumericLiteral_Double  float64
+	Block                  coreImpAsts
+	Var                    string
+	VariableIntroduction   string
+	While                  *coreImpAst
+	App                    *coreImpAst
+	Unary                  *coreImpAst
+	Comment                []*coreImpComment
+	Binary                 *coreImpAst
+	ForIn                  string
+	For                    string
+	IfElse                 *coreImpAst
+	ObjectLiteral          []map[string]*coreImpAst
+	Return                 *coreImpAst
+	Throw                  *coreImpAst
+	ArrayLiteral           coreImpAsts
+	Assignment             *coreImpAst
+	Indexer                *coreImpAst
+	Accessor               *coreImpAst
+	InstanceOf             *coreImpAst
+
+	parent *coreImpAst
+	root   *coreImp
 }
 
-type CoreImpAst struct {
-	AstSourceSpan  *CoreImpSourceSpan `json:"sourceSpan,omitempty"`
-	AstTag         string             `json:"tag,omitempty"`
-	AstBody        *CoreImpAst        `json:"body,omitempty"`
-	AstRight       *CoreImpAst        `json:"rhs,omitempty"`
-	AstCommentDecl *CoreImpAst        `json:"decl,omitempty"`
-	AstApplArgs    CoreImpAsts        `json:"args,omitempty"`
-	AstOp          string             `json:"op,omitempty"`
-	AstFuncParams  []string           `json:"params,omitempty"`
-	AstFor1        *CoreImpAst        `json:"for1,omitempty"`
-	AstFor2        *CoreImpAst        `json:"for2,omitempty"`
-	AstThen        *CoreImpAst        `json:"then,omitempty"`
-	AstElse        *CoreImpAst        `json:"else,omitempty"`
-
-	Function               string                   `json:",omitempty"`
-	StringLiteral          string                   `json:",omitempty"`
-	BooleanLiteral         bool                     `json:",omitempty"`
-	NumericLiteral_Integer int                      `json:",omitempty"`
-	NumericLiteral_Double  float64                  `json:",omitempty"`
-	Block                  CoreImpAsts              `json:",omitempty"`
-	Var                    string                   `json:",omitempty"`
-	VariableIntroduction   string                   `json:",omitempty"`
-	While                  *CoreImpAst              `json:",omitempty"`
-	App                    *CoreImpAst              `json:",omitempty"`
-	Unary                  *CoreImpAst              `json:",omitempty"`
-	Comment                []*CoreImpComment        `json:",omitempty"`
-	Binary                 *CoreImpAst              `json:",omitempty"`
-	ForIn                  string                   `json:",omitempty"`
-	For                    string                   `json:",omitempty"`
-	IfElse                 *CoreImpAst              `json:",omitempty"`
-	ObjectLiteral          []map[string]*CoreImpAst `json:",omitempty"`
-	Return                 *CoreImpAst              `json:",omitempty"`
-	Throw                  *CoreImpAst              `json:",omitempty"`
-	ArrayLiteral           CoreImpAsts              `json:",omitempty"`
-	Assignment             *CoreImpAst              `json:",omitempty"`
-	Indexer                *CoreImpAst              `json:",omitempty"`
-	Accessor               *CoreImpAst              `json:",omitempty"`
-	InstanceOf             *CoreImpAst              `json:",omitempty"`
-
-	parent *CoreImpAst
-	root   *CoreImp
-}
-
-func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
+func (me *coreImpAst) astForceIntoBlock(into *gIrABlock) {
 	switch maybebody := me.ciAstToGIrAst().(type) {
-	case *GIrABlock:
+	case *gIrABlock:
 		into.Body = maybebody.Body
 		for _, a := range into.Body {
 			a.Base().parent = into
@@ -167,7 +159,7 @@ func (me *CoreImpAst) astForceIntoBlock(into *GIrABlock) {
 	}
 }
 
-func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
+func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 	istopleveldecl := (me.parent == nil)
 	switch me.AstTag {
 	case "StringLiteral":
@@ -180,7 +172,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		a = ªI(me.NumericLiteral_Integer)
 	case "Var":
 		v := ªVar("", me.Var, nil)
-		if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Var); gvd != nil {
+		if gvd := me.root.mod.girMeta.goValDeclByPsName(me.Var); gvd != nil {
 			v.Export = true
 		}
 		if ustr.BeginsUpper(me.Var) {
@@ -206,15 +198,15 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "For":
-		var fv GIrAVar
+		var fv gIrAVar
 		f := ªFor()
 		fv.setBothNamesFromPsName(me.For)
 		fv1, fv2, fv3, fv4 := fv, fv, fv, fv // quirky that we need these 4 copies but we do
-		f.ForInit = []*GIrASet{ªSet(&fv1, me.AstFor1.ciAstToGIrAst())}
+		f.ForInit = []*gIrASet{ªSet(&fv1, me.AstFor1.ciAstToGIrAst())}
 		f.ForInit[0].parent = f
 		f.ForCond = ªO2(&fv2, "<", me.AstFor2.ciAstToGIrAst())
 		f.ForCond.Base().parent = f
-		f.ForStep = []*GIrASet{ªSet(&fv3, ªO2(&fv4, "+", ªI(1)))}
+		f.ForStep = []*gIrASet{ªSet(&fv3, ªO2(&fv4, "+", ªI(1)))}
 		f.ForStep[0].parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
@@ -241,7 +233,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			if ustr.BeginsUpper(me.VariableIntroduction) {
 				v.WasTypeFunc = true
 			}
-			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.VariableIntroduction); gvd != nil {
+			if gvd := me.root.mod.girMeta.goValDeclByPsName(me.VariableIntroduction); gvd != nil {
 				v.Export = true
 			}
 		}
@@ -256,14 +248,14 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 			if ustr.BeginsUpper(me.Function) {
 				f.WasTypeFunc = true
 			}
-			if gvd := me.root.mod.girMeta.GoValDeclByPsName(me.Function); gvd != nil {
+			if gvd := me.root.mod.girMeta.goValDeclByPsName(me.Function); gvd != nil {
 				f.Export = true
 			}
 		}
 		f.setBothNamesFromPsName(me.Function)
-		f.RefFunc = &GIrATypeRefFunc{}
+		f.RefFunc = &gIrATypeRefFunc{}
 		for _, fpn := range me.AstFuncParams {
-			arg := &GIrANamedTypeRef{}
+			arg := &gIrANamedTypeRef{}
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
@@ -359,7 +351,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		r := ªPanic(me.Throw.ciAstToGIrAst())
 		a = r
 	case "ArrayLiteral":
-		exprs := make([]GIrA, 0, len(me.ArrayLiteral))
+		exprs := make([]gIrA, 0, len(me.ArrayLiteral))
 		for _, v := range me.ArrayLiteral {
 			exprs = append(exprs, v.ciAstToGIrAst())
 		}
@@ -379,11 +371,11 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 		if len(me.AstRight.Var) > 0 {
 			a = ªIs(me.InstanceOf.ciAstToGIrAst(), me.AstRight.Var)
 		} else /*if me.AstRight.Indexer != nil*/ {
-			adot := me.AstRight.ciAstToGIrAst().(*GIrADot)
-			a = ªIs(me.InstanceOf.ciAstToGIrAst(), FindModuleByPName(adot.DotLeft.(*GIrAVar).NamePs).qName+"."+adot.DotRight.(*GIrAVar).NamePs)
+			adot := me.AstRight.ciAstToGIrAst().(*gIrADot)
+			a = ªIs(me.InstanceOf.ciAstToGIrAst(), findModuleByPName(adot.DotLeft.(*gIrAVar).NamePs).qName+"."+adot.DotRight.(*gIrAVar).NamePs)
 		}
 	default:
-		panic(fmt.Errorf("Just below %v: unrecognized CoreImp AST-tag, please report: %s", me.parent, me.AstTag))
+		panic(fmt.Errorf("Just below %v: unrecognized coreImp AST-tag, please report: %s", me.parent, me.AstTag))
 	}
 	if ab := a.Base(); ab != nil {
 		ab.Comments = me.Comment
@@ -391,7 +383,7 @@ func (me *CoreImpAst) ciAstToGIrAst() (a GIrA) {
 	return
 }
 
-func (me *CoreImp) preProcessTopLevel() error {
+func (me *coreImp) preProcessTopLevel() error {
 	me.namedRequires = map[string]string{}
 	me.Body = me.preProcessAsts(nil, me.Body...)
 	i := 0
@@ -424,7 +416,7 @@ func (me *CoreImp) preProcessTopLevel() error {
 	return nil
 }
 
-func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) CoreImpAsts {
+func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpAsts {
 	if parent != nil {
 		parent.root = me
 	}
@@ -444,20 +436,20 @@ func (me *CoreImp) preProcessAsts(parent *CoreImpAst, asts ...*CoreImpAst) CoreI
 		if a != nil {
 			for _, sym := range []*string{&a.For, &a.ForIn, &a.Function, &a.Var, &a.VariableIntroduction} {
 				if len(*sym) > 0 {
-					*sym = strunprimer.Replace(*sym)
+					*sym = strReplUnprime.Replace(*sym)
 				}
 			}
 			for i, mkv := range a.ObjectLiteral {
 				for onename, oneval := range mkv {
-					if nuname := strunprimer.Replace(onename); nuname != onename {
-						mkv = map[string]*CoreImpAst{}
+					if nuname := strReplUnprime.Replace(onename); nuname != onename {
+						mkv = map[string]*coreImpAst{}
 						mkv[nuname] = oneval
 						a.ObjectLiteral[i] = mkv
 					}
 				}
 			}
 			for i, afp := range a.AstFuncParams {
-				a.AstFuncParams[i] = strunprimer.Replace(afp)
+				a.AstFuncParams[i] = strReplUnprime.Replace(afp)
 			}
 
 			a.root = me

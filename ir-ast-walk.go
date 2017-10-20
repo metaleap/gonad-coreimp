@@ -10,7 +10,7 @@ Golang intermediate-representation AST:
 traversals of the abstract syntax tree
 */
 
-func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
+func (me *gonadIrAst) topLevelDefs(okay func(gIrA) bool) (defs []gIrA) {
 	for _, ast := range me.Body {
 		if okay(ast) {
 			defs = append(defs, ast)
@@ -19,7 +19,7 @@ func (me *GonadIrAst) topLevelDefs(okay func(GIrA) bool) (defs []GIrA) {
 	return
 }
 
-func (me *GonadIrAst) Walk(on func(GIrA) GIrA) {
+func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
 	for i, a := range me.Body {
 		if a != nil {
 			me.Body[i] = walk(a, on)
@@ -28,101 +28,101 @@ func (me *GonadIrAst) Walk(on func(GIrA) GIrA) {
 	for _, tr := range me.girM.GoTypeDefs {
 		for _, trm := range tr.Methods {
 			if trm.method.body != nil {
-				trm.method.body, _ = walk(trm.method.body, on).(*GIrABlock)
+				trm.method.body, _ = walk(trm.method.body, on).(*gIrABlock)
 			}
 		}
 	}
 }
 
-func walk(ast GIrA, on func(GIrA) GIrA) GIrA {
+func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 	if ast != nil {
 		switch a := ast.(type) {
 		// why extra nil checks some places below: we do have the rare case of ast!=nil and ast.(type) set and still holding a null-ptr
 		// why not everywhere: due to the nature of the ASTs constructed from coreimp, only those cases can potentially be nil if they exist at all
-		case *GIrABlock:
+		case *gIrABlock:
 			if a != nil {
 				for i, _ := range a.Body {
 					a.Body[i] = walk(a.Body[i], on)
 				}
 			}
-		case *GIrACall:
+		case *gIrACall:
 			a.Callee = walk(a.Callee, on)
 			for i, _ := range a.CallArgs {
 				a.CallArgs[i] = walk(a.CallArgs[i], on)
 			}
-		case *GIrAConst:
+		case *gIrAConst:
 			if !a.WasTypeFunc {
 				a.ConstVal = walk(a.ConstVal, on)
 			}
-		case *GIrADot:
+		case *gIrADot:
 			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
-		case *GIrAFor:
+		case *gIrAFor:
 			a.ForCond = walk(a.ForCond, on)
-			if tmp, _ := walk(a.ForRange, on).(*GIrAVar); tmp != nil {
+			if tmp, _ := walk(a.ForRange, on).(*gIrAVar); tmp != nil {
 				a.ForRange = tmp
 			}
-			if tmp, _ := walk(a.ForDo, on).(*GIrABlock); tmp != nil {
+			if tmp, _ := walk(a.ForDo, on).(*gIrABlock); tmp != nil {
 				a.ForDo = tmp
 			}
 			for i, fi := range a.ForInit {
-				if tmp, _ := walk(fi, on).(*GIrASet); tmp != nil {
+				if tmp, _ := walk(fi, on).(*gIrASet); tmp != nil {
 					a.ForInit[i] = tmp
 				}
 			}
 			for i, fs := range a.ForStep {
-				if tmp, _ := walk(fs, on).(*GIrASet); tmp != nil {
+				if tmp, _ := walk(fs, on).(*gIrASet); tmp != nil {
 					a.ForStep[i] = tmp
 				}
 			}
-		case *GIrAFunc:
+		case *gIrAFunc:
 			if !a.WasTypeFunc {
-				if tmp, _ := walk(a.FuncImpl, on).(*GIrABlock); tmp != nil {
+				if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
 					a.FuncImpl = tmp
 				}
 			}
-		case *GIrAIf:
+		case *gIrAIf:
 			a.If = walk(a.If, on)
-			if tmp, _ := walk(a.Then, on).(*GIrABlock); tmp != nil {
+			if tmp, _ := walk(a.Then, on).(*gIrABlock); tmp != nil {
 				a.Then = tmp
 			}
-			if tmp, _ := walk(a.Else, on).(*GIrABlock); tmp != nil {
+			if tmp, _ := walk(a.Else, on).(*gIrABlock); tmp != nil {
 				a.Else = tmp
 			}
-		case *GIrAIndex:
+		case *gIrAIndex:
 			a.IdxLeft, a.IdxRight = walk(a.IdxLeft, on), walk(a.IdxRight, on)
-		case *GIrAOp1:
+		case *gIrAOp1:
 			a.Of = walk(a.Of, on)
-		case *GIrAOp2:
+		case *gIrAOp2:
 			a.Left, a.Right = walk(a.Left, on), walk(a.Right, on)
-		case *GIrAPanic:
+		case *gIrAPanic:
 			a.PanicArg = walk(a.PanicArg, on)
-		case *GIrARet:
+		case *gIrARet:
 			a.RetArg = walk(a.RetArg, on)
-		case *GIrASet:
+		case *gIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
-		case *GIrAVar:
+		case *gIrAVar:
 			if a != nil && !a.WasTypeFunc {
 				a.VarVal = walk(a.VarVal, on)
 			}
-		case *GIrAIsType:
+		case *gIrAIsType:
 			a.ExprToTest = walk(a.ExprToTest, on)
-		case *GIrAToType:
+		case *gIrAToType:
 			a.ExprToCast = walk(a.ExprToCast, on)
-		case *GIrALitArr:
+		case *gIrALitArr:
 			for i, av := range a.ArrVals {
 				a.ArrVals[i] = walk(av, on)
 			}
-		case *GIrALitObj:
+		case *gIrALitObj:
 			for i, av := range a.ObjFields {
-				if tmp, _ := walk(av, on).(*GIrALitObjField); tmp != nil {
+				if tmp, _ := walk(av, on).(*gIrALitObjField); tmp != nil {
 					a.ObjFields[i] = tmp
 				}
 			}
-		case *GIrALitObjField:
+		case *gIrALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *GIrAComments, *GIrAPkgSym, *GIrANil, *GIrALitBool, *GIrALitDouble, *GIrALitInt, *GIrALitStr:
+		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr:
 		default:
-			panic(fmt.Errorf("WALK not handling GIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
+			panic(fmt.Errorf("WALK not handling gIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {

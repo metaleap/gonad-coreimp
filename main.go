@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	Proj PsBowerProject
-	Deps = map[string]*PsBowerProject{}
+	Proj psBowerProject
+	Deps = map[string]*psBowerProject{}
 	Flag struct {
 		NoPrefix      bool
 		Comments      bool
@@ -35,7 +35,7 @@ func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex *sync.Mutex, reldirpath
 		jsonfilepath = filepath.Join(reldirpath, "bower.json")
 	}
 	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
-		bproj := &PsBowerProject{
+		bproj := &psBowerProject{
 			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
 		}
 		defer mutex.Unlock()
@@ -44,30 +44,30 @@ func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex *sync.Mutex, reldirpath
 	}
 }
 
-func loadDepFromBowerFile(wg *sync.WaitGroup, depname string, dep *PsBowerProject) {
+func loadDepFromBowerFile(wg *sync.WaitGroup, depname string, dep *psBowerProject) {
 	defer wg.Done()
-	if err := dep.LoadFromJsonFile(true); err != nil {
+	if err := dep.loadFromJsonFile(true); err != nil {
 		panic(err)
 	}
 }
 
-func loadGIrMetas(wg *sync.WaitGroup, dep *PsBowerProject) {
+func loadgIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.EnsureModPkgGIrMetas()
+	dep.ensureModPkgGIrMetas()
 }
 
-func prepGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
+func prepGIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.PrepModPkgGIrAsts()
-	if err := dep.WriteOutDirtyGIrMetas(false); err != nil {
+	dep.prepModPkgGIrAsts()
+	if err := dep.writeOutDirtyGIrMetas(false); err != nil {
 		panic(err)
 	}
 }
 
-func reGenGIrAsts(wg *sync.WaitGroup, dep *PsBowerProject) {
+func reGengIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.ReGenModPkgGIrAsts()
-	if err := dep.WriteOutDirtyGIrMetas(true); err != nil {
+	dep.reGenModPkgGIrAsts()
+	if err := dep.writeOutDirtyGIrMetas(true); err != nil {
 		panic(err)
 	}
 }
@@ -101,7 +101,7 @@ func main() {
 		if !ufs.DirExists(Proj.SrcDirPath) {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
-		if err = Proj.LoadFromJsonFile(false); err == nil {
+		if err = Proj.loadFromJsonFile(false); err == nil {
 			var mutex sync.Mutex
 			var wg sync.WaitGroup
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
@@ -117,13 +117,13 @@ func main() {
 			if wg.Wait(); err == nil {
 				for _, dep := range Deps {
 					wg.Add(1)
-					go loadGIrMetas(&wg, dep)
+					go loadgIrMetas(&wg, dep)
 				}
 				wg.Add(1)
-				go loadGIrMetas(&wg, &Proj)
-				if err = Proj.EnsureOutDirs(); err == nil {
+				go loadgIrMetas(&wg, &Proj)
+				if err = Proj.ensureOutDirs(); err == nil {
 					for _, dep := range Deps {
-						if err = dep.EnsureOutDirs(); err != nil {
+						if err = dep.ensureOutDirs(); err != nil {
 							break
 						}
 					}
@@ -140,10 +140,10 @@ func main() {
 					if err == nil {
 						for _, dep := range Deps {
 							wg.Add(1)
-							go reGenGIrAsts(&wg, dep)
+							go reGengIrAsts(&wg, dep)
 						}
 						wg.Add(1)
-						go reGenGIrAsts(&wg, &Proj)
+						go reGengIrAsts(&wg, &Proj)
 						allpkgimppaths := map[string]bool{}
 						numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
 						if Flag.ForceRegenAll {
