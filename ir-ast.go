@@ -270,6 +270,7 @@ func (me *gonadIrAst) finalizePostPrep() (err error) {
 }
 
 func (me *gonadIrAst) prepFromCoreImp() (err error) {
+	return // temporarily
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
@@ -278,7 +279,6 @@ func (me *gonadIrAst) prepFromCoreImp() (err error) {
 	}
 	me.prepForeigns()
 	me.prepFixupExportedNames()
-	return // temporarily
 	me.prepAddNewExtraTypes()
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)

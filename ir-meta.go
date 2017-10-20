@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/metaleap/go-util-fs"
+	"github.com/metaleap/go-util-slice"
 )
 
 /*
@@ -204,6 +205,10 @@ func newModImp(impmod *modPkg) *gIrMPkgRef {
 	return &gIrMPkgRef{N: impmod.pName, Q: impmod.qName, P: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
 }
 
+func (me *gonadIrMeta) hasExport(name string) bool {
+	return uslice.StrHas(me.Exports, name)
+}
+
 func (me *gonadIrMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *gIrMTypeRef) {
 	tref = &gIrMTypeRef{}
 	if tc.isTypeConstructor() {
@@ -314,9 +319,26 @@ func (me *gonadIrMeta) populateEnvTypeClasses() {
 
 func (me *gonadIrMeta) populateFromCoreImp() {
 	me.mod.coreimp.prep()
+	// discover and store exports
 	for _, exp := range me.mod.ext.EfExports {
 		if len(exp.TypeRef) > 1 {
-			me.Exports = append(me.Exports, exp.TypeRef[1].(string))
+			tname := exp.TypeRef[1].(string)
+			me.Exports = append(me.Exports, tname)
+			if len(exp.TypeRef) > 2 {
+				if ctornames, _ := exp.TypeRef[2].([]interface{}); len(ctornames) > 0 {
+					for _, ctorname := range ctornames {
+						if cn, _ := ctorname.(string); len(cn) > 0 && !me.hasExport(cn) {
+							me.Exports = append(me.Exports, tname+"ĸ"+cn)
+						}
+					}
+				} else {
+					if td, _ := me.mod.coreimp.DeclEnv.TypeDefs[tname]; td != nil && td.Decl.DataType != nil {
+						for ctorname, _ := range td.Decl.DataType.Ctors {
+							me.Exports = append(me.Exports, tname+"ĸ"+ctorname)
+						}
+					}
+				}
+			}
 		} else if len(exp.TypeClassRef) > 1 {
 			me.Exports = append(me.Exports, exp.TypeClassRef[1].(string))
 		} else if len(exp.ValueRef) > 1 {
@@ -325,22 +347,24 @@ func (me *gonadIrMeta) populateFromCoreImp() {
 			me.Exports = append(me.Exports, exp.TypeInstanceRef[1].(map[string]interface{})["Ident"].(string))
 		}
 	}
+	// discover and store imports
 	for _, imp := range me.mod.coreimp.Imps {
 		if impname := strings.Join(imp, "."); impname != "Prim" && impname != "Prelude" && impname != me.mod.qName {
 			me.imports = append(me.imports, findModuleByQName(impname))
 		}
 	}
+	for _, impmod := range me.imports {
+		me.Imports = append(me.Imports, newModImp(impmod))
+	}
+	// transform 100% complete coreimp structures
+	// into lean, only-what-we-use girMeta structures (still representing PS-not-Go decls)
 	me.populateEnvTypeSyns()
 	me.populateEnvTypeClasses()
 	me.populateEnvTypeDataDecls()
 	me.populateEnvFuncsAndVals()
+	// then transform those into Go decls
 	me.populateGoTypeDefs()
 	me.populateGoValDecls()
-
-	for _, impmod := range me.imports {
-		me.Imports = append(me.Imports, newModImp(impmod))
-	}
-	return
 }
 
 func (me *gonadIrMeta) populateFromLoaded() error {

@@ -219,7 +219,7 @@ func (me *gonadIrMeta) populateGoTypeDefs() {
 
 	for _, ts := range me.EnvTypeSyns {
 		tdict = map[string][]string{}
-		gtd := &gIrANamedTypeRef{Export: uslice.StrHas(me.Exports, ts.Name)}
+		gtd := &gIrANamedTypeRef{Export: me.hasExport(ts.Name)}
 		gtd.setBothNamesFromPsName(ts.Name)
 		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
@@ -259,40 +259,15 @@ func (me *gonadIrMeta) populateGoTypeDefs() {
 			}
 			gif.Methods = append(gif.Methods, ifm)
 		}
-		tgif := &gIrANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: true}
+		tgif := &gIrANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: me.hasExport(tc.Name)}
 		tgif.setRefFrom(gif)
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
 
-	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.EnvTypeDataDecls, mdict, true)...)
+	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.EnvTypeDataDecls, mdict)...)
 }
 
-func sanitizeSymbolForGo(name string, upper bool) string {
-	if len(name) == 0 {
-		return name
-	}
-	if upper {
-		runes := []rune(name)
-		runes[0] = unicode.ToUpper(runes[0])
-		name = string(runes)
-	} else {
-		if ustr.BeginsUpper(name) {
-			runes := []rune(name)
-			runes[0] = unicode.ToLower(runes[0])
-			name = string(runes)
-		} else {
-			switch name {
-			case "append", "false", "iota", "nil", "true":
-				return "ˇ" + name
-			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "ˇĸˇ" + name
-			}
-		}
-	}
-	return strReplSanitizer.Replace(name)
-}
-
-func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdict map[string][]string, forexport bool) (gtds gIrANamedTypeRefs) {
+func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdict map[string][]string) (gtds gIrANamedTypeRefs) {
 	var tdict map[string][]string
 	for _, td := range typedatadecls {
 		tdict = map[string][]string{}
@@ -300,7 +275,7 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
 			isnewtype, hasselfref, hasctorargs := false, false, false
-			gid := &gIrANamedTypeRef{RefInterface: &gIrATypeRefInterface{xtd: td}, Export: forexport}
+			gid := &gIrANamedTypeRef{RefInterface: &gIrATypeRefInterface{xtd: td}, Export: me.hasExport(td.Name)}
 			gid.setBothNamesFromPsName(td.Name)
 			for _, ctor := range td.Ctors {
 				if numargs := len(ctor.Args); numargs > 0 {
@@ -318,7 +293,8 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
 			} else {
 				for _, ctor := range td.Ctors {
-					ctor.gtd = &gIrANamedTypeRef{Export: forexport, RefStruct: &gIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
+					ctor.gtd = &gIrANamedTypeRef{Export: me.hasExport(gid.NamePs + "ĸ" + ctor.Name),
+						RefStruct: &gIrATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
@@ -335,14 +311,6 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 		}
 	}
 	return
-}
-
-func toGIrAEnumConstName(dataname string, ctorname string) string {
-	return "tag_" + dataname + "_" + ctorname
-}
-
-func toGIrAEnumTypeName(dataname string) string {
-	return "tags_" + dataname
 }
 
 func (me *gonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string][]string, tr *gIrMTypeRef) interface{} {
@@ -395,6 +363,39 @@ func (me *gonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		}
 	}
 	return nil
+}
+
+func sanitizeSymbolForGo(name string, upper bool) string {
+	if len(name) == 0 {
+		return name
+	}
+	if upper {
+		runes := []rune(name)
+		runes[0] = unicode.ToUpper(runes[0])
+		name = string(runes)
+	} else {
+		if ustr.BeginsUpper(name) {
+			runes := []rune(name)
+			runes[0] = unicode.ToLower(runes[0])
+			name = string(runes)
+		} else {
+			switch name {
+			case "append", "false", "iota", "nil", "true":
+				return "ˇ" + name
+			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
+				return "ˇĸˇ" + name
+			}
+		}
+	}
+	return strReplSanitizer.Replace(name)
+}
+
+func toGIrAEnumConstName(dataname string, ctorname string) string {
+	return "tag_" + dataname + "_" + ctorname
+}
+
+func toGIrAEnumTypeName(dataname string) string {
+	return "tags_" + dataname
 }
 
 func typeNameWithPkgName(pkgname string, typename string) (fullname string) {

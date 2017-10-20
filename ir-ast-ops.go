@@ -58,7 +58,7 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 		}
 	}
 	if len(newxtypedatadecl.Ctors) > 0 {
-		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]*gIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{}, false)...)
+		newextratypes = append(newextratypes, me.girM.toGIrADataTypeDefs([]*gIrMTypeDataDecl{newxtypedatadecl}, map[string][]string{})...)
 	}
 	//	also turn type-class instances into 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.girM.EnvTypeClassInsts {
