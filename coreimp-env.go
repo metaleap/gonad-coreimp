@@ -119,13 +119,18 @@ func (me *CoreImpEnvTypeSyn) prep() {
 }
 
 type CoreImpEnvTypeCtor struct {
-	Decl string             `json:"cDecl"` // data or newtype
+	Decl string             `json:"cDecl"`
 	Type string             `json:"cType"`
 	Ctor *CoreImpEnvTagType `json:"cCtor"`
 	Args []string           `json:"cArgs"` // value0, value1 ..etc.
 }
 
+func (me *CoreImpEnvTypeCtor) isDeclData() bool    { return me.Decl == "data" }
+func (me *CoreImpEnvTypeCtor) isDeclNewtype() bool { return me.Decl == "newtype" }
 func (me *CoreImpEnvTypeCtor) prep() {
+	if !(me.isDeclData() || me.isDeclNewtype()) {
+		panic(coreImpEnvErr("CoreImpEnvTypeCtor.Decl", me.Decl))
+	}
 	if me.Ctor != nil {
 		me.Ctor.prep()
 	}
@@ -176,12 +181,23 @@ func (me *CoreImpEnvTypeData) prep() {
 }
 
 type CoreImpEnvName struct {
-	Vis  string             `json:"nVis"`  // Environment.hs:Defined or Undefined
-	Kind string             `json:"nKind"` // Environment.hs: Private or Public or External
+	Vis  string             `json:"nVis"`
+	Kind string             `json:"nKind"`
 	Type *CoreImpEnvTagType `json:"nType"`
 }
 
+func (me *CoreImpEnvName) isVisDefined() bool   { return me.Vis == "Defined" }
+func (me *CoreImpEnvName) isVisUndefined() bool { return me.Vis == "Undefined" }
+func (me *CoreImpEnvName) isKindPrivate() bool  { return me.Kind == "Private" }
+func (me *CoreImpEnvName) isKindPublic() bool   { return me.Kind == "Public" }
+func (me *CoreImpEnvName) isKindExternal() bool { return me.Kind == "External" }
 func (me *CoreImpEnvName) prep() {
+	if !(me.isVisDefined() || me.isVisUndefined()) {
+		panic(coreImpEnvErr("CoreImpEnvName.Vis", me.Vis))
+	}
+	if !(me.isKindPublic() || me.isKindPrivate() || me.isKindExternal()) {
+		panic(coreImpEnvErr("CoreImpEnvName.Kind", me.Kind))
+	}
 	if me.Type != nil {
 		me.Type.prep()
 	}
@@ -207,10 +223,10 @@ func (_ *coreImpEnvTag) tagFrom(tc map[string]interface{}) coreImpEnvTag {
 type CoreImpEnvTagKind struct {
 	coreImpEnvTag
 
-	funOrRowKind0 *CoreImpEnvTagKind
-	funKind1      *CoreImpEnvTagKind
-	unknown       int
-	named         string
+	num   int
+	text  string
+	kind0 *CoreImpEnvTagKind
+	kind1 *CoreImpEnvTagKind
 }
 
 func (me *CoreImpEnvTagKind) isRow() bool       { return me.Tag == "Row" }
@@ -218,23 +234,25 @@ func (me *CoreImpEnvTagKind) isKUnknown() bool  { return me.Tag == "KUnknown" }
 func (me *CoreImpEnvTagKind) isFunKind() bool   { return me.Tag == "FunKind" }
 func (me *CoreImpEnvTagKind) isNamedKind() bool { return me.Tag == "NamedKind" }
 func (me *CoreImpEnvTagKind) new(tc map[string]interface{}) *CoreImpEnvTagKind {
-	return &CoreImpEnvTagKind{coreImpEnvTag: me.tagFrom(tc)}
+	return &CoreImpEnvTagKind{coreImpEnvTag: me.tagFrom(tc), num: -1}
 }
 func (me *CoreImpEnvTagKind) prep() {
 	if me != nil {
+		//	no type assertions, arr-len checks or nil checks anywhere here: the panic signals us that the coreimp format has changed
+		me.num = -1
 		if me.isKUnknown() {
-			me.unknown = me.Contents.(int)
+			me.num = int(me.Contents.(float64))
 		} else if me.isRow() {
-			me.funOrRowKind0 = me.new(me.Contents.(map[string]interface{}))
-			me.funOrRowKind0.prep()
+			me.kind0 = me.new(me.Contents.(map[string]interface{}))
+			me.kind0.prep()
 		} else if me.isFunKind() {
 			items := me.Contents.([]interface{})
-			me.funOrRowKind0 = me.new(items[0].(map[string]interface{}))
-			me.funOrRowKind0.prep()
-			me.funKind1 = me.new(items[1].(map[string]interface{}))
-			me.funKind1.prep()
+			me.kind0 = me.new(items[0].(map[string]interface{}))
+			me.kind0.prep()
+			me.kind1 = me.new(items[1].(map[string]interface{}))
+			me.kind1.prep()
 		} else if me.isNamedKind() {
-			me.named = me.ident2qname(me.Contents.([]interface{}))
+			me.text = me.ident2qname(me.Contents.([]interface{}))
 		} else {
 			panic(coreImpEnvErr("tagged-kind", me.Tag))
 		}
@@ -245,11 +263,11 @@ type CoreImpEnvTagType struct {
 	coreImpEnvTag
 
 	num    int
+	skolem int
 	text   string
 	type0  *CoreImpEnvTagType
 	type1  *CoreImpEnvTagType
 	constr *CoreImpEnvConstr
-	skolem int
 }
 
 func (me *CoreImpEnvTagType) isTUnknown() bool            { return me.Tag == "TUnknown" }
@@ -275,6 +293,7 @@ func (me *CoreImpEnvTagType) new(tc map[string]interface{}) *CoreImpEnvTagType {
 	return &CoreImpEnvTagType{coreImpEnvTag: me.tagFrom(tc), num: -1, skolem: -1}
 }
 func (me *CoreImpEnvTagType) prep() {
+	//	no type assertions, arr-len checks or nil checks anywhere here: the panic signals us that the coreimp format has changed
 	me.skolem, me.num = -1, -1
 	if me.isTUnknown() {
 		me.num = int(me.Contents.(float64))
