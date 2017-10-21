@@ -35,19 +35,18 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.girM.EnvTypeClassInsts {
 		if gid := findGoTypeByPsQName(tci.ClassName); gid == nil {
-			panic(me.mod.srcFilePath + ": type-class " + tci.ClassName + " not found for instance " + tci.Name)
+			panic(me.mod.srcFilePath + ": type-class '" + tci.ClassName + "' not found for instance '" + tci.Name + "'")
 		} else {
 			gtd := newextratypes.byPsName(tci.Name)
 			if gtd == nil {
-				gtd = &gIrANamedTypeRef{Export: true, instOf: tci.ClassName, RefStruct: &gIrATypeRefStruct{}}
+				gtd = &gIrANamedTypeRef{Export: true, RefStruct: &gIrATypeRefStruct{instOf: tci.ClassName}}
 				gtd.setBothNamesFromPsName(tci.Name)
 				gtd.NameGo = "ı" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
 			}
 			for _, method := range gid.RefInterface.Methods {
 				mcopy := *method
-				mcopy.method.hasNoThis = true
-				gtd.Methods = append(gtd.Methods, &mcopy)
+				gtd.RefStruct.Methods = append(gtd.RefStruct.Methods, &mcopy)
 			}
 		}
 	}
@@ -68,6 +67,15 @@ func (me *gonadIrAst) prepFixupExportedNames() {
 			ensure(&af.gIrANamedTypeRef)
 		} else if av, _ := a.(*gIrALet); av != nil {
 			ensure(&av.gIrANamedTypeRef)
+		}
+		if ab := a.Base(); ab != nil {
+			if gvd := me.girM.goValDeclByPsName(ab.NamePs); gvd != nil {
+				if ab.NameGo != gvd.NameGo {
+					panic(me.mod.srcFilePath + ": please report as bug, " + ab.NameGo + "!=" + gvd.NameGo)
+				} else {
+					// panic("ab.gIrANamedTypeRef.copyFrom(gvd)")
+				}
+			}
 		}
 		return false
 	})
@@ -95,10 +103,9 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
 						if dr.NameGo == "value" {
 							if nuglobalvar := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
-								nuvarsym := ªSymGo("")
-								nuvarsym.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
-								nuvarsym.NameGo = nuglobalvar.NameGo
-								return nuvarsym
+								sym4nuvar := ªSymGo(nuglobalvar.NameGo)
+								sym4nuvar.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
+								return sym4nuvar
 							}
 						} else {
 							//	if the dot's LHS refers to a package, ensure the import is marked as in-use and switch out dot for pkgsym
@@ -214,59 +221,42 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 	for _, ifx := range instfuncvars {
 		ifv, _ := ifx.(*gIrALet)
 		gtd := me.girM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
-		gtdInstOf := findGoTypeByPsQName(gtd.instOf)
+		gtdInstOf := findGoTypeByPsQName(gtd.RefStruct.instOf)
 		ifv.Export = gtdInstOf.Export
 		ifv.setBothNamesFromPsName(ifv.NamePs)
-		var tcctors []gIrA
 		var mod *modPkg
-		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.instOf, true)
+		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf, true)
 		if len(pname) == 0 || pname == me.mod.pName {
 			mod = me.mod
 		} else {
 			mod = findModuleByPName(pname)
 		}
-		tcctors = mod.girAst.topLevelDefs(func(a gIrA) bool {
-			if afn, _ := a.(*gIrAFunc); afn != nil {
-				return afn.WasTypeFunc && afn.NamePs == tcname
+		if tcctor := mod.girAst.typeCtorFunc(tcname); tcctor != nil {
+			if tcctor.fromFunc == nil {
+				tcctor.fromFunc = tcctor.fromLet.LetVal.(*gIrAFunc)
 			}
-			if av, _ := a.(*gIrALet); av != nil {
-				return av.WasTypeFunc && av.NamePs == tcname
-			}
-			return false
-		})
-		for i := 0; i < len(tcctors); i++ {
-			switch av := tcctors[i].(type) {
-			case *gIrALet:
-				tcctors[i] = av.LetVal.(*gIrAFunc)
-			}
-		}
-		ifo := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
-		if len(tcctors) > 0 {
-			tcctor := tcctors[0].(*gIrAFunc)
-			for i, instfuncarg := range tcctor.RefFunc.Args {
-				for _, gtdmethod := range gtd.Methods {
+			ifo := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
+			for i, instfuncarg := range tcctor.fromFunc.RefFunc.Args {
+				for _, gtdmethod := range gtd.RefStruct.Methods {
 					if gtdmethod.NamePs == instfuncarg.NamePs {
 						ifofv := ifo.ObjFields[i].FieldVal
 						switch ifa := ifofv.(type) {
 						case *gIrAFunc:
-							gtdmethod.method.body = ifa.FuncImpl
+							gtdmethod.RefFunc.impl = ifa.FuncImpl
 						default:
 							oldp := ifofv.Parent()
-							gtdmethod.method.body = ªBlock(ªRet(ifofv))
-							gtdmethod.method.body.parent = oldp
+							gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
+							gtdmethod.RefFunc.impl.parent = oldp
 						}
 						break
 					}
 				}
 			}
-		} else {
-			if ifv.NamePs == "showBoolean" && strings.Contains(me.mod.srcFilePath, "Show") {
-			}
 		}
 		nuctor := ªO(&gIrANamedTypeRef{RefAlias: gtd.NameGo})
 		nuctor.parent = ifv
 		ifv.LetVal = nuctor
-		ifv.RefAlias = gtd.instOf
+		ifv.RefAlias = gtd.RefStruct.instOf
 	}
 }
 
@@ -279,32 +269,21 @@ func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
 				return ªConst(&a.gIrANamedTypeRef, a.LetVal)
 			}
 		case *gIrAFunc:
-			// marked to be ditched?
-			for _, df := range dictfuncs {
-				if df == a {
-					return nil
-				}
-			}
-			// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
-			if len(a.gIrANamedTypeRef.RefFunc.Rets) > 0 {
-				panic(me.mod.srcFilePath + ": unexpected at this stage, please report as bug: func return-args present for " + a.NameGo + "/" + a.NamePs)
-			}
-			// at *this* point, we never seem to run into functions without a return statement at present, so the below check is skipped but kept around:
-			if checkhasrets := false; checkhasrets {
-				hasrets := false
-				walk(a, func(asub gIrA) gIrA {
-					switch asub.(type) {
-					case *gIrARet:
-						hasrets = true
+			if a.gIrANamedTypeRef.RefFunc != nil {
+				// marked to be ditched?
+				for _, df := range dictfuncs {
+					if df == a {
+						return nil
 					}
-					return asub
-				})
-				if !hasrets {
-					panic(me.mod.srcFilePath + ": unexpected at this stage, please report as bug: no return in func " + a.NameGo + "/" + a.NamePs)
 				}
+				// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
+				if len(a.gIrANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
+					// otherwise, add an empty-for-now 'unknown' (aka interface{}) return type
+					a.gIrANamedTypeRef.RefFunc.Rets = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
+				}
+			} else {
+				panic(me.mod.srcFilePath + ": please report as bug, a gIrAFunc had no RefFunc set")
 			}
-			// finally, add an empty-for-now 'unknown' (aka interface{}) return type
-			a.gIrANamedTypeRef.RefFunc.Rets = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
 		}
 		return ast
 	})

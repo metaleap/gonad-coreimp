@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -234,7 +234,7 @@ func (me *gonadIrMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *gIrMTy
 			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromEnvTag(tca))
 		}
 	} else {
-		panic(coreImpEnvErr("tagged-type", tc.Tag))
+		panic(notImplErr("tagged-type", tc.Tag, me.mod.srcFilePath))
 	}
 	return
 }
@@ -251,7 +251,7 @@ func (me *gonadIrMeta) populateEnvTypeDataDecls() {
 			//	type-aliases handled separately in populateEnvTypeSyns already, nothing to do here
 		} else if tdef.Decl.ExternData {
 			if ffigofilepath := me.mod.srcFilePath[:len(me.mod.srcFilePath)-len(".purs")] + ".go"; ufs.FileExists(ffigofilepath) {
-				panic("Time to handle FFI " + ffigofilepath)
+				panic(me.mod.srcFilePath + ": time to handle FFI " + ffigofilepath)
 			} else {
 				//	special case for official purescript core libs: alias to applicable struct from gonad's default ffi packages
 				ta := &gIrMNamedTypeRef{Name: tdefname, Ref: &gIrMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + tdefname}}
@@ -366,18 +366,17 @@ func (me *gonadIrMeta) populateFromCoreImp() {
 	me.populateGoValDecls()
 }
 
-func (me *gonadIrMeta) populateFromLoaded() error {
+func (me *gonadIrMeta) populateFromLoaded() {
 	me.imports = nil
 	for _, imp := range me.Imports {
 		if !strings.HasPrefix(imp.Q, nsPrefixDefaultFfiPkg) {
 			if impmod := findModuleByQName(imp.Q); impmod == nil {
-				return errors.New("Bad import " + imp.Q)
+				panic(fmt.Errorf("Bad import %s", imp.Q))
 			} else {
 				me.imports = append(me.imports, impmod)
 			}
 		}
 	}
-	return nil
 }
 
 func (me *gonadIrMeta) populateGoValDecls() {

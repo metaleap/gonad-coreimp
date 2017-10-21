@@ -141,9 +141,7 @@ func (me *psBowerProject) prepModPkgGIrAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenGIr || Flag.ForceRegenAll {
-			if err := modinfo.prepGIrAst(); err != nil {
-				panic(err)
-			}
+			modinfo.prepGIrAst()
 		}
 	})
 }

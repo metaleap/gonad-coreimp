@@ -12,11 +12,11 @@ of top-level functions.
 */
 
 const (
-	msgfmt = "Encountered (previously unknown or unneeded) %s '%s',\n\tplease report the case with the *.purs code(base) so that we can support it."
+	msgfmt = "Encountered (previously unknown or unneeded) %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that we can support it."
 )
 
-func coreImpEnvErr(cat string, name string) error {
-	return fmt.Errorf(msgfmt, cat, name)
+func notImplErr(cat string, name string, in interface{}) error {
+	return fmt.Errorf(msgfmt, cat, name, in)
 }
 
 type coreImpEnv struct {
@@ -68,7 +68,7 @@ type coreImpEnvClass struct {
 func (me *coreImpEnvClass) prep() {
 	for tcan, tca := range me.Args {
 		if tca != nil {
-			panic(coreImpEnvErr("tcArgs", tcan+"!=nil"))
+			panic(notImplErr("tcArgs", tcan+"!=nil", "'typeClasses'"))
 			tca.prep()
 		}
 	}
@@ -107,7 +107,7 @@ type coreImpEnvConstr struct {
 
 func (me *coreImpEnvConstr) prep() {
 	if me.Data != nil {
-		panic(coreImpEnvErr("constraintData", fmt.Sprintf("%v", me.Data)))
+		panic(notImplErr("constraintData", fmt.Sprintf("%v", me.Data), "'typeClasses' or 'typeClassDictionaries'"))
 	}
 	for _, ca := range me.Args {
 		ca.prep()
@@ -139,7 +139,7 @@ func (me *coreImpEnvTypeCtor) isDeclData() bool    { return me.Decl == "data" }
 func (me *coreImpEnvTypeCtor) isDeclNewtype() bool { return me.Decl == "newtype" }
 func (me *coreImpEnvTypeCtor) prep() {
 	if !(me.isDeclData() || me.isDeclNewtype()) {
-		panic(coreImpEnvErr("coreImpEnvTypeCtor.Decl", me.Decl))
+		panic(notImplErr("cDecl", me.Decl, "'dataConstructors'"))
 	}
 	if me.Ctor != nil {
 		me.Ctor.prep()
@@ -170,10 +170,10 @@ type coreImpEnvTypeDecl struct {
 
 func (me *coreImpEnvTypeDecl) prep() {
 	if me.LocalTypeVariable {
-		panic(coreImpEnvErr("tDecl", "LocalTypeVariable"))
+		panic(notImplErr("tDecl", "LocalTypeVariable", "'types'"))
 	}
 	if me.ScopedTypeVar {
-		panic(coreImpEnvErr("tDecl", "ScopedTypeVar"))
+		panic(notImplErr("tDecl", "ScopedTypeVar", "'types'"))
 	}
 	if me.DataType != nil {
 		me.DataType.prep()
@@ -209,10 +209,10 @@ func (me *coreImpEnvName) isKindPublic() bool   { return me.Kind == "Public" }
 func (me *coreImpEnvName) isKindExternal() bool { return me.Kind == "External" }
 func (me *coreImpEnvName) prep() {
 	if !(me.isVisDefined() || me.isVisUndefined()) {
-		panic(coreImpEnvErr("coreImpEnvName.Vis", me.Vis))
+		panic(notImplErr("nVis", me.Vis, "'names'"))
 	}
 	if !(me.isKindPublic() || me.isKindPrivate() || me.isKindExternal()) {
-		panic(coreImpEnvErr("coreImpEnvName.Kind", me.Kind))
+		panic(notImplErr("nKind", me.Kind, "'names'"))
 	}
 	if me.Type != nil {
 		me.Type.prep()
@@ -277,7 +277,7 @@ func (me *coreImpEnvTagKind) prep() {
 		} else if me.isNamedKind() {
 			me.text = me.ident2qname(me.Contents.([]interface{}))
 		} else {
-			panic(coreImpEnvErr("tagged-kind", me.Tag))
+			panic(notImplErr("tagged-kind", me.Tag, me.Contents))
 		}
 	}
 }
@@ -362,6 +362,6 @@ func (me *coreImpEnvTagType) prep() {
 	} else if me.isREmpty() {
 		// nothing to do
 	} else {
-		panic(coreImpEnvErr("tagged-type", me.Tag))
+		panic(notImplErr("tagged-type", me.Tag, me.Contents))
 	}
 }

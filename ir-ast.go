@@ -22,10 +22,11 @@ This latter 'design accident' should probably be revamped.
 */
 
 type gonadIrAst struct {
-	gIrABlock `json:",omitempty"`
-	mod       *modPkg
-	proj      *psBowerProject
-	girM      *gonadIrMeta
+	gIrABlock     `json:",omitempty"`
+	typeCtorFuncs []*gIrACtor
+	mod           *modPkg
+	proj          *psBowerProject
+	girM          *gonadIrMeta
 }
 
 type gIrA interface {
@@ -164,6 +165,12 @@ type gIrAComments struct {
 	gIrABase
 }
 
+type gIrACtor struct {
+	gIrABase
+	fromLet  *gIrALet
+	fromFunc *gIrAFunc
+}
+
 type gIrAOp1 struct {
 	gIrABase
 	Op1 string `json:",omitempty"`
@@ -284,7 +291,17 @@ type gIrAPkgSym struct {
 	Symbol  string `json:",omitempty"`
 }
 
-func (me *gonadIrAst) finalizePostPrep() (err error) {
+func (me *gonadIrAst) typeCtorFunc(nameps string) *gIrACtor {
+	for _, tcf := range me.typeCtorFuncs {
+		if (tcf.fromLet != nil && tcf.fromLet.NamePs == nameps) ||
+			(tcf.fromFunc != nil && tcf.fromFunc.NamePs == nameps) {
+			return tcf
+		}
+	}
+	return nil
+}
+
+func (me *gonadIrAst) finalizePostPrep() {
 	//	various fix-ups
 	me.walk(func(ast gIrA) gIrA {
 		if ast != nil {
@@ -304,23 +321,27 @@ func (me *gonadIrAst) finalizePostPrep() (err error) {
 	dictfuncs := me.postClearTcDictFuncs()
 	me.postMiscFixups(dictfuncs)
 	me.resolveAllArgTypes()
-	return
 }
 
-func (me *gonadIrAst) prepFromCoreImp() (err error) {
+func (me *gonadIrAst) prepFromCoreImp() {
 	me.gIrABlock.ast = me
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
 	for _, cia := range me.mod.coreimp.Body {
-		me.Add(cia.ciAstToGIrAst())
+		if a := cia.ciAstToGIrAst(); a != nil {
+			if ctor, _ := a.(*gIrACtor); ctor != nil {
+				me.typeCtorFuncs = append(me.typeCtorFuncs, ctor)
+			} else {
+				me.Add(a)
+			}
+		}
 	}
 	me.prepForeigns()
 	me.prepFixupExportedNames()
 	me.prepAddNewExtraTypes()
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)
-	return
 }
 
 func (me *gonadIrAst) resolveAllArgTypes() {
@@ -339,22 +360,15 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	sort.Sort(me.girM.GoTypeDefs)
 	for _, gtd := range me.girM.GoTypeDefs {
 		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRefFromPsQName)
-		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
+		codeEmitStructMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
 
-	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAConst); return ok && !c.WasTypeFunc })
-	toplevelvars := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrALet); return ok && !c.WasTypeFunc })
+	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { ac, _ := a.(*gIrAConst); return ac != nil })
+	toplevelvars := me.topLevelDefs(func(a gIrA) bool { al, _ := a.(*gIrALet); return al != nil })
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
 
-	toplevelctorfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrALet); return ok && c.WasTypeFunc })
-	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAFunc); return ok && !c.WasTypeFunc })
-	if false {
-		for _, ast := range toplevelctorfuncs {
-			codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
-			fmt.Fprint(buf, "\n\n")
-		}
-	}
+	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { af, _ := a.(*gIrAFunc); return af != nil })
 	for _, ast := range toplevelfuncs {
 		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
 		fmt.Fprint(buf, "\n\n")
@@ -363,7 +377,7 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	codeEmitPkgDecl(writer, me.mod.pName)
 	sort.Sort(me.girM.Imports)
 	codeEmitModImps(writer, me.girM.Imports)
-	buf.WriteTo(writer)
+	_, err = buf.WriteTo(writer)
 	return
 }
 

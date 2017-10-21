@@ -65,18 +65,19 @@ type gIrANamedTypeRef struct {
 	RefArray     *gIrATypeRefArray     `json:",omitempty"`
 	RefPtr       *gIrATypeRefPtr       `json:",omitempty"`
 
-	Methods     gIrANamedTypeRefs `json:",omitempty"`
-	Export      bool              `json:",omitempty"`
-	WasTypeFunc bool              `json:",omitempty"`
-
-	method gIrATypeMethod
-	instOf string
+	Export bool `json:",omitempty"`
 }
 
-type gIrATypeMethod struct {
-	body      *gIrABlock
-	isNewCtor bool
-	hasNoThis bool
+func (me *gIrANamedTypeRef) copyFrom(from *gIrANamedTypeRef, names bool, trefs bool, export bool) {
+	if names {
+		me.NameGo, me.NamePs = from.NameGo, from.NamePs
+	}
+	if trefs {
+		me.RefAlias, me.RefUnknown, me.RefInterface, me.RefFunc, me.RefStruct, me.RefArray, me.RefPtr = from.RefAlias, from.RefUnknown, from.RefInterface, from.RefFunc, from.RefStruct, from.RefArray, from.RefPtr
+	}
+	if export {
+		me.Export = from.Export
+	}
 }
 
 func (me *gIrANamedTypeRef) eq(cmp *gIrANamedTypeRef) bool {
@@ -89,7 +90,7 @@ func (me *gIrANamedTypeRef) hasTypeInfo() bool {
 
 func (me *gIrANamedTypeRef) setBothNamesFromPsName(psname string) {
 	me.NamePs = psname
-	me.NameGo = sanitizeSymbolForGo(psname, me.Export || me.WasTypeFunc)
+	me.NameGo = sanitizeSymbolForGo(psname, me.Export)
 }
 
 func (me *gIrANamedTypeRef) setRefFrom(tref interface{}) {
@@ -178,6 +179,8 @@ func (me *gIrATypeRefInterface) allMethods() (allmethods gIrANamedTypeRefs) {
 type gIrATypeRefFunc struct {
 	Args gIrANamedTypeRefs `json:",omitempty"`
 	Rets gIrANamedTypeRefs `json:",omitempty"`
+
+	impl *gIrABlock
 }
 
 func (me *gIrATypeRefFunc) eq(cmp *gIrATypeRefFunc) bool {
@@ -188,6 +191,9 @@ type gIrATypeRefStruct struct {
 	Embeds    []string          `json:",omitempty"`
 	Fields    gIrANamedTypeRefs `json:",omitempty"`
 	PassByPtr bool              `json:",omitempty"`
+	Methods   gIrANamedTypeRefs `json:",omitempty"`
+
+	instOf string
 }
 
 func (me *gIrATypeRefStruct) eq(cmp *gIrATypeRefStruct) bool {
@@ -229,11 +235,15 @@ func (me *gonadIrMeta) populateGoTypeDefs() {
 						Rets: gIrANamedTypeRefs{&gIrANamedTypeRef{RefAlias: ifm.RefAlias}},
 					}
 					ifm.RefAlias = ""
+				} else if ifm.RefArray != nil || ifm.RefPtr != nil || ifm.RefStruct != nil || ifm.RefUnknown > 0 {
+					panic(me.mod.srcFilePath + ": some ifm.RefFoo was set, please report to handle")
 				} else {
 					ifm.RefFunc = &gIrATypeRefFunc{
-						Rets: gIrANamedTypeRefs{&gIrANamedTypeRef{RefUnknown: ifm.RefUnknown /*always 0 so far but whatever*/}},
+						Rets: gIrANamedTypeRefs{&gIrANamedTypeRef{}},
 					}
 				}
+			} else {
+				ifm.RefFunc.Args[0].setBothNamesFromPsName("v")
 			}
 			gif.Methods = append(gif.Methods, ifm)
 		}
@@ -360,7 +370,7 @@ func findGoTypeByPsQName(qname string) *gIrANamedTypeRef {
 			return mod.girMeta.goTypeDefByPsName(tname)
 		}
 	} else {
-		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")
+		panic("Unexpected non-qualified type-name encountered, please report with your *.purs code-base (and its output-directory *.json files)!")
 	}
 }
 
@@ -380,9 +390,9 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
-				return "ˇ" + name
+				return "ˇ" + name + "ˇ"
 			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "ˇĸˇ" + name
+				return "ˇ" + name
 			}
 		}
 	}

@@ -40,9 +40,11 @@ func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
 		}
 	}
 	for _, tr := range me.girM.GoTypeDefs {
-		for _, trm := range tr.Methods {
-			if trm.method.body != nil {
-				trm.method.body, _ = walk(trm.method.body, on).(*gIrABlock)
+		if tr.RefStruct != nil {
+			for _, trm := range tr.RefStruct.Methods {
+				if trm.RefFunc.impl != nil {
+					trm.RefFunc.impl, _ = walk(trm.RefFunc.impl, on).(*gIrABlock)
+				}
 			}
 		}
 	}
@@ -65,9 +67,7 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 				a.CallArgs[i] = walk(a.CallArgs[i], on)
 			}
 		case *gIrAConst:
-			if !a.WasTypeFunc {
-				a.ConstVal = walk(a.ConstVal, on)
-			}
+			a.ConstVal = walk(a.ConstVal, on)
 		case *gIrADot:
 			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
 		case *gIrAFor:
@@ -89,10 +89,8 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 				}
 			}
 		case *gIrAFunc:
-			if !a.WasTypeFunc {
-				if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
-					a.FuncImpl = tmp
-				}
+			if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
+				a.FuncImpl = tmp
 			}
 		case *gIrAIf:
 			a.If = walk(a.If, on)
@@ -115,7 +113,7 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 		case *gIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
 		case *gIrALet:
-			if a != nil && !a.WasTypeFunc {
+			if a != nil {
 				a.LetVal = walk(a.LetVal, on)
 			}
 		case *gIrAIsType:
@@ -136,7 +134,7 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 			a.FieldVal = walk(a.FieldVal, on)
 		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr, *gIrASym:
 		default:
-			panic(fmt.Errorf("walk() not handling gIrA type %v (value: %v), please report", reflect.TypeOf(a), a))
+			panic(fmt.Errorf("walk() not handling gIrA type '%v' (value: %v), please report", reflect.TypeOf(a), a))
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {

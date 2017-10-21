@@ -18,7 +18,7 @@ signatures) are mostly handled in ps-coreimp-decls.go.
 */
 
 var (
-	strReplUnprime = strings.NewReplacer("$prime", "'")
+	strReplUnsanitize = strings.NewReplacer("$prime", "'", "$$", "")
 )
 
 type coreImp struct { // we skip unmarshaling what isn't used for now, but DO keep these around commented-out:
@@ -84,7 +84,7 @@ func (me *coreImpDeclAnn) prep() {
 
 type coreImpDeclExpr struct {
 	Ann        *coreImpDeclAnn `json:"annotation"`
-	ExprTag    string          `json:"type"`            // Var or Literal or Abs or App or Let or Constructor (less likely: or Accessor or ObjectUpdate or Case)
+	ExprTag    string          `json:"type"`            // Var or Literal or Abs or App or Let or Constructor (or Accessor or ObjectUpdate or Case)
 	CtorName   string          `json:"constructorName"` // if ExprTag=Constructor
 	CtorType   string          `json:"typeName"`        // if ExprTag=Constructor
 	CtorFields []string        `json:"fieldNames"`      // if ExprTag=Constructor
@@ -222,29 +222,41 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = c
 	case "VariableIntroduction":
 		v := ªLet("", me.VariableIntroduction, nil)
-		if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
-			v.WasTypeFunc = true
-		}
+		wastypefunc := false
 		if me.AstRight != nil {
 			v.LetVal = me.AstRight.ciAstToGIrAst()
-			v.LetVal.Base().parent = v
+			vlvb := v.LetVal.Base()
+			vlvb.parent = v
+			if v.LetVal != nil && vlvb.RefFunc != nil {
+				wastypefunc = istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction)
+			} else if vlvc, _ := v.LetVal.(*gIrACall); vlvc != nil {
+				if vlvcb := vlvc.Callee.Base(); vlvcb.RefFunc != nil {
+					wastypefunc = istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction)
+				}
+			}
 		}
-		a = v
+		if wastypefunc {
+			a = &gIrACtor{fromLet: v}
+		} else {
+			a = v
+		}
 	case "Function":
+		wastypefunc := istopleveldecl && len(me.Function) > 0 && ustr.BeginsUpper(me.Function)
 		f := ªFunc()
-		if istopleveldecl && len(me.Function) > 0 && ustr.BeginsUpper(me.Function) {
-			f.WasTypeFunc = true
-		}
-		f.setBothNamesFromPsName(me.Function)
 		f.RefFunc = &gIrATypeRefFunc{}
+		f.setBothNamesFromPsName(me.Function)
 		for _, fpn := range me.AstFuncParams {
 			arg := &gIrANamedTypeRef{}
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
+		f.RefFunc.impl = f.FuncImpl
 		me.AstBody.astForceIntoBlock(f.FuncImpl)
-		f.method.body = f.FuncImpl
-		a = f
+		if wastypefunc {
+			a = &gIrACtor{fromFunc: f}
+		} else {
+			a = f
+		}
 	case "Unary":
 		o := ªO1(me.AstOp, me.Unary.ciAstToGIrAst())
 		switch o.Op1 {
@@ -259,7 +271,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		case "New":
 			o.Op1 = "&"
 		default:
-			panic("unrecognized unary op '" + o.Op1 + "', please report!")
+			panic(me.root.mod.srcFilePath + ": unrecognized unary op '" + o.Op1 + "', please report")
 		}
 		a = o
 	case "Binary":
@@ -304,7 +316,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		case "ZeroFillShiftRight":
 			o.Op2 = "&^"
 		default:
-			panic("unrecognized binary op '" + o.Op2 + "', please report!")
+			panic(me.root.mod.srcFilePath + ": unrecognized binary op '" + o.Op2 + "', please report")
 		}
 		a = o
 	case "Comment":
@@ -356,7 +368,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 			a = ªIs(me.InstanceOf.ciAstToGIrAst(), findModuleByPName(adot.DotLeft.(*gIrASym).NamePs).qName+"."+adot.DotRight.(*gIrASym).NamePs)
 		}
 	default:
-		panic(fmt.Errorf("Just below %v: unrecognized coreImp AST-tag, please report: %s", me.parent, me.AstTag))
+		panic(fmt.Errorf(me.root.mod.srcFilePath+": unrecognized coreImp AST-tag '%s' just below %v, please report", me.parent, me.AstTag))
 	}
 	if ab := a.Base(); ab != nil {
 		ab.Comments = me.Comment
@@ -364,7 +376,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 	return
 }
 
-func (me *coreImp) preProcessTopLevel() error {
+func (me *coreImp) preProcessTopLevel() {
 	me.namedRequires = map[string]string{}
 	me.Body = me.preProcessAsts(nil, me.Body...)
 	i := 0
@@ -391,10 +403,9 @@ func (me *coreImp) preProcessTopLevel() error {
 				a.parent, me.Body[i] = nil, a
 			}
 		} else if a.AstTag != "Function" && a.AstTag != "VariableIntroduction" && a.AstTag != "Comment" {
-			return fmt.Errorf("Encountered unexpected top-level AST tag, please report: %s", a.AstTag)
+			panic(fmt.Errorf("Encountered unexpected top-level AST tag, please report: %s", a.AstTag))
 		}
 	}
-	return nil
 }
 
 func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpAsts {
@@ -404,7 +415,7 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 	for i := 0; i < len(asts); i++ {
 		if cia := asts[i]; cia != nil && cia.AstTag == "Comment" && cia.AstCommentDecl != nil {
 			if cia.AstCommentDecl.AstTag == "Comment" {
-				panic("Please report: encountered comments nesting.")
+				panic(me.mod.srcFilePath + ": encountered comments nesting, please report")
 			}
 			cdecl := cia.AstCommentDecl
 			cia.AstCommentDecl = nil
@@ -417,12 +428,12 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 		if a != nil {
 			for _, sym := range []*string{&a.For, &a.ForIn, &a.Function, &a.Var, &a.VariableIntroduction} {
 				if len(*sym) > 0 {
-					*sym = strReplUnprime.Replace(*sym)
+					*sym = strReplUnsanitize.Replace(*sym)
 				}
 			}
 			for i, mkv := range a.ObjectLiteral {
 				for onename, oneval := range mkv {
-					if nuname := strReplUnprime.Replace(onename); nuname != onename {
+					if nuname := strReplUnsanitize.Replace(onename); nuname != onename {
 						mkv = map[string]*coreImpAst{}
 						mkv[nuname] = oneval
 						a.ObjectLiteral[i] = mkv
@@ -430,7 +441,7 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 				}
 			}
 			for i, afp := range a.AstFuncParams {
-				a.AstFuncParams[i] = strReplUnprime.Replace(afp)
+				a.AstFuncParams[i] = strReplUnsanitize.Replace(afp)
 			}
 
 			a.root = me

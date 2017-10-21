@@ -23,6 +23,7 @@ By now we have our own intermediate-representation AST anyway
 type goTypeRefResolver func(tref string, markused bool) (pname string, tname string)
 
 const (
+	dbgEmitEmptyFuncs                     = true
 	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
 )
 
@@ -105,8 +106,12 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 		} else {
 			fmt.Fprint(w, "{\n")
 			indent++
-			for _, expr := range a.Body {
-				codeEmitAst(w, indent, expr, trr)
+			if a.parent != nil && dbgEmitEmptyFuncs {
+				codeEmitAst(w, indent, ªRet(nil), trr)
+			} else {
+				for _, expr := range a.Body {
+					codeEmitAst(w, indent, expr, trr)
+				}
 			}
 			fmt.Fprintf(w, "%s}", tabs)
 			indent--
@@ -298,7 +303,10 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []gIrA, trr 
 // 	fmt.Fprint(w, ")\n\n")
 // }
 
-func codeEmitFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs, indlevel int, typerefresolver goTypeRefResolver, isretargs bool) {
+func codeEmitFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs, typerefresolver goTypeRefResolver, isretargs bool, withnames bool) {
+	if dbgEmitEmptyFuncs && isretargs && withnames {
+		methodargs[0].NameGo = "ret"
+	}
 	parens := (!isretargs) || len(methodargs) > 1 || (len(methodargs) == 1 && len(methodargs[0].NameGo) > 0)
 	if parens {
 		fmt.Fprint(w, "(")
@@ -306,10 +314,10 @@ func codeEmitFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs, indlevel int, t
 	if len(methodargs) > 0 {
 		for i, arg := range methodargs {
 			codeEmitCommaIf(w, i)
-			if len(arg.NameGo) > 0 {
+			if withnames && len(arg.NameGo) > 0 {
 				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
-			codeEmitTypeDecl(w, arg, indlevel, typerefresolver)
+			codeEmitTypeDecl(w, arg, -1, typerefresolver)
 		}
 	}
 	if parens {
@@ -353,7 +361,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefr
 	}
 	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
-	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.method.body != nil
+	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.RefFunc.impl != nil
 	if toplevel && !isfuncwithbodynotjustsig {
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}
@@ -388,8 +396,8 @@ func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefr
 				if ifmethod.RefFunc == nil {
 					panic(gtd.NamePs + "." + ifmethod.NamePs + ": unexpected interface-method (not a func), please report!")
 				} else {
-					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Args, indlevel+1, typerefresolver, false)
-					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Rets, indlevel+1, typerefresolver, true)
+					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Args, typerefresolver, false, false)
+					codeEmitFuncArgs(&buf, ifmethod.RefFunc.Rets, typerefresolver, true, false)
 				}
 				fmt.Fprint(w, tabind)
 				fmt.Fprintf(w, fmtembeds, buf.String())
@@ -426,37 +434,12 @@ func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefr
 			fmt.Fprintf(w, "%s}", tabind)
 		}
 	} else if gtd.RefFunc != nil {
-		ilev := indlevel
-		if ilev == 0 {
-			ilev++
-		}
 		fmt.Fprint(w, "func")
 		if isfuncwithbodynotjustsig && len(gtd.NameGo) > 0 {
 			fmt.Fprintf(w, " %s", gtd.NameGo)
 		}
-		fmt.Fprint(w, "(")
-		for i, l := 0, len(gtd.RefFunc.Args); i < l; i++ {
-			codeEmitCommaIf(w, i)
-			if argname := gtd.RefFunc.Args[i].NameGo; len(argname) > 0 {
-				fmt.Fprintf(w, "%s ", argname)
-			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Args[i], ilev, typerefresolver)
-		}
-		fmt.Fprint(w, ") ")
-		numrets := len(gtd.RefFunc.Rets)
-		if numrets > 1 {
-			fmt.Fprint(w, "(")
-		}
-		for i := 0; i < numrets; i++ {
-			codeEmitCommaIf(w, i)
-			if retname := gtd.RefFunc.Rets[i].NameGo; len(retname) > 0 {
-				fmt.Fprintf(w, "%s ", retname)
-			}
-			codeEmitTypeDecl(w, gtd.RefFunc.Rets[i], ilev, typerefresolver)
-		}
-		if numrets > 1 {
-			fmt.Fprint(w, ")")
-		}
+		codeEmitFuncArgs(w, gtd.RefFunc.Args, typerefresolver, false, isfuncwithbodynotjustsig)
+		codeEmitFuncArgs(w, gtd.RefFunc.Rets, typerefresolver, true, isfuncwithbodynotjustsig)
 	} else {
 		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
 	}
@@ -465,26 +448,22 @@ func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefr
 	}
 }
 
-func codeEmitTypeMethods(w io.Writer, tr *gIrANamedTypeRef, typerefresolver goTypeRefResolver) {
-	if len(tr.Methods) > 0 {
-		for _, method := range tr.Methods {
-			mthis := "this"
-			if method.method.hasNoThis {
-				mthis = "_"
-			}
-			if method.method.isNewCtor {
-				fmt.Fprintf(w, "func %s", method.NameGo)
-			} else if tr.RefStruct.PassByPtr {
+func codeEmitStructMethods(w io.Writer, tr *gIrANamedTypeRef, typerefresolver goTypeRefResolver) {
+	if tr.RefStruct != nil && len(tr.RefStruct.Methods) > 0 {
+		for _, method := range tr.RefStruct.Methods {
+			mthis := "_"
+			if tr.RefStruct.PassByPtr {
 				fmt.Fprintf(w, "func (%s *%s) %s", mthis, tr.NameGo, method.NameGo)
 			} else {
 				fmt.Fprintf(w, "func (%s %s) %s", mthis, tr.NameGo, method.NameGo)
 			}
-			codeEmitFuncArgs(w, method.RefFunc.Args, -1, typerefresolver, false)
-			codeEmitFuncArgs(w, method.RefFunc.Rets, -1, typerefresolver, true)
+			codeEmitFuncArgs(w, method.RefFunc.Args, typerefresolver, false, true)
+			codeEmitFuncArgs(w, method.RefFunc.Rets, typerefresolver, true, true)
 			fmt.Fprint(w, " ")
-			codeEmitAst(w, 0, method.method.body, typerefresolver)
-			fmt.Fprint(w, "\n\n")
+			codeEmitAst(w, 0, method.RefFunc.impl, typerefresolver)
+			fmt.Fprint(w, "\n")
 		}
+		fmt.Fprint(w, "\n")
 	}
 }
 
