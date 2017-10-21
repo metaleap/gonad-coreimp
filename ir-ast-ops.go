@@ -56,26 +56,30 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 }
 
 func (me *gonadIrAst) prepFixupExportedNames() {
-	ensure := func(gntr *gIrANamedTypeRef) {
+	ensure := func(asfunc *gIrAFunc, gntr *gIrANamedTypeRef) {
 		if gvd := me.girM.goValDeclByPsName(gntr.NamePs); gvd != nil {
-			gntr.Export = gvd.Export
-			gntr.NameGo = gvd.NameGo
+			gntr.copyFrom(gvd, true, asfunc == nil, true)
+			if asfunc != nil && gvd.RefFunc != nil {
+				for i, gvdfuncarg := range gvd.RefFunc.Args {
+					asfunc.RefFunc.Args[i].copyFrom(gvdfuncarg, false, true, false)
+				}
+				if len(asfunc.RefFunc.Rets) > 0 {
+					panic("Noice, you introduced a bug")
+				}
+				for _, gvdfuncret := range gvd.RefFunc.Rets {
+					asfunc.RefFunc.Rets = append(asfunc.RefFunc.Rets, gvdfuncret)
+				}
+			}
+			if asfunc != nil && gvd.RefFunc == nil && strings.HasPrefix(me.mod.srcFilePath, "src/") {
+				println(me.mod.srcFilePath + "\t" + gvd.NamePs + "/" + gvd.NameGo)
+			}
 		}
 	}
 	me.topLevelDefs(func(a gIrA) bool {
 		if af, _ := a.(*gIrAFunc); af != nil {
-			ensure(&af.gIrANamedTypeRef)
+			ensure(af, &af.gIrANamedTypeRef)
 		} else if av, _ := a.(*gIrALet); av != nil {
-			ensure(&av.gIrANamedTypeRef)
-		}
-		if ab := a.Base(); ab != nil {
-			if gvd := me.girM.goValDeclByPsName(ab.NamePs); gvd != nil {
-				if ab.NameGo != gvd.NameGo {
-					panic(me.mod.srcFilePath + ": please report as bug, " + ab.NameGo + "!=" + gvd.NameGo)
-				} else {
-					// panic("ab.gIrANamedTypeRef.copyFrom(gvd)")
-				}
-			}
+			ensure(nil, &av.gIrANamedTypeRef)
 		}
 		return false
 	})
@@ -281,7 +285,7 @@ func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
 					a.gIrANamedTypeRef.RefFunc.Rets = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
 				}
 			} else {
-				panic(me.mod.srcFilePath + ": please report as bug, a gIrAFunc had no RefFunc set")
+				panic(me.mod.srcFilePath + ": please report as bug, a gIrAFunc ('" + a.NameGo + "' / '" + a.NamePs + "') had no RefFunc set")
 			}
 		}
 		return ast

@@ -91,6 +91,10 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 					a.ForStep[i] = tmp
 				}
 			}
+		case *gIrACtor:
+			if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
+				a.FuncImpl = tmp
+			}
 		case *gIrAFunc:
 			if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
 				a.FuncImpl = tmp
