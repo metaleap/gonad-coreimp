@@ -98,7 +98,7 @@ type gIrMTypeClass struct {
 	Name        string               `json:"tcn,omitempty"`
 	Args        []string             `json:"tca,omitempty"`
 	Constraints []*gIrMTypeRefConstr `json:"tcc,omitempty"`
-	Members     []gIrMNamedTypeRef   `json:"tcm,omitempty"`
+	Members     []*gIrMNamedTypeRef  `json:"tcm,omitempty"`
 }
 
 type gIrMTypeClassInst struct {
@@ -208,6 +208,26 @@ func (me *gonadIrMeta) hasExport(name string) bool {
 	return uslice.StrHas(me.Exports, name)
 }
 
+func (me *gonadIrMeta) tcMember(name string) *gIrMNamedTypeRef {
+	for _, tc := range me.EnvTypeClasses {
+		for _, tcm := range tc.Members {
+			if tcm.Name == name {
+				return tcm
+			}
+		}
+	}
+	return nil
+}
+
+func (me *gonadIrMeta) tcInst(name string) *gIrMTypeClassInst {
+	for _, tci := range me.EnvTypeClassInsts {
+		if tci.Name == name {
+			return tci
+		}
+	}
+	return nil
+}
+
 func (me *gonadIrMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *gIrMTypeRef) {
 	tref = &gIrMTypeRef{}
 	if tc.isTypeConstructor() {
@@ -292,7 +312,7 @@ func (me *gonadIrMeta) populateEnvTypeClasses() {
 		}
 		for tcmname, tcmdef := range tcdef.Members {
 			tref := me.newTypeRefFromEnvTag(tcmdef)
-			tc.Members = append(tc.Members, gIrMNamedTypeRef{Name: tcmname, Ref: tref})
+			tc.Members = append(tc.Members, &gIrMNamedTypeRef{Name: tcmname, Ref: tref})
 		}
 		for _, tcsc := range tcdef.Superclasses {
 			c := &gIrMTypeRefConstr{Class: tcsc.Class}

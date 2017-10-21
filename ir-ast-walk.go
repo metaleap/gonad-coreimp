@@ -48,8 +48,8 @@ func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
 			}
 		}
 	}
-	for i, tcf := range me.typeCtorFuncs {
-		me.typeCtorFuncs[i] = walk(tcf, on).(*gIrACtor)
+	for i, tcf := range me.culled.typeCtorFuncs {
+		me.culled.typeCtorFuncs[i] = walk(tcf, on).(*gIrACtor)
 	}
 }
 

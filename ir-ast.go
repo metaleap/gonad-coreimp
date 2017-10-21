@@ -22,11 +22,16 @@ This latter 'design accident' should probably be revamped.
 */
 
 type gonadIrAst struct {
-	gIrABlock     `json:",omitempty"`
-	typeCtorFuncs []*gIrACtor
-	mod           *modPkg
-	proj          *psBowerProject
-	girM          *gonadIrMeta
+	gIrABlock `json:",omitempty"`
+
+	culled struct {
+		typeCtorFuncs []*gIrACtor
+		tcDictFuncs   []*gIrAFunc
+		tcInstFuncs   []*gIrAFunc
+	}
+	mod  *modPkg
+	proj *psBowerProject
+	girM *gonadIrMeta
 }
 
 type gIrA interface {
@@ -290,7 +295,7 @@ type gIrAPkgSym struct {
 }
 
 func (me *gonadIrAst) typeCtorFunc(nameps string) *gIrACtor {
-	for _, tcf := range me.typeCtorFuncs {
+	for _, tcf := range me.culled.typeCtorFuncs {
 		if tcf.NamePs == nameps {
 			return tcf
 		}
@@ -315,8 +320,7 @@ func (me *gonadIrAst) finalizePostPrep() {
 	})
 
 	me.postLinkTcInstFuncsToImplStructs()
-	dictfuncs := me.postClearTcDictFuncs()
-	me.postMiscFixups(dictfuncs)
+	me.postMiscFixups()
 	me.resolveAllArgTypes()
 }
 
@@ -326,13 +330,7 @@ func (me *gonadIrAst) prepFromCoreImp() {
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
 	for _, cia := range me.mod.coreimp.Body {
-		if a := cia.ciAstToGIrAst(); a != nil {
-			if ctor, _ := a.(*gIrACtor); ctor != nil {
-				me.typeCtorFuncs = append(me.typeCtorFuncs, ctor)
-			} else {
-				me.Add(a)
-			}
-		}
+		me.prepAddOrCull(cia.ciAstToGIrAst())
 	}
 	me.prepForeigns()
 	me.prepFixupExportedNames()

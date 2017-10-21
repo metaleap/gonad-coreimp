@@ -11,6 +11,28 @@ various transforms and operations on the AST,
 and "post" ops are called from FinalizePostPrep.
 */
 
+func (me *gonadIrAst) prepAddOrCull(a gIrA) {
+	if a != nil {
+		if ctor, _ := a.(*gIrACtor); ctor != nil {
+			// PureScript CoreImp contains constructor functions for each ADT "sub-type", we drop those
+			me.culled.typeCtorFuncs = append(me.culled.typeCtorFuncs, ctor)
+		} else {
+			culled := false
+			// check if helper function related to type-classes / type-class instances:
+			if afn, _ := a.(*gIrAFunc); afn != nil && afn.RefFunc != nil && len(afn.RefFunc.Args) == 1 && afn.FuncImpl != nil && len(afn.FuncImpl.Body) == 1 {
+				if culled = me.girM.tcInst(afn.NamePs) != nil; culled {
+					me.culled.tcInstFuncs = append(me.culled.tcInstFuncs, afn)
+				} else if culled = me.girM.tcMember(afn.NamePs) != nil; culled {
+					me.culled.tcDictFuncs = append(me.culled.tcDictFuncs, afn)
+				}
+			}
+			if !culled {
+				me.Add(a)
+			}
+		}
+	}
+}
+
 func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrALet) {
 	//	add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []gIrA{}
@@ -56,30 +78,33 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 }
 
 func (me *gonadIrAst) prepFixupExportedNames() {
-	ensure := func(asfunc *gIrAFunc, gntr *gIrANamedTypeRef) {
+	ensure := func(isfunc bool, gntr *gIrANamedTypeRef) *gIrANamedTypeRef {
 		if gvd := me.girM.goValDeclByPsName(gntr.NamePs); gvd != nil {
-			gntr.copyFrom(gvd, true, asfunc == nil, true)
-			if asfunc != nil && gvd.RefFunc != nil {
-				for i, gvdfuncarg := range gvd.RefFunc.Args {
-					asfunc.RefFunc.Args[i].copyFrom(gvdfuncarg, false, true, false)
-				}
-				if len(asfunc.RefFunc.Rets) > 0 {
-					panic("Noice, you introduced a bug")
-				}
-				for _, gvdfuncret := range gvd.RefFunc.Rets {
-					asfunc.RefFunc.Rets = append(asfunc.RefFunc.Rets, gvdfuncret)
-				}
-			}
-			if asfunc != nil && gvd.RefFunc == nil && strings.HasPrefix(me.mod.srcFilePath, "src/") {
-				println(me.mod.srcFilePath + "\t" + gvd.NamePs + "/" + gvd.NameGo)
-			}
+			gntr.copyFrom(gvd, true, !isfunc, true)
+			return gvd
 		}
+		return nil
 	}
 	me.topLevelDefs(func(a gIrA) bool {
-		if af, _ := a.(*gIrAFunc); af != nil {
-			ensure(af, &af.gIrANamedTypeRef)
-		} else if av, _ := a.(*gIrALet); av != nil {
-			ensure(nil, &av.gIrANamedTypeRef)
+		if av, _ := a.(*gIrALet); av != nil {
+			ensure(false, &av.gIrANamedTypeRef)
+		} else if af, _ := a.(*gIrAFunc); af != nil {
+			if gvd := ensure(true, &af.gIrANamedTypeRef); gvd != nil {
+				if gvd.RefFunc == nil {
+					panic(notImplErr("NIL RefFunc for", gvd.NamePs, me.mod.srcFilePath))
+				} else {
+					for i, gvdfuncarg := range gvd.RefFunc.Args {
+						af.RefFunc.Args[i].copyFrom(gvdfuncarg, false, true, false)
+					}
+					if len(af.RefFunc.Rets) > 0 {
+						panic(notImplErr("RET values for", gvd.NamePs, me.mod.srcFilePath))
+					}
+					for _, gvdfuncret := range gvd.RefFunc.Rets {
+						af.RefFunc.Rets = append(af.RefFunc.Rets, gvdfuncret)
+					}
+				}
+			}
+
 		}
 		return false
 	})
@@ -128,27 +153,6 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 		}
 		return ast
 	})
-}
-
-func (me *gonadIrAst) postClearTcDictFuncs() (dictfuncs []gIrA) {
-	//	ditch all: func tcmethodname(dict){return dict.tcmethodname}
-	dictfuncs = me.topLevelDefs(func(a gIrA) bool {
-		if fn, _ := a.(*gIrAFunc); fn != nil &&
-			fn.RefFunc != nil && len(fn.RefFunc.Args) == 1 && fn.RefFunc.Args[0].NamePs == "dict" &&
-			fn.FuncImpl != nil && len(fn.FuncImpl.Body) == 1 {
-			if fnret, _ := fn.FuncImpl.Body[0].(*gIrARet); fnret != nil {
-				if fnretdot, _ := fnret.RetArg.(*gIrADot); fnretdot != nil {
-					if fnretdotl, _ := fnretdot.DotLeft.(*gIrASym); fnretdotl != nil && fnretdotl.NamePs == "dict" {
-						if fnretdotr, _ := fnretdot.DotRight.(*gIrASym); fnretdotr != nil && fnretdotr.NamePs == fn.NamePs {
-							return true
-						}
-					}
-				}
-			}
-		}
-		return false
-	})
-	return
 }
 
 func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
@@ -263,7 +267,7 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 	}
 }
 
-func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
+func (me *gonadIrAst) postMiscFixups() {
 	me.walk(func(ast gIrA) gIrA {
 		switch a := ast.(type) {
 		case *gIrALet:
@@ -273,12 +277,6 @@ func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
 			}
 		case *gIrAFunc:
 			if a.gIrANamedTypeRef.RefFunc != nil {
-				// marked to be ditched?
-				for _, df := range dictfuncs {
-					if df == a {
-						return nil
-					}
-				}
 				// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
 				if len(a.gIrANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
 					// otherwise, add an empty-for-now 'unknown' (aka interface{}) return type

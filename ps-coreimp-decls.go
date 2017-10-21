@@ -12,7 +12,7 @@ of top-level functions.
 */
 
 const (
-	msgfmt = "Encountered (previously unknown or unneeded) %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that we can support it."
+	msgfmt = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
 )
 
 func notImplErr(cat string, name string, in interface{}) error {
