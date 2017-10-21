@@ -136,7 +136,7 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 			a.FieldVal = walk(a.FieldVal, on)
 		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr, *gIrASym:
 		default:
-			panic(fmt.Errorf("WALK not handling gIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
+			panic(fmt.Errorf("walk() not handling gIrA type %v (value: %v), please report", reflect.TypeOf(a), a))
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {

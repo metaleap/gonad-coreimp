@@ -58,7 +58,7 @@ func (me *psBowerProject) moduleByPName(pname string) *modPkg {
 	return nil
 }
 
-func (me *psBowerProject) loadFromJsonFile(isdep bool) (err error) {
+func (me *psBowerProject) loadFromJsonFile() (err error) {
 	if err = udevbower.LoadFromFile(me.JsonFilePath, &me.JsonFile); err == nil {
 		me.GoOut.PkgDirPath = Flag.GoNamespace
 		if repourl := me.JsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {

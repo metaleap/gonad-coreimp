@@ -265,9 +265,9 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []gIrA, trr 
 			fmt.Fprint(w, "var (\n")
 		}
 		valºnameºtype := func(a gIrA) (val gIrA, name string, typeref *gIrANamedTypeRef) {
-			if ac, ok := a.(*gIrAConst); ok && consts {
+			if ac, _ := a.(*gIrAConst); ac != nil && consts {
 				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.gIrANamedTypeRef
-			} else if av, ok := a.(*gIrALet); ok {
+			} else if av, _ := a.(*gIrALet); av != nil {
 				val, name, typeref = av.LetVal, av.NameGo, &av.gIrANamedTypeRef
 			}
 			return
@@ -285,18 +285,18 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []gIrA, trr 
 	}
 }
 
-func codeEmitEnumConsts(w io.Writer, enumconstnames []string, enumconsttype string) {
-	fmt.Fprint(w, "const (\n")
-	fmt.Fprintf(w, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
-	for i, enumconstname := range enumconstnames {
-		fmt.Fprintf(w, "\t%s", enumconstname)
-		if i == 0 {
-			fmt.Fprintf(w, " %s = iota", enumconsttype)
-		}
-		fmt.Fprint(w, "\n")
-	}
-	fmt.Fprint(w, ")\n\n")
-}
+// func codeEmitEnumConsts(w io.Writer, enumconstnames []string, enumconsttype string) {
+// 	fmt.Fprint(w, "const (\n")
+// 	fmt.Fprintf(w, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
+// 	for i, enumconstname := range enumconstnames {
+// 		fmt.Fprintf(w, "\t%s", enumconstname)
+// 		if i == 0 {
+// 			fmt.Fprintf(w, " %s = iota", enumconsttype)
+// 		}
+// 		fmt.Fprint(w, "\n")
+// 	}
+// 	fmt.Fprint(w, ")\n\n")
+// }
 
 func codeEmitFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs, indlevel int, typerefresolver goTypeRefResolver, isretargs bool) {
 	parens := (!isretargs) || len(methodargs) > 1 || (len(methodargs) == 1 && len(methodargs[0].NameGo) > 0)
@@ -342,9 +342,9 @@ func codeEmitPkgDecl(w io.Writer, pname string) {
 	fmt.Fprintf(w, "package %s\n\n", pname)
 }
 
-func codeEmitTypeAlias(w io.Writer, tname string, ttype string) {
-	fmt.Fprintf(w, "type %s %s\n\n", tname, ttype)
-}
+// func codeEmitTypeAlias(w io.Writer, tname string, ttype string) {
+// 	fmt.Fprintf(w, "type %s %s\n\n", tname, ttype)
+// }
 
 func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefresolver goTypeRefResolver) {
 	if gtd == nil {
@@ -428,7 +428,7 @@ func codeEmitTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int, typerefr
 	} else if gtd.RefFunc != nil {
 		ilev := indlevel
 		if ilev == 0 {
-			ilev += 1
+			ilev++
 		}
 		fmt.Fprint(w, "func")
 		if isfuncwithbodynotjustsig && len(gtd.NameGo) > 0 {

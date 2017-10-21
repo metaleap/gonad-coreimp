@@ -74,7 +74,7 @@ func (me *gonadIrAst) prepFixupExportedNames() {
 }
 
 func (me *gonadIrAst) prepForeigns() {
-	if reqforeign, _ := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
+	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
 		qn := nsPrefixDefaultFfiPkg + me.mod.qName
 		me.girM.ForeignImp = me.girM.Imports.addIfHasnt(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
 		me.girM.save = true
@@ -94,7 +94,7 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 					if dr, _ := a.DotRight.(*gIrASym); dr != nil {
 						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
 						if dr.NameGo == "value" {
-							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
+							if nuglobalvar := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
 								nuvarsym := ªSymGo("")
 								nuvarsym.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
 								nuvarsym.NameGo = nuglobalvar.NameGo

@@ -28,7 +28,7 @@ var (
 	}
 )
 
-func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex *sync.Mutex, reldirpath string) {
+func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex sync.Locker, reldirpath string) {
 	defer wg.Done()
 	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
 	if !ufs.FileExists(jsonfilepath) {
@@ -44,9 +44,9 @@ func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex *sync.Mutex, reldirpath
 	}
 }
 
-func loadDepFromBowerFile(wg *sync.WaitGroup, depname string, dep *psBowerProject) {
+func loadDepFromBowerFile(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	if err := dep.loadFromJsonFile(true); err != nil {
+	if err := dep.loadFromJsonFile(); err != nil {
 		panic(err)
 	}
 }
@@ -101,7 +101,7 @@ func main() {
 		if !ufs.DirExists(Proj.SrcDirPath) {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
-		if err = Proj.loadFromJsonFile(false); err == nil {
+		if err = Proj.loadFromJsonFile(); err == nil {
 			var mutex sync.Mutex
 			var wg sync.WaitGroup
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
@@ -110,9 +110,9 @@ func main() {
 				return true
 			})
 			wg.Wait()
-			for dk, dv := range Deps {
+			for _, dv := range Deps {
 				wg.Add(1)
-				go loadDepFromBowerFile(&wg, dk, dv)
+				go loadDepFromBowerFile(&wg, dv)
 			}
 			if wg.Wait(); err == nil {
 				for _, dep := range Deps {
@@ -151,7 +151,7 @@ func main() {
 
 						}
 						if wg.Wait(); err == nil {
-							dur := time.Now().Sub(starttime)
+							dur := time.Since(starttime)
 							fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
 							err = writeTestMainGo(allpkgimppaths)
 						}

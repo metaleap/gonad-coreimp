@@ -117,8 +117,7 @@ type gIrMTypeDataCtor struct {
 	Name string       `json:"tdcn,omitempty"`
 	Args gIrMTypeRefs `json:"tdca,omitempty"`
 
-	gtd     *gIrANamedTypeRef
-	comment *gIrAComments
+	gtd *gIrANamedTypeRef
 }
 
 type gIrMTypeRefs []*gIrMTypeRef
@@ -332,7 +331,7 @@ func (me *gonadIrMeta) populateFromCoreImp() {
 						}
 					}
 				} else {
-					if td, _ := me.mod.coreimp.DeclEnv.TypeDefs[tname]; td != nil && td.Decl.DataType != nil {
+					if td := me.mod.coreimp.DeclEnv.TypeDefs[tname]; td != nil && td.Decl.DataType != nil {
 						for ctorname, _ := range td.Decl.DataType.Ctors {
 							me.Exports = append(me.Exports, tname+"ĸ"+ctorname)
 						}
@@ -382,11 +381,8 @@ func (me *gonadIrMeta) populateFromLoaded() error {
 }
 
 func (me *gonadIrMeta) populateGoValDecls() {
-	mdict := map[string][]string{}
-	var tdict map[string][]string
-
 	for _, evd := range me.EnvValDecls {
-		tdict = map[string][]string{}
+		tdict := map[string][]string{}
 		gvd := &gIrANamedTypeRef{Export: me.hasExport(evd.Name)}
 		gvd.setBothNamesFromPsName(evd.Name)
 		for gtd := me.goTypeDefByGoName(gvd.NameGo); gtd != nil; gtd = me.goTypeDefByGoName(gvd.NameGo) {
@@ -395,7 +391,7 @@ func (me *gonadIrMeta) populateGoValDecls() {
 		for gvd2 := me.goValDeclByGoName(gvd.NameGo); gvd2 != nil; gvd2 = me.goValDeclByGoName(gvd.NameGo) {
 			gvd.NameGo += "ª"
 		}
-		gvd.setRefFrom(me.toGIrATypeRef(mdict, tdict, evd.Ref))
+		gvd.setRefFrom(me.toGIrATypeRef(tdict, evd.Ref))
 		me.GoValDecls = append(me.GoValDecls, gvd)
 	}
 }

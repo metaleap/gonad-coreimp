@@ -260,7 +260,6 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 			o.Op1 = "&"
 		default:
 			panic("unrecognized unary op '" + o.Op1 + "', please report!")
-			o.Op1 = "?" + o.Op1 + "?"
 		}
 		a = o
 	case "Binary":
@@ -305,7 +304,6 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		case "ZeroFillShiftRight":
 			o.Op2 = "&^"
 		default:
-			o.Op2 = "?" + o.Op2 + "?"
 			panic("unrecognized binary op '" + o.Op2 + "', please report!")
 		}
 		a = o
@@ -372,7 +370,7 @@ func (me *coreImp) preProcessTopLevel() error {
 	i := 0
 	ditch := func() {
 		me.Body = append(me.Body[:i], me.Body[i+1:]...)
-		i -= 1
+		i--
 	}
 	for i = 0; i < len(me.Body); i++ {
 		a := me.Body[i]

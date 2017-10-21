@@ -70,7 +70,6 @@ type gIrANamedTypeRef struct {
 	WasTypeFunc bool              `json:",omitempty"`
 
 	method gIrATypeMethod
-	ctor   *gIrMTypeDataCtor
 	instOf string
 }
 
@@ -159,10 +158,10 @@ func (me *gIrATypeRefInterface) allMethods() (allmethods gIrANamedTypeRefs) {
 			m := map[string]*gIrANamedTypeRef{}
 			for _, embed := range me.Embeds {
 				if gtd := findGoTypeByPsQName(embed); gtd == nil || gtd.RefInterface == nil {
-					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report!", me.xtc.Name, embed))
+					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report", me.xtc.Name, embed))
 				} else {
 					for _, method := range gtd.RefInterface.allMethods() {
-						if dupl, _ := m[method.NameGo]; dupl == nil {
+						if dupl := m[method.NameGo]; dupl == nil {
 							m[method.NameGo], me.inheritedMethods = method, append(me.inheritedMethods, method)
 						} else if !dupl.eq(method) {
 							panic("Interface (generated from type-class " + me.xtc.Name + ") would inherit multiple (but different-signature) methods named " + method.NameGo)
@@ -196,19 +195,16 @@ func (me *gIrATypeRefStruct) eq(cmp *gIrATypeRefStruct) bool {
 }
 
 func (me *gonadIrMeta) populateGoTypeDefs() {
-	mdict := map[string][]string{}
-	var tdict map[string][]string
-
 	for _, ts := range me.EnvTypeSyns {
-		tdict = map[string][]string{}
+		tdict := map[string][]string{}
 		gtd := &gIrANamedTypeRef{Export: me.hasExport(ts.Name)}
 		gtd.setBothNamesFromPsName(ts.Name)
-		gtd.setRefFrom(me.toGIrATypeRef(mdict, tdict, ts.Ref))
+		gtd.setRefFrom(me.toGIrATypeRef(tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 
 	for _, tc := range me.EnvTypeClasses {
-		tdict = map[string][]string{}
+		tdict := map[string][]string{}
 		gif := &gIrATypeRefInterface{xtc: tc}
 		for _, tcc := range tc.Constraints {
 			for _, tcca := range tcc.Args {
@@ -220,7 +216,7 @@ func (me *gonadIrMeta) populateGoTypeDefs() {
 		}
 		for _, tcm := range tc.Members {
 			ifm := &gIrANamedTypeRef{NamePs: tcm.Name, NameGo: sanitizeSymbolForGo(tcm.Name, true)}
-			ifm.setRefFrom(me.toGIrATypeRef(mdict, tdict, tcm.Ref))
+			ifm.setRefFrom(me.toGIrATypeRef(tdict, tcm.Ref))
 			if ifm.RefFunc == nil {
 				if ifm.RefInterface != nil {
 					ifm.RefFunc = &gIrATypeRefFunc{
@@ -246,13 +242,12 @@ func (me *gonadIrMeta) populateGoTypeDefs() {
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
 
-	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.EnvTypeDataDecls, mdict)...)
+	me.GoTypeDefs = append(me.GoTypeDefs, me.toGIrADataTypeDefs(me.EnvTypeDataDecls)...)
 }
 
-func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdict map[string][]string) (gtds gIrANamedTypeRefs) {
-	var tdict map[string][]string
+func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl) (gtds gIrANamedTypeRefs) {
 	for _, td := range typedatadecls {
-		tdict = map[string][]string{}
+		tdict := map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
 		} else {
@@ -272,7 +267,7 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 			}
 			if isnewtype {
 				gid.RefInterface = nil
-				gid.setRefFrom(me.toGIrATypeRef(mdict, tdict, td.Ctors[0].Args[0]))
+				gid.setRefFrom(me.toGIrATypeRef(tdict, td.Ctors[0].Args[0]))
 			} else {
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &gIrANamedTypeRef{Export: me.hasExport(gid.NamePs + "ĸ" + ctor.Name),
@@ -281,7 +276,7 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
 						field := &gIrANamedTypeRef{}
-						field.setRefFrom(me.toGIrATypeRef(mdict, tdict, ctorarg))
+						field.setRefFrom(me.toGIrATypeRef(tdict, ctorarg))
 						ctorarg.tmp_assoc = field
 						field.NameGo = fmt.Sprintf("%s%d", sanitizeSymbolForGo(ctor.Name, true), ia)
 						ctor.gtd.RefStruct.Fields = append(ctor.gtd.RefStruct.Fields, field)
@@ -295,7 +290,7 @@ func (me *gonadIrMeta) toGIrADataTypeDefs(typedatadecls []*gIrMTypeDataDecl, mdi
 	return
 }
 
-func (me *gonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string][]string, tr *gIrMTypeRef) interface{} {
+func (me *gonadIrMeta) toGIrATypeRef(tdict map[string][]string, tr *gIrMTypeRef) interface{} {
 	if len(tr.TypeConstructor) > 0 {
 		return tr.TypeConstructor
 	} else if tr.REmpty {
@@ -312,35 +307,35 @@ func (me *gonadIrMeta) toGIrATypeRef(mdict map[string][]string, tdict map[string
 		} else {
 			ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
 		}
-		return me.toGIrATypeRef(mdict, tdict, tr.ConstrainedType.Ref)
+		return me.toGIrATypeRef(tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {
-		return me.toGIrATypeRef(mdict, tdict, tr.ForAll.Ref)
+		return me.toGIrATypeRef(tdict, tr.ForAll.Ref)
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
 		rectype := &gIrATypeRefStruct{PassByPtr: true, Fields: gIrANamedTypeRefs{&gIrANamedTypeRef{NamePs: tr.RCons.Label, NameGo: sanitizeSymbolForGo(tr.RCons.Label, false)}}}
-		rectype.Fields[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.RCons.Left))
-		if nextrow := me.toGIrATypeRef(mdict, tdict, tr.RCons.Right); nextrow != nil {
+		rectype.Fields[0].setRefFrom(me.toGIrATypeRef(tdict, tr.RCons.Left))
+		if nextrow := me.toGIrATypeRef(tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*gIrATypeRefStruct).Fields...)
 		}
 		return rectype
 	} else if tr.TypeApp != nil {
 		if tr.TypeApp.Left.TypeConstructor == "Prim.Record" {
-			return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right)
+			return me.toGIrATypeRef(tdict, tr.TypeApp.Right)
 		} else if tr.TypeApp.Left.TypeConstructor == "Prim.Array" {
 			array := &gIrATypeRefArray{Of: &gIrANamedTypeRef{}}
-			array.Of.setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
+			array.Of.setRefFrom(me.toGIrATypeRef(tdict, tr.TypeApp.Right))
 			return array
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" {
 			funtype := &gIrATypeRefFunc{}
 			funtype.Args = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
-			funtype.Args[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left.TypeApp.Right))
+			funtype.Args[0].setRefFrom(me.toGIrATypeRef(tdict, tr.TypeApp.Left.TypeApp.Right))
 			funtype.Rets = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
-			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Right))
+			funtype.Rets[0].setRefFrom(me.toGIrATypeRef(tdict, tr.TypeApp.Right))
 			return funtype
 		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
-			return me.toGIrATypeRef(mdict, tdict, tr.TypeApp.Left)
-		} else {
+			return me.toGIrATypeRef(tdict, tr.TypeApp.Left)
+			// } else {
 			//	Nested stuff ie. (Either foo) bar
 		}
 	}
@@ -367,7 +362,6 @@ func findGoTypeByPsQName(qname string) *gIrANamedTypeRef {
 	} else {
 		panic("Unexpected non-qualified type-name encountered, please report with your PS module (and its output-directory json files)!")
 	}
-	return nil
 }
 
 func sanitizeSymbolForGo(name string, upper bool) string {

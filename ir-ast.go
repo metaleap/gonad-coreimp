@@ -185,8 +185,8 @@ type gIrAOp2 struct {
 }
 
 func (me gIrAOp2) isConstable() bool {
-	if c, _ := me.Left.(gIrAConstable); c != nil && c.isConstable() {
-		if c, _ := me.Right.(gIrAConstable); c != nil && c.isConstable() {
+	if cl, _ := me.Left.(gIrAConstable); cl != nil && cl.isConstable() {
+		if cr, _ := me.Right.(gIrAConstable); cr != nil && cr.isConstable() {
 			return true
 		}
 	}
