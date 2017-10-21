@@ -58,11 +58,9 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 
 func (me *gonadIrAst) prepFixupExportedNames() {
 	ensure := func(gntr *gIrANamedTypeRef) {
-		if gntr != nil {
-			if gvd := me.girM.goValDeclByPsName(gntr.NamePs); gvd != nil {
-				gntr.Export = gvd.Export
-				gntr.NameGo = gvd.NameGo
-			}
+		if gvd := me.girM.goValDeclByPsName(gntr.NamePs); gvd != nil {
+			gntr.Export = gvd.Export
+			gntr.NameGo = gvd.NameGo
 		}
 	}
 	me.topLevelDefs(func(a gIrA) bool {
