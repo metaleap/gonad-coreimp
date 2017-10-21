@@ -91,20 +91,24 @@ func (me *gIrALet) isConstable() bool {
 
 type gIrASym struct {
 	gIrABase
-	decl gIrA
+	refto gIrA
 }
 
-func (me *gIrASym) declOfSym() gIrA {
-	if me.decl == nil {
-		if ast := me.Ast(); ast != nil {
-			me.decl = ast.lookupDeclOfSym(me)
-		}
+func (me *gIrASym) refTo() gIrA {
+	if me.refto == nil {
+		me.refto = gIrALookupInAncestorBlocks(me, func(stmt gIrA) (isref bool) {
+			switch stmt.(type) {
+			case *gIrALet, *gIrAConst, *gIrAFunc:
+				isref = (me.NamePs == stmt.Base().NamePs)
+			}
+			return
+		})
 	}
-	return me.decl
+	return me.refto
 }
 
 func (me *gIrASym) isConstable() bool {
-	if c, _ := me.declOfSym().(gIrAConstable); c != nil {
+	if c, _ := me.refTo().(gIrAConstable); c != nil {
 		return c.isConstable()
 	}
 	return false

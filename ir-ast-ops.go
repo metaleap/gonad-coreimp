@@ -100,7 +100,7 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
 						if dr.NameGo == "value" {
 							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
-								nuvarsym := ªSym("", "")
+								nuvarsym := ªSymGo("")
 								nuvarsym.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
 								nuvarsym.NameGo = nuglobalvar.NameGo
 								return nuvarsym

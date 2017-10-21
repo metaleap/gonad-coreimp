@@ -96,7 +96,7 @@ func ªDot(left gIrA, right gIrA) *gIrADot {
 }
 
 func ªDotNamed(left string, right string) *gIrADot {
-	return ªDot(ªSym(left, ""), ªSym(right, ""))
+	return ªDot(ªSymGo(left), ªSymGo(right))
 }
 
 func ªEq(left gIrA, right gIrA) *gIrAOp2 {
@@ -196,7 +196,7 @@ func ªSet(left gIrA, right gIrA) *gIrASet {
 }
 
 func ªsetVarInGroup(namego string, right gIrA, typespec *gIrANamedTypeRef) *gIrASet {
-	a := ªSet(ªSym(namego, ""), right)
+	a := ªSet(ªSymGo(namego), right)
 	if typespec != nil && typespec.hasTypeInfo() {
 		a.gIrANamedTypeRef = *typespec
 	}
@@ -204,13 +204,16 @@ func ªsetVarInGroup(namego string, right gIrA, typespec *gIrANamedTypeRef) *gIr
 	return a
 }
 
-func ªSym(namego string, nameps string) *gIrASym {
+func ªSymGo(namego string) *gIrASym {
 	a := &gIrASym{}
-	if len(namego) == 0 && len(nameps) > 0 {
-		a.setBothNamesFromPsName(nameps)
-	} else {
-		a.NameGo, a.NamePs = namego, nameps
-	}
+	a.NameGo = namego
+	return a
+}
+
+func ªSymPs(nameps string, exported bool) *gIrASym {
+	a := &gIrASym{}
+	a.Export = exported
+	a.setBothNamesFromPsName(nameps)
 	return a
 }
 
