@@ -231,12 +231,11 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		} else {
 			mod = findModuleByPName(pname)
 		}
-		if tcctor := mod.girAst.typeCtorFunc(tcname); tcctor != nil {
-			if tcctor.fromFunc == nil {
-				tcctor.fromFunc = tcctor.fromLet.LetVal.(*gIrAFunc)
-			}
+		if tcctor := mod.girAst.typeCtorFunc(tcname); tcctor == nil {
+			panic(me.mod.srcFilePath + ": instance ctor func not found for " + ifv.NamePs + ", please report")
+		} else {
 			ifo := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
-			for i, instfuncarg := range tcctor.fromFunc.RefFunc.Args {
+			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.RefStruct.Methods {
 					if gtdmethod.NamePs == instfuncarg.NamePs {
 						ifofv := ifo.ObjFields[i].FieldVal

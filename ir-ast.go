@@ -166,9 +166,7 @@ type gIrAComments struct {
 }
 
 type gIrACtor struct {
-	gIrABase
-	fromLet  *gIrALet
-	fromFunc *gIrAFunc
+	gIrAFunc
 }
 
 type gIrAOp1 struct {
@@ -293,8 +291,7 @@ type gIrAPkgSym struct {
 
 func (me *gonadIrAst) typeCtorFunc(nameps string) *gIrACtor {
 	for _, tcf := range me.typeCtorFuncs {
-		if (tcf.fromLet != nil && tcf.fromLet.NamePs == nameps) ||
-			(tcf.fromFunc != nil && tcf.fromFunc.NamePs == nameps) {
+		if tcf.NamePs == nameps {
 			return tcf
 		}
 	}

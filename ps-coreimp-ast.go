@@ -222,21 +222,25 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = c
 	case "VariableIntroduction":
 		v := ªLet("", me.VariableIntroduction, nil)
-		wastypefunc := false
+		var wastypefunc *gIrAFunc
 		if me.AstRight != nil {
 			v.LetVal = me.AstRight.ciAstToGIrAst()
 			vlvb := v.LetVal.Base()
 			vlvb.parent = v
 			if v.LetVal != nil && vlvb.RefFunc != nil {
-				wastypefunc = istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction)
+				if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
+					wastypefunc = v.LetVal.(*gIrAFunc)
+				}
 			} else if vlvc, _ := v.LetVal.(*gIrACall); vlvc != nil {
 				if vlvcb := vlvc.Callee.Base(); vlvcb.RefFunc != nil {
-					wastypefunc = istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction)
+					if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
+						wastypefunc = vlvc.Callee.(*gIrAFunc)
+					}
 				}
 			}
 		}
-		if wastypefunc {
-			a = &gIrACtor{fromLet: v}
+		if wastypefunc != nil {
+			a = &gIrACtor{gIrAFunc: *wastypefunc}
 		} else {
 			a = v
 		}
@@ -253,7 +257,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		f.RefFunc.impl = f.FuncImpl
 		me.AstBody.astForceIntoBlock(f.FuncImpl)
 		if wastypefunc {
-			a = &gIrACtor{fromFunc: f}
+			a = &gIrACtor{gIrAFunc: *f}
 		} else {
 			a = f
 		}
