@@ -26,8 +26,8 @@ type gonadIrAst struct {
 
 	culled struct {
 		typeCtorFuncs []*gIrACtor
-		tcDictFuncs   []*gIrAFunc
-		tcInstFuncs   []*gIrAFunc
+		tcDictDecls   []gIrA
+		tcInstDecls   []gIrA
 	}
 	mod  *modPkg
 	proj *psBowerProject

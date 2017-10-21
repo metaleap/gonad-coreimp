@@ -13,22 +13,21 @@ and "post" ops are called from FinalizePostPrep.
 
 func (me *gonadIrAst) prepAddOrCull(a gIrA) {
 	if a != nil {
+		culled := false
 		if ctor, _ := a.(*gIrACtor); ctor != nil {
 			// PureScript CoreImp contains constructor functions for each ADT "sub-type", we drop those
-			me.culled.typeCtorFuncs = append(me.culled.typeCtorFuncs, ctor)
-		} else {
-			culled := false
+			culled, me.culled.typeCtorFuncs = true, append(me.culled.typeCtorFuncs, ctor)
+		} else if ab := a.Base(); ab != nil {
 			// check if helper function related to type-classes / type-class instances:
-			if afn, _ := a.(*gIrAFunc); afn != nil && afn.RefFunc != nil && len(afn.RefFunc.Args) == 1 && afn.FuncImpl != nil && len(afn.FuncImpl.Body) == 1 {
-				if culled = me.girM.tcInst(afn.NamePs) != nil; culled {
-					me.culled.tcInstFuncs = append(me.culled.tcInstFuncs, afn)
-				} else if culled = me.girM.tcMember(afn.NamePs) != nil; culled {
-					me.culled.tcDictFuncs = append(me.culled.tcDictFuncs, afn)
-				}
+			if culled = me.girM.tcInst(ab.NamePs) != nil; culled {
+				// func instname(..)
+				me.culled.tcInstDecls = append(me.culled.tcInstDecls, ab)
+			} else if culled = me.girM.tcMember(ab.NamePs) != nil; culled {
+				me.culled.tcDictDecls = append(me.culled.tcDictDecls, ab)
 			}
-			if !culled {
-				me.Add(a)
-			}
+		}
+		if !culled {
+			me.Add(a)
 		}
 	}
 }
