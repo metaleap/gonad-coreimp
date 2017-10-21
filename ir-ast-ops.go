@@ -118,13 +118,6 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrAVar) {
 						}
 					}
 				}
-			case *gIrAVar:
-				if a != nil && a.VarVal != nil {
-					if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
-						//	turn var=literal's into consts
-						return ªConst(&a.gIrANamedTypeRef, a.VarVal)
-					}
-				}
 			}
 		}
 		return ast
@@ -285,6 +278,13 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
 	me.walk(func(ast gIrA) gIrA {
 		switch a := ast.(type) {
+		case *gIrAVar:
+			if a != nil && a.VarVal != nil {
+				if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
+					//	turn var=literal's into consts
+					return ªConst(&a.gIrANamedTypeRef, a.VarVal)
+				}
+			}
 		case *gIrAFunc:
 			// marked to be ditched?
 			for _, df := range dictfuncs {

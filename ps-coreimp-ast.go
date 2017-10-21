@@ -172,12 +172,6 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = ªI(me.NumericLiteral_Integer)
 	case "Var":
 		v := ªVar("", me.Var, nil)
-		if gvd := me.root.mod.girMeta.goValDeclByPsName(me.Var); gvd != nil {
-			v.Export = true
-		}
-		if ustr.BeginsUpper(me.Var) {
-			v.WasTypeFunc = true
-		}
 		a = v
 	case "Block":
 		b := ªBlock()
@@ -233,9 +227,6 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 			if ustr.BeginsUpper(me.VariableIntroduction) {
 				v.WasTypeFunc = true
 			}
-			if gvd := me.root.mod.girMeta.goValDeclByPsName(me.VariableIntroduction); gvd != nil {
-				v.Export = true
-			}
 		}
 		if me.AstRight != nil {
 			v.VarVal = me.AstRight.ciAstToGIrAst()
@@ -247,9 +238,6 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		if istopleveldecl && len(me.Function) > 0 {
 			if ustr.BeginsUpper(me.Function) {
 				f.WasTypeFunc = true
-			}
-			if gvd := me.root.mod.girMeta.goValDeclByPsName(me.Function); gvd != nil {
-				f.Export = true
 			}
 		}
 		f.setBothNamesFromPsName(me.Function)

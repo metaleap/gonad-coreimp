@@ -10,6 +10,34 @@ Golang intermediate-representation AST:
 traversals of the abstract syntax tree
 */
 
+func (me *gonadIrAst) lookupDeclOfSym(sym *gIrAVar) (decl gIrA) {
+	for nextparent := sym.parent; nextparent != nil && decl == nil; nextparent = nextparent.Parent() {
+		switch p := nextparent.(type) {
+		case *gIrABlock:
+			for _, stmt := range p.Body {
+				switch a := stmt.(type) {
+				case *gIrAVar:
+					if a.VarVal != nil && a.NamePs == sym.NamePs {
+						decl = a
+					}
+				case *gIrAConst:
+					if a.NamePs == sym.NamePs {
+						decl = a
+					}
+				case *gIrAFunc:
+					if a.NamePs == sym.NamePs {
+						decl = a
+					}
+				}
+				if decl != nil {
+					break
+				}
+			}
+		}
+	}
+	return
+}
+
 func (me *gonadIrAst) topLevelDefs(okay func(gIrA) bool) (defs []gIrA) {
 	for _, ast := range me.Body {
 		if okay(ast) {

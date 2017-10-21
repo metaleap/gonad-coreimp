@@ -23,23 +23,29 @@ This latter 'design accident' should probably be revamped.
 
 type gonadIrAst struct {
 	gIrABlock `json:",omitempty"`
-
-	mod  *modPkg
-	proj *psBowerProject
-	girM *gonadIrMeta
+	mod       *modPkg
+	proj      *psBowerProject
+	girM      *gonadIrMeta
 }
 
 type gIrA interface {
+	Ast() *gonadIrAst
 	Base() *gIrABase
 	Parent() gIrA
 }
 
 type gIrABase struct {
 	gIrANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
+	Comments         []*coreImpComment   `json:",omitempty"`
+	parent           gIrA
+	ast              *gonadIrAst // usually nil but set in top-level gIrABlock. for the rare occasions a gIrA impl needs this, it uses Ast() which traverses parents to the root then stores in ast --- rather than passing the root to all gIrA constructors etc
+}
 
-	Comments []*coreImpComment `json:",omitempty"`
-
-	parent gIrA
+func (me *gIrABase) Ast() *gonadIrAst {
+	if me.ast == nil && me.parent != nil {
+		me.ast = me.parent.Ast()
+	}
+	return me.ast
 }
 
 func (me *gIrABase) Base() *gIrABase {
@@ -69,9 +75,30 @@ type gIrAConst struct {
 	ConstVal gIrA `json:",omitempty"`
 }
 
+func (me *gIrAConst) isConstable() bool { return true }
+
 type gIrAVar struct {
 	gIrABase
 	VarVal gIrA `json:",omitempty"`
+	decl   gIrA
+}
+
+func (me *gIrAVar) isConstable() bool {
+	if c, _ := me.declOfSym().(gIrAConstable); c != nil {
+		return c.isConstable()
+	} else if c, _ := me.VarVal.(gIrAConstable); c != nil {
+		return c.isConstable()
+	}
+	return false
+}
+
+func (me *gIrAVar) declOfSym() gIrA {
+	if me.VarVal == nil && me.decl == nil {
+		if ast := me.Ast(); ast != nil {
+			me.decl = ast.lookupDeclOfSym(me)
+		}
+	}
+	return me.decl
 }
 
 type gIrAFunc struct {
@@ -84,9 +111,7 @@ type gIrALitStr struct {
 	LitStr string
 }
 
-func (me *gIrALitStr) isConstable() bool {
-	return true
-}
+func (me *gIrALitStr) isConstable() bool { return true }
 
 type gIrALitBool struct {
 	gIrABase
@@ -111,6 +136,7 @@ func (_ gIrALitInt) isConstable() bool { return true }
 
 type gIrABlock struct {
 	gIrABase
+
 	Body []gIrA `json:",omitempty"`
 }
 
@@ -147,8 +173,8 @@ type gIrAOp2 struct {
 
 func (me gIrAOp2) isConstable() bool {
 	if c, _ := me.Left.(gIrAConstable); c != nil && c.isConstable() {
-		if c, _ := me.Right.(gIrAConstable); c != nil {
-			return c.isConstable()
+		if c, _ := me.Right.(gIrAConstable); c != nil && c.isConstable() {
+			return true
 		}
 	}
 	return false
@@ -269,6 +295,7 @@ func (me *gonadIrAst) finalizePostPrep() (err error) {
 }
 
 func (me *gonadIrAst) prepFromCoreImp() (err error) {
+	me.gIrABlock.ast = me
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
@@ -302,17 +329,18 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 		codeEmitTypeMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
 
-	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { _, ok := a.(*gIrAConst); return ok })
-	toplevelvars := me.topLevelDefs(func(a gIrA) bool { _, ok := a.(*gIrAVar); return ok })
-
+	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAConst); return ok && !c.WasTypeFunc })
+	toplevelvars := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAVar); return ok && !c.WasTypeFunc })
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
 
 	toplevelctorfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAVar); return ok && c.WasTypeFunc })
 	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAFunc); return ok && !c.WasTypeFunc })
-	for _, ast := range toplevelctorfuncs {
-		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
-		fmt.Fprint(buf, "\n\n")
+	if false {
+		for _, ast := range toplevelctorfuncs {
+			codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
+			fmt.Fprint(buf, "\n\n")
+		}
 	}
 	for _, ast := range toplevelfuncs {
 		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
