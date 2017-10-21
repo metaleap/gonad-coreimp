@@ -88,15 +88,13 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 		fmt.Fprint(w, " = ")
 		codeEmitAst(w, indent, a.ConstVal, trr)
 		fmt.Fprint(w, "\n")
-	case *gIrAVar:
-		if a.VarVal != nil {
-			fmt.Fprintf(w, "%svar %s", tabs, a.NameGo)
-			fmt.Fprint(w, " = ")
-			codeEmitAst(w, indent, a.VarVal, trr)
-			fmt.Fprint(w, "\n")
-		} else if len(a.NameGo) > 0 {
-			fmt.Fprint(w, a.NameGo)
-		}
+	case *gIrASym:
+		fmt.Fprint(w, a.NameGo)
+	case *gIrALet:
+		fmt.Fprintf(w, "%svar %s", tabs, a.NameGo)
+		fmt.Fprint(w, " = ")
+		codeEmitAst(w, indent, a.LetVal, trr)
+		fmt.Fprint(w, "\n")
 	case *gIrABlock:
 		if a == nil || len(a.Body) == 0 {
 			fmt.Fprint(w, "{}")
@@ -217,19 +215,19 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 	case *gIrAFor:
 		if a.ForRange != nil {
 			fmt.Fprintf(w, "%sfor _, %s := range ", tabs, a.ForRange.NameGo)
-			codeEmitAst(w, indent, a.ForRange.VarVal, trr)
+			codeEmitAst(w, indent, a.ForRange.LetVal, trr)
 			codeEmitAst(w, indent, a.ForDo, trr)
 		} else if len(a.ForInit) > 0 || len(a.ForStep) > 0 {
 			fmt.Fprint(w, "for ")
 
 			for i, finit := range a.ForInit {
 				codeEmitCommaIf(w, i)
-				codeEmitAst(w, indent, finit.SetLeft, trr)
+				fmt.Fprint(w, finit.NameGo)
 			}
-			fmt.Fprint(w, " = ")
+			fmt.Fprint(w, " := ")
 			for i, finit := range a.ForInit {
 				codeEmitCommaIf(w, i)
-				codeEmitAst(w, indent, finit.ToRight, trr)
+				codeEmitAst(w, indent, finit.LetVal, trr)
 			}
 			fmt.Fprint(w, "; ")
 
@@ -269,8 +267,8 @@ func codeEmitGroupedVals(w io.Writer, indent int, consts bool, asts []gIrA, trr 
 		valºnameºtype := func(a gIrA) (val gIrA, name string, typeref *gIrANamedTypeRef) {
 			if ac, ok := a.(*gIrAConst); ok && consts {
 				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.gIrANamedTypeRef
-			} else if av, ok := a.(*gIrAVar); ok {
-				val, name, typeref = av.VarVal, av.NameGo, &av.gIrANamedTypeRef
+			} else if av, ok := a.(*gIrALet); ok {
+				val, name, typeref = av.LetVal, av.NameGo, &av.gIrANamedTypeRef
 			}
 			return
 		}

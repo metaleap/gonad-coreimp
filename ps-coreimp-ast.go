@@ -171,7 +171,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 	case "NumericLiteral_Integer":
 		a = ªI(me.NumericLiteral_Integer)
 	case "Var":
-		v := ªVar("", me.Var, nil)
+		v := ªSym("", me.Var)
 		a = v
 	case "Block":
 		b := ªBlock()
@@ -187,20 +187,19 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = f
 	case "ForIn":
 		f := ªFor()
-		f.ForRange = ªVar("", me.ForIn, me.AstFor1.ciAstToGIrAst())
+		f.ForRange = ªLet("", me.ForIn, me.AstFor1.ciAstToGIrAst())
 		f.ForRange.parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "For":
-		var fv gIrAVar
 		f := ªFor()
-		fv.setBothNamesFromPsName(me.For)
-		fv1, fv2, fv3, fv4 := fv, fv, fv, fv // quirky that we need these 4 copies but we do
-		f.ForInit = []*gIrASet{ªSet(&fv1, me.AstFor1.ciAstToGIrAst())}
+		fs := ªSym("", me.For)
+		f.ForInit = []*gIrALet{ªLet("", me.For, me.AstFor1.ciAstToGIrAst())}
 		f.ForInit[0].parent = f
-		f.ForCond = ªO2(&fv2, "<", me.AstFor2.ciAstToGIrAst())
+		fscmp, fsset, fsadd := *fs, *fs, *fs // quirky that we need these copies but we do
+		f.ForCond = ªO2(&fscmp, "<", me.AstFor2.ciAstToGIrAst())
 		f.ForCond.Base().parent = f
-		f.ForStep = []*gIrASet{ªSet(&fv3, ªO2(&fv4, "+", ªI(1)))}
+		f.ForStep = []*gIrASet{ªSet(&fsset, ªO2(&fsadd, "+", ªI(1)))}
 		f.ForStep[0].parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
@@ -222,23 +221,19 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		}
 		a = c
 	case "VariableIntroduction":
-		v := ªVar("", me.VariableIntroduction, nil)
-		if istopleveldecl {
-			if ustr.BeginsUpper(me.VariableIntroduction) {
-				v.WasTypeFunc = true
-			}
+		v := ªLet("", me.VariableIntroduction, nil)
+		if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
+			v.WasTypeFunc = true
 		}
 		if me.AstRight != nil {
-			v.VarVal = me.AstRight.ciAstToGIrAst()
-			v.VarVal.Base().parent = v
+			v.LetVal = me.AstRight.ciAstToGIrAst()
+			v.LetVal.Base().parent = v
 		}
 		a = v
 	case "Function":
 		f := ªFunc()
-		if istopleveldecl && len(me.Function) > 0 {
-			if ustr.BeginsUpper(me.Function) {
-				f.WasTypeFunc = true
-			}
+		if istopleveldecl && len(me.Function) > 0 && ustr.BeginsUpper(me.Function) {
+			f.WasTypeFunc = true
 		}
 		f.setBothNamesFromPsName(me.Function)
 		f.RefFunc = &gIrATypeRefFunc{}
@@ -350,7 +345,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			dv := ªVar("", me.AstRight.StringLiteral, nil)
+			dv := ªSym("", me.AstRight.StringLiteral)
 			a = ªDot(me.Indexer.ciAstToGIrAst(), dv)
 		} else {
 			a = ªIndex(me.Indexer.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
@@ -360,7 +355,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 			a = ªIs(me.InstanceOf.ciAstToGIrAst(), me.AstRight.Var)
 		} else /*if me.AstRight.Indexer != nil*/ {
 			adot := me.AstRight.ciAstToGIrAst().(*gIrADot)
-			a = ªIs(me.InstanceOf.ciAstToGIrAst(), findModuleByPName(adot.DotLeft.(*gIrAVar).NamePs).qName+"."+adot.DotRight.(*gIrAVar).NamePs)
+			a = ªIs(me.InstanceOf.ciAstToGIrAst(), findModuleByPName(adot.DotLeft.(*gIrASym).NamePs).qName+"."+adot.DotRight.(*gIrASym).NamePs)
 		}
 	default:
 		panic(fmt.Errorf("Just below %v: unrecognized coreImp AST-tag, please report: %s", me.parent, me.AstTag))

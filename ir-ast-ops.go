@@ -11,15 +11,15 @@ various transforms and operations on the AST,
 and "post" ops are called from FinalizePostPrep.
 */
 
-func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrAVar) {
+func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrALet) {
 	//	add private globals to represent all arg-less ctors (ie. "one const per enum-value")
 	nuglobals := []gIrA{}
-	nuglobalsmap = map[string]*gIrAVar{}
+	nuglobalsmap = map[string]*gIrALet{}
 	for _, gtd := range me.girM.GoTypeDefs {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
 				if ctor.gtd != nil && len(ctor.Args) == 0 {
-					nuvar := ªVar("º"+ctor.Name, "", ªO(&gIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
+					nuvar := ªLet("º"+ctor.Name, "", ªO(&gIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
 					nuglobalsmap[ctor.Name] = nuvar
 					nuglobals = append(nuglobals, nuvar)
 				}
@@ -71,7 +71,7 @@ func (me *gonadIrAst) prepFixupExportedNames() {
 	me.topLevelDefs(func(a gIrA) bool {
 		if af, _ := a.(*gIrAFunc); af != nil {
 			ensure(&af.gIrANamedTypeRef)
-		} else if av, _ := a.(*gIrAVar); av != nil {
+		} else if av, _ := a.(*gIrALet); av != nil {
 			ensure(&av.gIrANamedTypeRef)
 		}
 		return false
@@ -86,7 +86,7 @@ func (me *gonadIrAst) prepForeigns() {
 	}
 }
 
-func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrAVar) {
+func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 	me.walk(func(ast gIrA) gIrA {
 		if ast != nil {
 			switch a := ast.(type) {
@@ -95,12 +95,12 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrAVar) {
 					return a.Left
 				}
 			case *gIrADot:
-				if dl, _ := a.DotLeft.(*gIrAVar); dl != nil {
-					if dr, _ := a.DotRight.(*gIrAVar); dr != nil {
+				if dl, _ := a.DotLeft.(*gIrASym); dl != nil {
+					if dr, _ := a.DotRight.(*gIrASym); dr != nil {
 						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
 						if dr.NameGo == "value" {
 							if nuglobalvar, _ := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
-								nuvarsym := ªSym("")
+								nuvarsym := ªSym("", "")
 								nuvarsym.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
 								nuvarsym.NameGo = nuglobalvar.NameGo
 								return nuvarsym
@@ -132,8 +132,8 @@ func (me *gonadIrAst) postClearTcDictFuncs() (dictfuncs []gIrA) {
 			fn.FuncImpl != nil && len(fn.FuncImpl.Body) == 1 {
 			if fnret, _ := fn.FuncImpl.Body[0].(*gIrARet); fnret != nil {
 				if fnretdot, _ := fnret.RetArg.(*gIrADot); fnretdot != nil {
-					if fnretdotl, _ := fnretdot.DotLeft.(*gIrAVar); fnretdotl != nil && fnretdotl.NamePs == "dict" {
-						if fnretdotr, _ := fnretdot.DotRight.(*gIrAVar); fnretdotr != nil && fnretdotr.NamePs == fn.NamePs {
+					if fnretdotl, _ := fnretdot.DotLeft.(*gIrASym); fnretdotl != nil && fnretdotl.NamePs == "dict" {
+						if fnretdotr, _ := fnretdot.DotRight.(*gIrASym); fnretdotr != nil && fnretdotr.NamePs == fn.NamePs {
 							return true
 						}
 					}
@@ -149,15 +149,15 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
 	var gtd *gIrANamedTypeRef
 	if ocdot, _ := oc.Callee.(*gIrADot); ocdot != nil {
-		if ocdot1, _ := ocdot.DotLeft.(*gIrAVar); ocdot1 != nil {
+		if ocdot1, _ := ocdot.DotLeft.(*gIrASym); ocdot1 != nil {
 			if mod := findModuleByPName(ocdot1.NamePs); mod != nil {
-				if ocdot2, _ := ocdot.DotRight.(*gIrAVar); ocdot2 != nil {
-					gtd = mod.girMeta.goTypeDefByPsName(ocdot.DotRight.(*gIrAVar).NamePs)
+				if ocdot2, _ := ocdot.DotRight.(*gIrASym); ocdot2 != nil {
+					gtd = mod.girMeta.goTypeDefByPsName(ocdot2.NamePs)
 				}
 			}
 		}
 	}
-	ocv, _ := oc.Callee.(*gIrAVar)
+	ocv, _ := oc.Callee.(*gIrASym)
 	if gtd == nil && ocv != nil {
 		gtd = me.girM.goTypeDefByPsName(ocv.NamePs)
 	}
@@ -207,8 +207,8 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 
 func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 	instfuncvars := me.topLevelDefs(func(a gIrA) bool {
-		if v, _ := a.(*gIrAVar); v != nil {
-			if vv, _ := v.VarVal.(*gIrALitObj); vv != nil {
+		if v, _ := a.(*gIrALet); v != nil {
+			if vv, _ := v.LetVal.(*gIrALitObj); vv != nil {
 				if gtd := me.girM.goTypeDefByPsName(v.NamePs); gtd != nil {
 					return true
 				}
@@ -217,7 +217,7 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		return false
 	})
 	for _, ifx := range instfuncvars {
-		ifv, _ := ifx.(*gIrAVar)
+		ifv, _ := ifx.(*gIrALet)
 		gtd := me.girM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
 		gtdInstOf := findGoTypeByPsQName(gtd.instOf)
 		ifv.Export = gtdInstOf.Export
@@ -234,18 +234,18 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 			if afn, _ := a.(*gIrAFunc); afn != nil {
 				return afn.WasTypeFunc && afn.NamePs == tcname
 			}
-			if av, _ := a.(*gIrAVar); av != nil {
+			if av, _ := a.(*gIrALet); av != nil {
 				return av.WasTypeFunc && av.NamePs == tcname
 			}
 			return false
 		})
 		for i := 0; i < len(tcctors); i++ {
 			switch av := tcctors[i].(type) {
-			case *gIrAVar:
-				tcctors[i] = av.VarVal.(*gIrAFunc)
+			case *gIrALet:
+				tcctors[i] = av.LetVal.(*gIrAFunc)
 			}
 		}
-		ifo := ifv.VarVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
+		ifo := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
 		if len(tcctors) > 0 {
 			tcctor := tcctors[0].(*gIrAFunc)
 			for i, instfuncarg := range tcctor.RefFunc.Args {
@@ -270,7 +270,7 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		}
 		nuctor := ªO(&gIrANamedTypeRef{RefAlias: gtd.NameGo})
 		nuctor.parent = ifv
-		ifv.VarVal = nuctor
+		ifv.LetVal = nuctor
 		ifv.RefAlias = gtd.instOf
 	}
 }
@@ -278,12 +278,10 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 func (me *gonadIrAst) postMiscFixups(dictfuncs []gIrA) {
 	me.walk(func(ast gIrA) gIrA {
 		switch a := ast.(type) {
-		case *gIrAVar:
-			if a != nil && a.VarVal != nil {
-				if vc, _ := a.VarVal.(gIrAConstable); vc != nil && vc.isConstable() {
-					//	turn var=literal's into consts
-					return ªConst(&a.gIrANamedTypeRef, a.VarVal)
-				}
+		case *gIrALet:
+			if a != nil && a.isConstable() {
+				//	turn var=literal's into consts
+				return ªConst(&a.gIrANamedTypeRef, a.LetVal)
 			}
 		case *gIrAFunc:
 			// marked to be ditched?

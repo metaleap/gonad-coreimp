@@ -77,28 +77,37 @@ type gIrAConst struct {
 
 func (me *gIrAConst) isConstable() bool { return true }
 
-type gIrAVar struct {
+type gIrALet struct {
 	gIrABase
-	VarVal gIrA `json:",omitempty"`
-	decl   gIrA
+	LetVal gIrA `json:",omitempty"`
 }
 
-func (me *gIrAVar) isConstable() bool {
-	if c, _ := me.declOfSym().(gIrAConstable); c != nil {
-		return c.isConstable()
-	} else if c, _ := me.VarVal.(gIrAConstable); c != nil {
+func (me *gIrALet) isConstable() bool {
+	if c, _ := me.LetVal.(gIrAConstable); c != nil {
 		return c.isConstable()
 	}
 	return false
 }
 
-func (me *gIrAVar) declOfSym() gIrA {
-	if me.VarVal == nil && me.decl == nil {
+type gIrASym struct {
+	gIrABase
+	decl gIrA
+}
+
+func (me *gIrASym) declOfSym() gIrA {
+	if me.decl == nil {
 		if ast := me.Ast(); ast != nil {
 			me.decl = ast.lookupDeclOfSym(me)
 		}
 	}
 	return me.decl
+}
+
+func (me *gIrASym) isConstable() bool {
+	if c, _ := me.declOfSym().(gIrAConstable); c != nil {
+		return c.isConstable()
+	}
+	return false
 }
 
 type gIrAFunc struct {
@@ -192,9 +201,9 @@ type gIrAFor struct {
 	gIrABase
 	ForDo    *gIrABlock `json:",omitempty"`
 	ForCond  gIrA       `json:",omitempty"`
-	ForInit  []*gIrASet `json:",omitempty"`
+	ForInit  []*gIrALet `json:",omitempty"`
 	ForStep  []*gIrASet `json:",omitempty"`
-	ForRange *gIrAVar   `json:",omitempty"`
+	ForRange *gIrALet   `json:",omitempty"`
 }
 
 type gIrAIf struct {
@@ -330,11 +339,11 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	}
 
 	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAConst); return ok && !c.WasTypeFunc })
-	toplevelvars := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAVar); return ok && !c.WasTypeFunc })
+	toplevelvars := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrALet); return ok && !c.WasTypeFunc })
 	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
 	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
 
-	toplevelctorfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAVar); return ok && c.WasTypeFunc })
+	toplevelctorfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrALet); return ok && c.WasTypeFunc })
 	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { c, ok := a.(*gIrAFunc); return ok && !c.WasTypeFunc })
 	if false {
 		for _, ast := range toplevelctorfuncs {

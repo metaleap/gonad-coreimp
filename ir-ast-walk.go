@@ -10,27 +10,17 @@ Golang intermediate-representation AST:
 traversals of the abstract syntax tree
 */
 
-func (me *gonadIrAst) lookupDeclOfSym(sym *gIrAVar) (decl gIrA) {
+func (me *gonadIrAst) lookupDeclOfSym(sym *gIrASym) (decl gIrA) {
 	for nextparent := sym.parent; nextparent != nil && decl == nil; nextparent = nextparent.Parent() {
 		switch p := nextparent.(type) {
 		case *gIrABlock:
 			for _, stmt := range p.Body {
 				switch a := stmt.(type) {
-				case *gIrAVar:
-					if a.VarVal != nil && a.NamePs == sym.NamePs {
+				case *gIrALet, *gIrAConst, *gIrAFunc:
+					if ab := a.Base(); ab != nil && ab.NamePs == sym.NamePs {
 						decl = a
+						return
 					}
-				case *gIrAConst:
-					if a.NamePs == sym.NamePs {
-						decl = a
-					}
-				case *gIrAFunc:
-					if a.NamePs == sym.NamePs {
-						decl = a
-					}
-				}
-				if decl != nil {
-					break
 				}
 			}
 		}
@@ -86,14 +76,14 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
 		case *gIrAFor:
 			a.ForCond = walk(a.ForCond, on)
-			if tmp, _ := walk(a.ForRange, on).(*gIrAVar); tmp != nil {
+			if tmp, _ := walk(a.ForRange, on).(*gIrALet); tmp != nil {
 				a.ForRange = tmp
 			}
 			if tmp, _ := walk(a.ForDo, on).(*gIrABlock); tmp != nil {
 				a.ForDo = tmp
 			}
 			for i, fi := range a.ForInit {
-				if tmp, _ := walk(fi, on).(*gIrASet); tmp != nil {
+				if tmp, _ := walk(fi, on).(*gIrALet); tmp != nil {
 					a.ForInit[i] = tmp
 				}
 			}
@@ -128,9 +118,9 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 			a.RetArg = walk(a.RetArg, on)
 		case *gIrASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
-		case *gIrAVar:
+		case *gIrALet:
 			if a != nil && !a.WasTypeFunc {
-				a.VarVal = walk(a.VarVal, on)
+				a.LetVal = walk(a.LetVal, on)
 			}
 		case *gIrAIsType:
 			a.ExprToTest = walk(a.ExprToTest, on)
@@ -148,7 +138,7 @@ func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
 			}
 		case *gIrALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr:
+		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr, *gIrASym:
 		default:
 			panic(fmt.Errorf("WALK not handling gIrA type %v (value: %v), please report!", reflect.TypeOf(a), a))
 		}

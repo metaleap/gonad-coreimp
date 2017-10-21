@@ -96,7 +96,7 @@ func ªDot(left gIrA, right gIrA) *gIrADot {
 }
 
 func ªDotNamed(left string, right string) *gIrADot {
-	return ªDot(ªSym(left), ªSym(right))
+	return ªDot(ªSym(left, ""), ªSym(right, ""))
 }
 
 func ªEq(left gIrA, right gIrA) *gIrAOp2 {
@@ -132,6 +132,21 @@ func ªIndex(left gIrA, right gIrA) *gIrAIndex {
 func ªIs(expr gIrA, typeexpr string) *gIrAIsType {
 	a := &gIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
 	a.ExprToTest.Base().parent = a
+	return a
+}
+
+func ªLet(namego string, nameps string, val gIrA) *gIrALet {
+	a := &gIrALet{LetVal: val}
+	if val != nil {
+		vb := val.Base()
+		vb.parent = a
+		a.gIrANamedTypeRef = vb.gIrANamedTypeRef
+	}
+	if len(namego) == 0 && len(nameps) > 0 {
+		a.setBothNamesFromPsName(nameps)
+	} else {
+		a.NameGo, a.NamePs = namego, nameps
+	}
 	return a
 }
 
@@ -180,8 +195,8 @@ func ªSet(left gIrA, right gIrA) *gIrASet {
 	return a
 }
 
-func ªsetVarInGroup(name string, right gIrA, typespec *gIrANamedTypeRef) *gIrASet {
-	a := ªSet(ªSym(name), right)
+func ªsetVarInGroup(namego string, right gIrA, typespec *gIrANamedTypeRef) *gIrASet {
+	a := ªSet(ªSym(namego, ""), right)
 	if typespec != nil && typespec.hasTypeInfo() {
 		a.gIrANamedTypeRef = *typespec
 	}
@@ -189,27 +204,18 @@ func ªsetVarInGroup(name string, right gIrA, typespec *gIrANamedTypeRef) *gIrAS
 	return a
 }
 
-func ªSym(name string) *gIrAVar {
-	return ªVar(name, "", nil)
+func ªSym(namego string, nameps string) *gIrASym {
+	a := &gIrASym{}
+	if len(namego) == 0 && len(nameps) > 0 {
+		a.setBothNamesFromPsName(nameps)
+	} else {
+		a.NameGo, a.NamePs = namego, nameps
+	}
+	return a
 }
 
 func ªTo(expr gIrA, pname string, tname string) *gIrAToType {
 	a := &gIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
 	a.ExprToCast.Base().parent = a
-	return a
-}
-
-func ªVar(namego string, nameps string, val gIrA) *gIrAVar {
-	a := &gIrAVar{VarVal: val}
-	if val != nil {
-		vb := val.Base()
-		vb.parent = a
-		a.gIrANamedTypeRef = vb.gIrANamedTypeRef
-	}
-	if len(a.NameGo) == 0 && len(nameps) > 0 {
-		a.setBothNamesFromPsName(nameps)
-	} else {
-		a.NameGo, a.NamePs = namego, nameps
-	}
 	return a
 }
