@@ -367,7 +367,7 @@ func findGoTypeByPsQName(qname string) *gIrANamedTypeRef {
 		if mod := findModuleByQName(pname); mod == nil {
 			panic(fmt.Errorf("Unknown module qname %s", pname))
 		} else {
-			return mod.girMeta.goTypeDefByPsName(tname)
+			return mod.irMeta.goTypeDefByPsName(tname)
 		}
 	} else {
 		panic("Unexpected non-qualified type-name encountered, please report with your *.purs code-base (and its output-directory *.json files)!")

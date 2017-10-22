@@ -39,7 +39,7 @@ func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
 			me.Body[i] = walk(a, on)
 		}
 	}
-	for _, tr := range me.girM.GoTypeDefs {
+	for _, tr := range me.irM.GoTypeDefs {
 		if tr.RefStruct != nil {
 			for _, trm := range tr.RefStruct.Methods {
 				if trm.RefFunc.impl != nil {

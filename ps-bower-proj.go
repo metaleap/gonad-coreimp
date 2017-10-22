@@ -97,15 +97,16 @@ func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgd
 	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
 		modinfo.pName = strReplDot2Underscore.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
-		modinfo.girMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
+		modinfo.irMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
-		if ufs.FileExists(modinfo.girMetaFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
-			modinfo.reGenGIr = ufs.IsAnyInNewerThanAnyOf(filepath.Dir(modinfo.impFilePath),
-				modinfo.girMetaFilePath, modinfo.gopkgfilepath)
+		if ufs.FileExists(modinfo.irMetaFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
+			stalemeta, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.irMetaFilePath)
+			stalepkg, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.gopkgfilepath)
+			modinfo.reGenIr = stalemeta || stalepkg
 		} else {
-			modinfo.reGenGIr = true
+			modinfo.reGenIr = true
 		}
 		me.Modules = append(me.Modules, modinfo)
 	}
@@ -120,16 +121,16 @@ func (me *psBowerProject) forAll(op func(*sync.WaitGroup, *modPkg)) {
 	wg.Wait()
 }
 
-func (me *psBowerProject) ensureModPkgGIrMetas() {
+func (me *psBowerProject) ensureModPkgIrMetas() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		var err error
-		if modinfo.reGenGIr || Flag.ForceRegenAll {
-			err = modinfo.reGenPkgGIrMeta()
-		} else if err = modinfo.loadPkgGIrMeta(); err != nil {
-			modinfo.reGenGIr = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd girs
-			println(modinfo.qName + ": regenerating due to error when loading " + modinfo.girMetaFilePath + ": " + err.Error())
-			err = modinfo.reGenPkgGIrMeta()
+		if modinfo.reGenIr || Flag.ForceRegenAll {
+			err = modinfo.reGenPkgIrMeta()
+		} else if err = modinfo.loadPkgIrMeta(); err != nil {
+			modinfo.reGenIr = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd IRs
+			println(modinfo.qName + ": regenerating due to error when loading " + modinfo.irMetaFilePath + ": " + err.Error())
+			err = modinfo.reGenPkgIrMeta()
 		}
 		if err != nil {
 			panic(err)
@@ -137,37 +138,44 @@ func (me *psBowerProject) ensureModPkgGIrMetas() {
 	})
 }
 
-func (me *psBowerProject) prepModPkgGIrAsts() {
+func (me *psBowerProject) populateModPkgIrMetas() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenGIr || Flag.ForceRegenAll {
-			modinfo.prepGIrAst()
+		modinfo.populatePkgIrMeta()
+	})
+}
+
+func (me *psBowerProject) prepModPkgIrAsts() {
+	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
+		defer wg.Done()
+		if modinfo.reGenIr || Flag.ForceRegenAll {
+			modinfo.prepIrAst()
 		}
 	})
 }
 
-func (me *psBowerProject) reGenModPkgGIrAsts() {
+func (me *psBowerProject) reGenModPkgIrAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenGIr || Flag.ForceRegenAll {
-			if err := modinfo.reGenPkgGIrAst(); err != nil {
+		if modinfo.reGenIr || Flag.ForceRegenAll {
+			if err := modinfo.reGenPkgIrAst(); err != nil {
 				panic(err)
 			}
 		}
 	})
 }
 
-func (me *psBowerProject) writeOutDirtyGIrMetas(isagain bool) (err error) {
+func (me *psBowerProject) writeOutDirtyIrMetas(isagain bool) (err error) {
 	isfirst := !isagain
 	me.forAll(func(wg *sync.WaitGroup, m *modPkg) {
 		defer wg.Done()
-		shouldwrite := (isagain && m.girMeta.save) ||
-			(isfirst && (m.reGenGIr || m.girMeta.save || Flag.ForceRegenAll))
+		shouldwrite := (isagain && m.irMeta.save) ||
+			(isfirst && (m.reGenIr || m.irMeta.save || Flag.ForceRegenAll))
 		if shouldwrite {
 			var buf bytes.Buffer
-			if err = m.girMeta.writeAsJsonTo(&buf); err == nil {
-				if err = ufs.WriteBinaryFile(m.girMetaFilePath, buf.Bytes()); err == nil {
-					m.girMeta.save = false
+			if err = m.irMeta.writeAsJsonTo(&buf); err == nil {
+				if err = ufs.WriteBinaryFile(m.irMetaFilePath, buf.Bytes()); err == nil {
+					m.irMeta.save = false
 				}
 			}
 			if err != nil {

@@ -31,7 +31,7 @@ type gonadIrAst struct {
 	}
 	mod  *modPkg
 	proj *psBowerProject
-	girM *gonadIrMeta
+	irM  *gonadIrMeta
 }
 
 type gIrA interface {
@@ -352,8 +352,8 @@ func (me *gonadIrAst) writeAsJsonTo(w io.Writer) error {
 func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	var buf = &bytes.Buffer{}
 
-	sort.Sort(me.girM.GoTypeDefs)
-	for _, gtd := range me.girM.GoTypeDefs {
+	sort.Sort(me.irM.GoTypeDefs)
+	for _, gtd := range me.irM.GoTypeDefs {
 		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRefFromPsQName)
 		codeEmitStructMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
 	}
@@ -370,8 +370,8 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 	}
 
 	codeEmitPkgDecl(writer, me.mod.pName)
-	sort.Sort(me.girM.Imports)
-	codeEmitModImps(writer, me.girM.Imports)
+	sort.Sort(me.irM.Imports)
+	codeEmitModImps(writer, me.irM.Imports)
 	_, err = buf.WriteTo(writer)
 	return
 }
@@ -409,7 +409,7 @@ func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 				}
 				pname = mod.pName
 			}
-			for _, imp := range me.girM.Imports {
+			for _, imp := range me.irM.Imports {
 				if imp.Q == qn {
 					if foundimport = true; markused {
 						imp.used = true
@@ -424,7 +424,7 @@ func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 				} else {
 					imp = newModImp(mod)
 				}
-				if me.girM.imports, me.girM.Imports = append(me.girM.imports, mod), append(me.girM.Imports, imp); markused {
+				if me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp); markused {
 					imp.used = true
 				}
 			}
@@ -433,8 +433,8 @@ func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 		mod = me.mod
 	}
 	if (!wasprim) && mod != nil {
-		if tref := mod.girMeta.goTypeDefByPsName(tname); tref != nil {
-			tname = mod.girMeta.goTypeDefByPsName(tname).NameGo
+		if tref := mod.irMeta.goTypeDefByPsName(tname); tref != nil {
+			tname = mod.irMeta.goTypeDefByPsName(tname).NameGo
 		}
 	}
 	return

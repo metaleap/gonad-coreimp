@@ -53,23 +53,28 @@ func loadDepFromBowerFile(wg *sync.WaitGroup, dep *psBowerProject) {
 	}
 }
 
-func loadgIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
+func loadIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.ensureModPkgGIrMetas()
+	dep.ensureModPkgIrMetas()
 }
 
-func prepGIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
+func populateIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.prepModPkgGIrAsts()
-	if err := dep.writeOutDirtyGIrMetas(false); err != nil {
+	dep.populateModPkgIrMetas()
+}
+
+func prepIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
+	defer wg.Done()
+	dep.prepModPkgIrAsts()
+	if err := dep.writeOutDirtyIrMetas(false); err != nil {
 		panic(err)
 	}
 }
 
-func reGengIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
+func reGenIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
 	defer wg.Done()
-	dep.reGenModPkgGIrAsts()
-	if err := dep.writeOutDirtyGIrMetas(true); err != nil {
+	dep.reGenModPkgIrAsts()
+	if err := dep.writeOutDirtyIrMetas(true); err != nil {
 		panic(err)
 	}
 }
@@ -121,24 +126,28 @@ func main() {
 				Deps[""] = &Proj // from now on, all deps and the main proj are handled in parallel and equivalently
 				for _, dep := range Deps {
 					wg.Add(1)
-					go loadgIrMetas(&wg, dep)
+					go loadIrMetas(&wg, dep)
 				}
 				for _, dep := range Deps {
 					if err = dep.ensureOutDirs(); err != nil {
 						break
 					}
 				}
-				wg.Wait()
-				if err == nil {
+				if wg.Wait(); err == nil {
 					for _, dep := range Deps {
 						wg.Add(1)
-						go prepGIrAsts(&wg, dep)
+						go populateIrMetas(&wg, dep)
+					}
+					wg.Wait()
+					for _, dep := range Deps {
+						wg.Add(1)
+						go prepIrAsts(&wg, dep)
 					}
 					wg.Wait()
 					if err == nil {
 						for _, dep := range Deps {
 							wg.Add(1)
-							go reGengIrAsts(&wg, dep)
+							go reGenIrAsts(&wg, dep)
 						}
 						allpkgimppaths := map[string]bool{}
 						numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
@@ -163,7 +172,7 @@ func main() {
 func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
 	for _, dep := range Deps {
 		for _, mod := range dep.Modules {
-			if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
+			if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenIr; mod.reGenIr {
 				numregen++
 			}
 		}
@@ -182,10 +191,9 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 			thisok := []string{}
 			for _, dep := range Deps {
 				for _, mod := range dep.Modules {
-					modimppath := path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)
-					if !uslice.StrHas(okpkgs, modimppath) {
+					if modimppath := path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath); !uslice.StrHas(okpkgs, modimppath) {
 						isthisok := true
-						for _, imp := range mod.girMeta.Imports {
+						for _, imp := range mod.irMeta.Imports {
 							if (!uslice.StrHas(okpkgs, imp.P)) && !strings.Contains(imp.Q, nsPrefixDefaultFfiPkg) {
 								isthisok = false
 								break

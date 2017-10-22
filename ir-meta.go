@@ -390,10 +390,10 @@ func (me *gonadIrMeta) populateFromLoaded() {
 	me.imports = nil
 	for _, imp := range me.Imports {
 		if !strings.HasPrefix(imp.Q, nsPrefixDefaultFfiPkg) {
-			if impmod := findModuleByQName(imp.Q); impmod == nil {
-				panic(fmt.Errorf("Bad import %s", imp.Q))
-			} else {
+			if impmod := findModuleByQName(imp.Q); impmod != nil {
 				me.imports = append(me.imports, impmod)
+			} else if len(imp.Q) > 0 {
+				panic(fmt.Errorf("%s: bad import %s", me.mod.srcFilePath, imp.Q))
 			}
 		}
 	}

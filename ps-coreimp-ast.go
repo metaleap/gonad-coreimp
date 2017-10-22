@@ -171,7 +171,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 	case "NumericLiteral_Integer":
 		a = ªI(me.NumericLiteral_Integer)
 	case "Var":
-		v := ªSymPs(me.Var, me.root.mod.girMeta.hasExport(me.Var))
+		v := ªSymPs(me.Var, me.root.mod.irMeta.hasExport(me.Var))
 		a = v
 	case "Block":
 		b := ªBlock()
@@ -193,7 +193,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = f
 	case "For":
 		f := ªFor()
-		fs := ªSymPs(me.For, me.root.mod.girMeta.hasExport(me.For))
+		fs := ªSymPs(me.For, me.root.mod.irMeta.hasExport(me.For))
 		f.ForInit = []*gIrALet{ªLet("", me.For, me.AstFor1.ciAstToGIrAst())}
 		f.ForInit[0].parent = f
 		fscmp, fsset, fsadd := *fs, *fs, *fs // quirky that we need these copies but we do
@@ -359,7 +359,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			dv := ªSymPs(me.AstRight.StringLiteral, me.root.mod.girMeta.hasExport(me.AstRight.StringLiteral))
+			dv := ªSymPs(me.AstRight.StringLiteral, me.root.mod.irMeta.hasExport(me.AstRight.StringLiteral))
 			a = ªDot(me.Indexer.ciAstToGIrAst(), dv)
 		} else {
 			a = ªIndex(me.Indexer.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
