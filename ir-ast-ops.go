@@ -221,22 +221,8 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 }
 
 func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
-	// instfuncvars := me.topLevelDefs(func(a gIrA) bool {
-	// 	if v, _ := a.(*gIrALet); v != nil {
-	// 		if vv, _ := v.LetVal.(*gIrALitObj); vv != nil {
-	// 			if gtd := me.girM.goTypeDefByPsName(v.NamePs); gtd != nil {
-	// 				return true
-	// 			}
-	// 		}
-	// 	}
-	// 	return false
-	// })
 	for _, ifx := range me.culled.tcInstDecls {
 		ifv, _ := ifx.(*gIrALet)
-		if ifv == nil {
-			println(me.mod.srcFilePath + "\t\t\t\t" + ifx.(*gIrAFunc).NamePs)
-			continue
-		}
 		gtd := me.girM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
 		gtdInstOf := findGoTypeByPsQName(gtd.RefStruct.instOf)
 		ifv.Export = gtdInstOf.Export
@@ -251,14 +237,13 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		if tcctor := mod.girAst.typeCtorFunc(tcname); tcctor == nil {
 			panic(me.mod.srcFilePath + ": instance ctor func not found for " + ifv.NamePs + ", please report")
 		} else {
-			ifo, _ := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
-			if ifo == nil {
-				// println(me.mod.srcFilePath + "\t" + ifx.Base().NamePs)
-			} else {
-				for i, instfuncarg := range tcctor.RefFunc.Args {
-					for _, gtdmethod := range gtd.RefStruct.Methods {
-						if gtdmethod.NamePs == instfuncarg.NamePs {
-							ifofv := ifo.ObjFields[i].FieldVal
+			for i, instfuncarg := range tcctor.RefFunc.Args {
+				for _, gtdmethod := range gtd.RefStruct.Methods {
+					if gtdmethod.NamePs == instfuncarg.NamePs {
+						switch ifvx := ifv.LetVal.(type) {
+						case *gIrALitObj:
+							panic("This again?!")
+							ifofv := ifvx.ObjFields[i].FieldVal
 							switch ifa := ifofv.(type) {
 							case *gIrAFunc:
 								gtdmethod.RefFunc.impl = ifa.FuncImpl
@@ -267,8 +252,20 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 								gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
 								gtdmethod.RefFunc.impl.parent = oldp
 							}
-							break
+						case *gIrADot:
+							callargs := []gIrA{}
+							for _, gma := range gtdmethod.RefFunc.Args {
+								callargs = append(callargs, ªSymGo(gma.NameGo))
+							}
+							gtdmethod.RefFunc.impl = ªBlock(ªRet(ªCall(ifvx, callargs...)))
+						case *gIrAOp1:
+							// println("OP1\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
+						case *gIrAFunc:
+							// println("FUN\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
+						default:
+							println(ifv.LetVal.(*gIrALitObj).NamePs)
 						}
+						break
 					}
 				}
 			}
