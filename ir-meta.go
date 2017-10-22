@@ -66,7 +66,7 @@ func (me gIrMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
 
 func (me *gIrMPkgRefs) addIfHasnt(lname, imppath, qname string) (pkgref *gIrMPkgRef) {
 	if pkgref = me.byImpPath(imppath); pkgref == nil {
-		pkgref = &gIrMPkgRef{used: true, N: lname, P: imppath, Q: qname}
+		pkgref = &gIrMPkgRef{N: lname, P: imppath, Q: qname}
 		*me = append(*me, pkgref)
 	}
 	return
@@ -81,12 +81,21 @@ func (me gIrMPkgRefs) byImpPath(imppath string) *gIrMPkgRef {
 	return nil
 }
 
+func (me gIrMPkgRefs) byImpName(pkgname string) *gIrMPkgRef {
+	for _, imp := range me {
+		if imp.N == pkgname || (imp.N == "" && imp.P == pkgname) {
+			return imp
+		}
+	}
+	return nil
+}
+
 type gIrMPkgRef struct {
 	N string
 	Q string
 	P string
 
-	used bool
+	emitted bool
 }
 
 type gIrMNamedTypeRef struct {

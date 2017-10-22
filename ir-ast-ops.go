@@ -145,7 +145,6 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 							//	if the dot's LHS refers to a package, ensure the import is marked as in-use and switch out dot for pkgsym
 							for _, imp := range me.irM.Imports {
 								if imp.N == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.irM.ForeignImp) {
-									imp.used = true
 									dr.Export = true
 									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
 									return ªPkgSym(imp.N, dr.NameGo)
@@ -221,6 +220,7 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 }
 
 func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
+	return
 	for _, ifx := range me.culled.tcInstDecls {
 		ifv, _ := ifx.(*gIrALet)
 		gtd := me.irM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
@@ -228,7 +228,7 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		ifv.Export = gtdInstOf.Export
 		ifv.setBothNamesFromPsName(ifv.NamePs)
 		var mod *modPkg
-		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf, true)
+		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf)
 		if len(pname) == 0 || pname == me.mod.pName {
 			mod = me.mod
 		} else {

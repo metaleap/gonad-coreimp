@@ -354,29 +354,30 @@ func (me *gonadIrAst) writeAsGoTo(writer io.Writer) (err error) {
 
 	sort.Sort(me.irM.GoTypeDefs)
 	for _, gtd := range me.irM.GoTypeDefs {
-		codeEmitTypeDecl(buf, gtd, 0, me.resolveGoTypeRefFromPsQName)
-		codeEmitStructMethods(buf, gtd, me.resolveGoTypeRefFromPsQName)
+		me.codeGenTypeDecl(buf, gtd, 0)
+		me.codeGenStructMethods(buf, gtd)
 	}
 
 	toplevelconsts := me.topLevelDefs(func(a gIrA) bool { ac, _ := a.(*gIrAConst); return ac != nil })
 	toplevelvars := me.topLevelDefs(func(a gIrA) bool { al, _ := a.(*gIrALet); return al != nil })
-	codeEmitGroupedVals(buf, 0, true, toplevelconsts, me.resolveGoTypeRefFromPsQName)
-	codeEmitGroupedVals(buf, 0, false, toplevelvars, me.resolveGoTypeRefFromPsQName)
+	me.codeGenGroupedVals(buf, 0, true, toplevelconsts)
+	me.codeGenGroupedVals(buf, 0, false, toplevelvars)
 
 	toplevelfuncs := me.topLevelDefs(func(a gIrA) bool { af, _ := a.(*gIrAFunc); return af != nil })
 	for _, ast := range toplevelfuncs {
-		codeEmitAst(buf, 0, ast, me.resolveGoTypeRefFromPsQName)
+		me.codeGenAst(buf, 0, ast)
 		fmt.Fprint(buf, "\n\n")
 	}
 
-	codeEmitPkgDecl(writer, me.mod.pName)
-	sort.Sort(me.irM.Imports)
-	codeEmitModImps(writer, me.irM.Imports)
-	_, err = buf.WriteTo(writer)
+	if err = me.codeGenPkgDecl(writer); err == nil {
+		if err = me.codeGenModImps(writer); err == nil {
+			_, err = buf.WriteTo(writer)
+		}
+	}
 	return
 }
 
-func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (pname string, tname string) {
+func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string) (pname string, tname string) {
 	var mod *modPkg
 	wasprim := false
 	i := strings.LastIndex(tref, ".")
@@ -411,9 +412,7 @@ func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 			}
 			for _, imp := range me.irM.Imports {
 				if imp.Q == qn {
-					if foundimport = true; markused {
-						imp.used = true
-					}
+					foundimport = true
 					break
 				}
 			}
@@ -424,9 +423,7 @@ func (me *gonadIrAst) resolveGoTypeRefFromPsQName(tref string, markused bool) (p
 				} else {
 					imp = newModImp(mod)
 				}
-				if me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp); markused {
-					imp.used = true
-				}
+				me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp)
 			}
 		}
 	} else {
