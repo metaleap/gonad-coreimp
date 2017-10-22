@@ -13,6 +13,7 @@ import (
 	"github.com/go-forks/pflag"
 	"github.com/metaleap/go-util-fs"
 	"github.com/metaleap/go-util-misc"
+	"github.com/metaleap/go-util-slice"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 		DumpAst       bool
 		GoDirSrcPath  string
 		GoNamespace   string
+		DepLevel      int
 	}
 )
 
@@ -84,6 +86,7 @@ func main() {
 	pflag.BoolVar(&Flag.Comments, "comments", false, "Include comments in the generated code")
 	pflag.BoolVar(&Flag.ForceRegenAll, "force", false, "Force re-generating all applicable (coreimp dumps present) packages")
 	pflag.BoolVar(&Flag.DumpAst, "dump-ast", false, "Dumps a gonad.ast.json next to gonad.json")
+	pflag.IntVar(&Flag.DepLevel, "dep-level", -1, "(temporary option)")
 	for _, gopath := range ugo.GoPaths() {
 		if Flag.GoDirSrcPath = filepath.Join(gopath, "src"); ufs.DirExists(Flag.GoDirSrcPath) {
 			break
@@ -115,17 +118,14 @@ func main() {
 				go loadDepFromBowerFile(&wg, dv)
 			}
 			if wg.Wait(); err == nil {
+				Deps[""] = &Proj // from now on, all deps and the main proj are handled in parallel and equivalently
 				for _, dep := range Deps {
 					wg.Add(1)
 					go loadgIrMetas(&wg, dep)
 				}
-				wg.Add(1)
-				go loadgIrMetas(&wg, &Proj)
-				if err = Proj.ensureOutDirs(); err == nil {
-					for _, dep := range Deps {
-						if err = dep.ensureOutDirs(); err != nil {
-							break
-						}
+				for _, dep := range Deps {
+					if err = dep.ensureOutDirs(); err != nil {
+						break
 					}
 				}
 				wg.Wait()
@@ -134,21 +134,16 @@ func main() {
 						wg.Add(1)
 						go prepGIrAsts(&wg, dep)
 					}
-					wg.Add(1)
-					go prepGIrAsts(&wg, &Proj)
 					wg.Wait()
 					if err == nil {
 						for _, dep := range Deps {
 							wg.Add(1)
 							go reGengIrAsts(&wg, dep)
 						}
-						wg.Add(1)
-						go reGengIrAsts(&wg, &Proj)
 						allpkgimppaths := map[string]bool{}
 						numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
 						if Flag.ForceRegenAll {
 							numregen = len(allpkgimppaths)
-
 						}
 						if wg.Wait(); err == nil {
 							dur := time.Since(starttime)
@@ -166,11 +161,6 @@ func main() {
 }
 
 func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
-	for _, mod := range Proj.Modules {
-		if allpkgimppaths[path.Join(Proj.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
-			numregen++
-		}
-	}
 	for _, dep := range Deps {
 		for _, mod := range dep.Modules {
 			if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenGIr; mod.reGenGIr {
@@ -183,21 +173,53 @@ func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
 
 func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 	w := &bytes.Buffer{}
-	if _, err = fmt.Fprintln(w, "package main\n\nimport ("); err == nil {
-		//	we sort them to avoid useless diffs
-		pkgimppaths := sort.StringSlice{}
-		for pkgimppath, _ := range allpkgimppaths {
-			pkgimppaths = append(pkgimppaths, pkgimppath)
+	fmt.Fprintln(w, "package main\n\nimport (")
+
+	// temporary commandline option to only import a sub-set of packages
+	if Flag.DepLevel >= 0 {
+		okpkgs := []string{}
+		for i := 0; i <= Flag.DepLevel; i++ {
+			thisok := []string{}
+			for _, dep := range Deps {
+				for _, mod := range dep.Modules {
+					modimppath := path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)
+					if !uslice.StrHas(okpkgs, modimppath) {
+						isthisok := true
+						for _, imp := range mod.girMeta.Imports {
+							if (!uslice.StrHas(okpkgs, imp.P)) && !strings.Contains(imp.Q, nsPrefixDefaultFfiPkg) {
+								isthisok = false
+								break
+							}
+						}
+						if isthisok {
+							println(modimppath)
+							thisok = append(thisok, modimppath)
+						}
+					}
+				}
+			}
+			okpkgs = append(okpkgs, thisok...)
 		}
-		sort.Strings(pkgimppaths)
-		for _, pkgimppath := range pkgimppaths {
-			if _, err = fmt.Fprintf(w, "\t_ %q\n", pkgimppath); err != nil {
-				return
+		for pkgimppath, _ := range allpkgimppaths {
+			if !uslice.StrHas(okpkgs, pkgimppath) {
+				delete(allpkgimppaths, pkgimppath)
 			}
 		}
-		if _, err = fmt.Fprintln(w, ")\n\nfunc main() { println(\"Looks like this compiled just fine!\") }"); err == nil {
-			err = ufs.WriteTextFile(filepath.Join(Flag.GoDirSrcPath, Proj.GoOut.PkgDirPath, "check-if-all-gonad-generated-packages-compile.go"), w.String())
+	}
+
+	//	we sort them
+	pkgimppaths := sort.StringSlice{}
+	for pkgimppath, _ := range allpkgimppaths {
+		pkgimppaths = append(pkgimppaths, pkgimppath)
+	}
+	sort.Strings(pkgimppaths)
+	for _, pkgimppath := range pkgimppaths {
+		if _, err = fmt.Fprintf(w, "\t_ %q\n", pkgimppath); err != nil {
+			return
 		}
+	}
+	if _, err = fmt.Fprintln(w, ")\n\nfunc main() { println(\"Looks like this compiled just fine!\") }"); err == nil {
+		err = ufs.WriteTextFile(filepath.Join(Flag.GoDirSrcPath, Proj.GoOut.PkgDirPath, "check-if-all-gonad-generated-packages-compile.go"), w.String())
 	}
 	return
 }
