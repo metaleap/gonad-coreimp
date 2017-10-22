@@ -99,7 +99,7 @@ func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgd
 		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
 		modinfo.irMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
-		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
+		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.qName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
 		if ufs.FileExists(modinfo.irMetaFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
 			stalemetaˇimp, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.irMetaFilePath)

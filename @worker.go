@@ -8,11 +8,11 @@ import (
 	"github.com/metaleap/go-util-fs"
 )
 
-type worker struct {
+type mainWorker struct {
 	sync.WaitGroup
 }
 
-func (me *worker) gø(fn func(*psBowerProject)) {
+func (me *mainWorker) forAllDeps(fn func(*psBowerProject)) {
 	for _, d := range Deps {
 		me.Add(1)
 		go fn(d)
@@ -20,7 +20,7 @@ func (me *worker) gø(fn func(*psBowerProject)) {
 	me.Wait()
 }
 
-func (me *worker) checkIfDepDirHasBowerFile(locker sync.Locker, reldirpath string) {
+func (me *mainWorker) checkIfDepDirHasBowerFile(locker sync.Locker, reldirpath string) {
 	defer me.Done()
 	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
 	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
@@ -33,24 +33,24 @@ func (me *worker) checkIfDepDirHasBowerFile(locker sync.Locker, reldirpath strin
 	}
 }
 
-func (me *worker) loadDepFromBowerFile(dep *psBowerProject) {
+func (me *mainWorker) loadDepFromBowerFile(dep *psBowerProject) {
 	defer me.Done()
 	if err := dep.loadFromJsonFile(); err != nil {
 		panic(err)
 	}
 }
 
-func (me *worker) loadIrMetas(dep *psBowerProject) {
+func (me *mainWorker) loadIrMetas(dep *psBowerProject) {
 	defer me.Done()
 	dep.ensureModPkgIrMetas()
 }
 
-func (me *worker) populateIrMetas(dep *psBowerProject) {
+func (me *mainWorker) populateIrMetas(dep *psBowerProject) {
 	defer me.Done()
 	dep.populateModPkgIrMetas()
 }
 
-func (me *worker) prepIrAsts(dep *psBowerProject) {
+func (me *mainWorker) prepIrAsts(dep *psBowerProject) {
 	defer me.Done()
 	dep.prepModPkgIrAsts()
 	if err := dep.writeOutDirtyIrMetas(false); err != nil {
@@ -58,7 +58,7 @@ func (me *worker) prepIrAsts(dep *psBowerProject) {
 	}
 }
 
-func (me *worker) reGenIrAsts(dep *psBowerProject) {
+func (me *mainWorker) reGenIrAsts(dep *psBowerProject) {
 	defer me.Done()
 	dep.reGenModPkgIrAsts()
 	if err := dep.writeOutDirtyIrMetas(true); err != nil {

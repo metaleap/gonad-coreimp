@@ -61,40 +61,34 @@ func main() {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
 		if err = Proj.loadFromJsonFile(); err == nil {
-			var work worker
+			var do mainWorker
 			var mutex sync.Mutex
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
-				work.Add(1)
-				go work.checkIfDepDirHasBowerFile(&mutex, reldirpath)
+				do.Add(1)
+				go do.checkIfDepDirHasBowerFile(&mutex, reldirpath)
 				return true
 			})
-			work.Wait()
-			work.gø(work.loadDepFromBowerFile)
+			do.Wait()
+			do.forAllDeps(do.loadDepFromBowerFile)
+			Deps[""] = &Proj // from now on, all Deps and the main Proj are handled in parallel and equivalently
+			do.forAllDeps(do.loadIrMetas)
+			for _, dep := range Deps {
+				if err = dep.ensureOutDirs(); err != nil {
+					break
+				}
+			}
 			if err == nil {
-				Deps[""] = &Proj // from now on, all Deps and the main Proj are handled in parallel and equivalently
-				work.gø(work.loadIrMetas)
-				for _, dep := range Deps {
-					if err = dep.ensureOutDirs(); err != nil {
-						break
-					}
+				do.forAllDeps(do.populateIrMetas)
+				do.forAllDeps(do.prepIrAsts)
+				do.forAllDeps(do.reGenIrAsts)
+				allpkgimppaths := map[string]bool{}
+				numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
+				if Flag.ForceRegenAll {
+					numregen = len(allpkgimppaths)
 				}
-				if err == nil {
-					work.gø(work.populateIrMetas)
-					work.gø(work.prepIrAsts)
-					if err == nil {
-						work.gø(work.reGenIrAsts)
-						if err == nil {
-							allpkgimppaths := map[string]bool{}
-							numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
-							if Flag.ForceRegenAll {
-								numregen = len(allpkgimppaths)
-							}
-							dur := time.Since(starttime)
-							fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
-							err = writeTestMainGo(allpkgimppaths)
-						}
-					}
-				}
+				dur := time.Since(starttime)
+				fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
+				err = writeTestMainGo(allpkgimppaths)
 			}
 		}
 	}
