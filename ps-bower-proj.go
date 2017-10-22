@@ -102,9 +102,11 @@ func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgd
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.lName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
 		if ufs.FileExists(modinfo.irMetaFilePath) && ufs.FileExists(modinfo.gopkgfilepath) {
-			stalemeta, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.irMetaFilePath)
-			stalepkg, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.gopkgfilepath)
-			modinfo.reGenIr = stalemeta || stalepkg
+			stalemetaˇimp, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.irMetaFilePath)
+			stalepkgˇimp, _ := ufs.IsNewerThan(modinfo.impFilePath, modinfo.gopkgfilepath)
+			stalemetaˇext, _ := ufs.IsNewerThan(modinfo.extFilePath, modinfo.irMetaFilePath)
+			stalepkgˇext, _ := ufs.IsNewerThan(modinfo.extFilePath, modinfo.gopkgfilepath)
+			modinfo.reGenIr = stalemetaˇimp || stalepkgˇimp || stalemetaˇext || stalepkgˇext
 		} else {
 			modinfo.reGenIr = true
 		}

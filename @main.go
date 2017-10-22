@@ -30,55 +30,6 @@ var (
 	}
 )
 
-func checkIfDepDirHasBowerFile(wg *sync.WaitGroup, mutex sync.Locker, reldirpath string) {
-	defer wg.Done()
-	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
-	if !ufs.FileExists(jsonfilepath) {
-		jsonfilepath = filepath.Join(reldirpath, "bower.json")
-	}
-	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
-		bproj := &psBowerProject{
-			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
-		}
-		defer mutex.Unlock()
-		mutex.Lock()
-		Deps[depname] = bproj
-	}
-}
-
-func loadDepFromBowerFile(wg *sync.WaitGroup, dep *psBowerProject) {
-	defer wg.Done()
-	if err := dep.loadFromJsonFile(); err != nil {
-		panic(err)
-	}
-}
-
-func loadIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
-	defer wg.Done()
-	dep.ensureModPkgIrMetas()
-}
-
-func populateIrMetas(wg *sync.WaitGroup, dep *psBowerProject) {
-	defer wg.Done()
-	dep.populateModPkgIrMetas()
-}
-
-func prepIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
-	defer wg.Done()
-	dep.prepModPkgIrAsts()
-	if err := dep.writeOutDirtyIrMetas(false); err != nil {
-		panic(err)
-	}
-}
-
-func reGenIrAsts(wg *sync.WaitGroup, dep *psBowerProject) {
-	defer wg.Done()
-	dep.reGenModPkgIrAsts()
-	if err := dep.writeOutDirtyIrMetas(true); err != nil {
-		panic(err)
-	}
-}
-
 func main() {
 	// runtime.SetGCPercent(-1) // turn off GC, we're a quickly-in-and-out-again program
 	starttime := time.Now()
@@ -110,51 +61,34 @@ func main() {
 			panic("No such `src-path` directory: " + Proj.SrcDirPath)
 		}
 		if err = Proj.loadFromJsonFile(); err == nil {
+			var work worker
 			var mutex sync.Mutex
-			var wg sync.WaitGroup
 			ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {
-				wg.Add(1)
-				go checkIfDepDirHasBowerFile(&wg, &mutex, reldirpath)
+				work.Add(1)
+				go work.checkIfDepDirHasBowerFile(&mutex, reldirpath)
 				return true
 			})
-			wg.Wait()
-			for _, dv := range Deps {
-				wg.Add(1)
-				go loadDepFromBowerFile(&wg, dv)
-			}
-			if wg.Wait(); err == nil {
-				Deps[""] = &Proj // from now on, all deps and the main proj are handled in parallel and equivalently
-				for _, dep := range Deps {
-					wg.Add(1)
-					go loadIrMetas(&wg, dep)
-				}
+			work.Wait()
+			work.gø(work.loadDepFromBowerFile)
+			if err == nil {
+				Deps[""] = &Proj // from now on, all Deps and the main Proj are handled in parallel and equivalently
+				work.gø(work.loadIrMetas)
 				for _, dep := range Deps {
 					if err = dep.ensureOutDirs(); err != nil {
 						break
 					}
 				}
-				if wg.Wait(); err == nil {
-					for _, dep := range Deps {
-						wg.Add(1)
-						go populateIrMetas(&wg, dep)
-					}
-					wg.Wait()
-					for _, dep := range Deps {
-						wg.Add(1)
-						go prepIrAsts(&wg, dep)
-					}
-					wg.Wait()
+				if err == nil {
+					work.gø(work.populateIrMetas)
+					work.gø(work.prepIrAsts)
 					if err == nil {
-						for _, dep := range Deps {
-							wg.Add(1)
-							go reGenIrAsts(&wg, dep)
-						}
-						allpkgimppaths := map[string]bool{}
-						numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
-						if Flag.ForceRegenAll {
-							numregen = len(allpkgimppaths)
-						}
-						if wg.Wait(); err == nil {
+						work.gø(work.reGenIrAsts)
+						if err == nil {
+							allpkgimppaths := map[string]bool{}
+							numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
+							if Flag.ForceRegenAll {
+								numregen = len(allpkgimppaths)
+							}
 							dur := time.Since(starttime)
 							fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
 							err = writeTestMainGo(allpkgimppaths)
