@@ -97,7 +97,7 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 		codeEmitAst(w, indent, a.LetVal, trr)
 		fmt.Fprint(w, "\n")
 	case *gIrABlock:
-		if dbgEmitEmptyFuncs && a.parent != nil {
+		if dbgEmitEmptyFuncs && a != nil && a.parent != nil {
 			codeEmitAst(w, indent, ªRet(nil), trr)
 		} else if a == nil || len(a.Body) == 0 {
 			fmt.Fprint(w, "{}")

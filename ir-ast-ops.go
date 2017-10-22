@@ -21,9 +21,15 @@ func (me *gonadIrAst) prepAddOrCull(a gIrA) {
 			// check if helper function related to type-classes / type-class instances:
 			if culled = me.girM.tcInst(ab.NamePs) != nil; culled {
 				// func instname(..)
-				me.culled.tcInstDecls = append(me.culled.tcInstDecls, ab)
+				if afn, _ := a.(*gIrAFunc); afn != nil {
+					p := afn.parent
+					av := ªLet(afn.NameGo, afn.NamePs, afn)
+					av.parent = p
+					a = av
+				}
+				me.culled.tcInstDecls = append(me.culled.tcInstDecls, a)
 			} else if culled = me.girM.tcMember(ab.NamePs) != nil; culled {
-				me.culled.tcDictDecls = append(me.culled.tcDictDecls, ab)
+				me.culled.tcDictDecls = append(me.culled.tcDictDecls, a)
 			}
 		}
 		if !culled {
@@ -215,18 +221,22 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 }
 
 func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
-	instfuncvars := me.topLevelDefs(func(a gIrA) bool {
-		if v, _ := a.(*gIrALet); v != nil {
-			if vv, _ := v.LetVal.(*gIrALitObj); vv != nil {
-				if gtd := me.girM.goTypeDefByPsName(v.NamePs); gtd != nil {
-					return true
-				}
-			}
-		}
-		return false
-	})
-	for _, ifx := range instfuncvars {
+	// instfuncvars := me.topLevelDefs(func(a gIrA) bool {
+	// 	if v, _ := a.(*gIrALet); v != nil {
+	// 		if vv, _ := v.LetVal.(*gIrALitObj); vv != nil {
+	// 			if gtd := me.girM.goTypeDefByPsName(v.NamePs); gtd != nil {
+	// 				return true
+	// 			}
+	// 		}
+	// 	}
+	// 	return false
+	// })
+	for _, ifx := range me.culled.tcInstDecls {
 		ifv, _ := ifx.(*gIrALet)
+		if ifv == nil {
+			println(me.mod.srcFilePath + "\t\t\t\t" + ifx.(*gIrAFunc).NamePs)
+			continue
+		}
 		gtd := me.girM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
 		gtdInstOf := findGoTypeByPsQName(gtd.RefStruct.instOf)
 		ifv.Export = gtdInstOf.Export
@@ -241,20 +251,24 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 		if tcctor := mod.girAst.typeCtorFunc(tcname); tcctor == nil {
 			panic(me.mod.srcFilePath + ": instance ctor func not found for " + ifv.NamePs + ", please report")
 		} else {
-			ifo := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
-			for i, instfuncarg := range tcctor.RefFunc.Args {
-				for _, gtdmethod := range gtd.RefStruct.Methods {
-					if gtdmethod.NamePs == instfuncarg.NamePs {
-						ifofv := ifo.ObjFields[i].FieldVal
-						switch ifa := ifofv.(type) {
-						case *gIrAFunc:
-							gtdmethod.RefFunc.impl = ifa.FuncImpl
-						default:
-							oldp := ifofv.Parent()
-							gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
-							gtdmethod.RefFunc.impl.parent = oldp
+			ifo, _ := ifv.LetVal.(*gIrALitObj) //  something like:  InterfaceName{funcs}
+			if ifo == nil {
+				// println(me.mod.srcFilePath + "\t" + ifx.Base().NamePs)
+			} else {
+				for i, instfuncarg := range tcctor.RefFunc.Args {
+					for _, gtdmethod := range gtd.RefStruct.Methods {
+						if gtdmethod.NamePs == instfuncarg.NamePs {
+							ifofv := ifo.ObjFields[i].FieldVal
+							switch ifa := ifofv.(type) {
+							case *gIrAFunc:
+								gtdmethod.RefFunc.impl = ifa.FuncImpl
+							default:
+								oldp := ifofv.Parent()
+								gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
+								gtdmethod.RefFunc.impl.parent = oldp
+							}
+							break
 						}
-						break
 					}
 				}
 			}
