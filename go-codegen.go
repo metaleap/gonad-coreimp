@@ -97,7 +97,9 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 		codeEmitAst(w, indent, a.LetVal, trr)
 		fmt.Fprint(w, "\n")
 	case *gIrABlock:
-		if a == nil || len(a.Body) == 0 {
+		if dbgEmitEmptyFuncs && a.parent != nil {
+			codeEmitAst(w, indent, ªRet(nil), trr)
+		} else if a == nil || len(a.Body) == 0 {
 			fmt.Fprint(w, "{}")
 			// } else if len(a.Body) == 1 {
 			// 	fmt.Fprint(w, "{ ")
@@ -106,12 +108,8 @@ func codeEmitAst(w io.Writer, indent int, ast gIrA, trr goTypeRefResolver) {
 		} else {
 			fmt.Fprint(w, "{\n")
 			indent++
-			if a.parent != nil && dbgEmitEmptyFuncs {
-				codeEmitAst(w, indent, ªRet(nil), trr)
-			} else {
-				for _, expr := range a.Body {
-					codeEmitAst(w, indent, expr, trr)
-				}
+			for _, expr := range a.Body {
+				codeEmitAst(w, indent, expr, trr)
 			}
 			fmt.Fprintf(w, "%s}", tabs)
 			indent--
