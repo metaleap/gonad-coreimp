@@ -82,7 +82,7 @@ func main() {
 				do.forAllDeps(do.prepIrAsts)
 				do.forAllDeps(do.reGenIrAsts)
 				allpkgimppaths := map[string]bool{}
-				numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled
+				numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceRegenAll to have the map filled for writeTestMainGo
 				if Flag.ForceRegenAll {
 					numregen = len(allpkgimppaths)
 				}
