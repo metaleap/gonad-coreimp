@@ -25,7 +25,7 @@ func ªB(literal bool) *irALitBool {
 	return a
 }
 
-func ªF(literal float64) *irALitNum {
+func ªN(literal float64) *irALitNum {
 	a := &irALitNum{LitDouble: literal}
 	a.RefAlias = "Prim.Number"
 	return a

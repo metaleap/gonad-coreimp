@@ -118,30 +118,30 @@ type coreImpAst struct {
 	AstThen        *coreImpAst        `json:"then"`
 	AstElse        *coreImpAst        `json:"else"`
 
-	Function               string
-	StringLiteral          string
-	BooleanLiteral         bool
-	NumericLiteral_Integer int
-	NumericLiteral_Double  float64
-	Block                  coreImpAsts
-	Var                    string
-	VariableIntroduction   string
-	While                  *coreImpAst
-	App                    *coreImpAst
-	Unary                  *coreImpAst
-	Comment                []*coreImpComment
-	Binary                 *coreImpAst
-	ForIn                  string
-	For                    string
-	IfElse                 *coreImpAst
-	ObjectLiteral          []map[string]*coreImpAst
-	Return                 *coreImpAst
-	Throw                  *coreImpAst
-	ArrayLiteral           coreImpAsts
-	Assignment             *coreImpAst
-	Indexer                *coreImpAst
-	Accessor               *coreImpAst
-	InstanceOf             *coreImpAst
+	Function             string
+	StringLiteral        string
+	BooleanLiteral       bool
+	IntegerLiteral       int
+	NumberLiteral        float64
+	Block                coreImpAsts
+	Var                  string
+	VariableIntroduction string
+	While                *coreImpAst
+	App                  *coreImpAst
+	Unary                *coreImpAst
+	Comment              []*coreImpComment
+	Binary               *coreImpAst
+	ForIn                string
+	For                  string
+	IfElse               *coreImpAst
+	ObjectLiteral        []map[string]*coreImpAst
+	Return               *coreImpAst
+	Throw                *coreImpAst
+	ArrayLiteral         coreImpAsts
+	Assignment           *coreImpAst
+	Indexer              *coreImpAst
+	Accessor             *coreImpAst
+	InstanceOf           *coreImpAst
 
 	parent *coreImpAst
 	root   *coreImp
@@ -166,10 +166,10 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		a = ªS(me.StringLiteral)
 	case "BooleanLiteral":
 		a = ªB(me.BooleanLiteral)
-	case "NumericLiteral_Double":
-		a = ªF(me.NumericLiteral_Double)
-	case "NumericLiteral_Integer":
-		a = ªI(me.NumericLiteral_Integer)
+	case "NumberLiteral":
+		a = ªN(me.NumberLiteral)
+	case "IntegerLiteral":
+		a = ªI(me.IntegerLiteral)
 	case "Var":
 		v := ªSymPs(me.Var, me.root.mod.irMeta.hasExport(me.Var))
 		a = v
