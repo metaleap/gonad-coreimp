@@ -54,11 +54,11 @@ func (me *coreImpEnv) prep() {
 }
 
 type coreImpEnvClass struct {
-	CoveringSets   [][]int                       `json:"tcCoveringSets"`
-	DeterminedArgs []int                         `json:"tcDeterminedArgs"`
-	Args           map[string]*coreImpEnvTagKind `json:"tcArgs"`
-	Members        map[string]*coreImpEnvTagType `json:"tcMembers"`
-	Superclasses   []*coreImpEnvConstr           `json:"tcSuperclasses"`
+	CoveringSets   [][]int                  `json:"tcCoveringSets"`
+	DeterminedArgs []int                    `json:"tcDeterminedArgs"`
+	Args           []*coreImpEnvClassArg    `json:"tcArgs"`
+	Members        []*coreImpEnvClassMember `json:"tcMembers"`
+	Superclasses   []*coreImpEnvConstr      `json:"tcSuperclasses"`
 	Dependencies   []struct {
 		Determiners []int `json:"determiners"`
 		Determined  []int `json:"determined"`
@@ -66,9 +66,9 @@ type coreImpEnvClass struct {
 }
 
 func (me *coreImpEnvClass) prep() {
-	for tcan, tca := range me.Args {
-		if tca != nil {
-			panic(notImplErr("tcArgs", tcan+"!=nil", "'typeClasses'"))
+	for _, tca := range me.Args {
+		if tca.Type != nil {
+			panic(notImplErr("tcArgs", tca.Name+"!=nil", "'typeClasses'"))
 			tca.prep()
 		}
 	}
@@ -80,17 +80,44 @@ func (me *coreImpEnvClass) prep() {
 	}
 }
 
+type coreImpEnvClassArg struct {
+	Name string             `json:"tcaName"`
+	Type *coreImpEnvTagKind `json:"tcaKind"`
+}
+
+func (me *coreImpEnvClassArg) prep() {
+	me.Type.prep()
+}
+
+type coreImpEnvClassMember struct {
+	Ident string             `json:"tcmIdent"`
+	Type  *coreImpEnvTagType `json:"tcmType"`
+}
+
+func (me *coreImpEnvClassMember) prep() {
+	me.Type.prep()
+}
+
 type coreImpEnvInst struct {
-	Chain         []string             `json:"tcdChain"`
-	Index         int                  `json:"tcdIndex"`
-	Value         string               `json:"tcdValue"`
-	Path          map[string]int       `json:"tcdPath"`
+	Chain []string `json:"tcdChain"`
+	Index int      `json:"tcdIndex"`
+	Value string   `json:"tcdValue"`
+	Path  []struct {
+		Class string `json:"tcdpClass"`
+		Int   int    `json:"tcdpInt"`
+	} `json:"tcdPath"`
 	ClassName     string               `json:"tcdClassName"`
 	InstanceTypes []*coreImpEnvTagType `json:"tcdInstanceTypes"`
 	Dependencies  []*coreImpEnvConstr  `json:"tcdDependencies"`
 }
 
 func (me *coreImpEnvInst) prep() {
+	if len(me.Path) > 0 {
+		panic(notImplErr("tcdPath", me.Path[0].Class, "'typeClassDictionaries'"))
+	}
+	if me.Index != 0 {
+		panic(notImplErr("tcdIndex", fmt.Sprint(me.Index), "'typeClassDictionaries'"))
+	}
 	for _, it := range me.InstanceTypes {
 		it.prep()
 	}
@@ -115,8 +142,11 @@ func (me *coreImpEnvConstr) prep() {
 }
 
 type coreImpEnvTypeSyn struct {
-	Args map[string]*coreImpEnvTagKind `json:"tsArgs"`
-	Type *coreImpEnvTagType            `json:"tsType"`
+	Args []struct {
+		Name string             `json:"tsaName"`
+		Kind *coreImpEnvTagKind `json:"tsaKind"`
+	} `json:"tsArgs"`
+	Type *coreImpEnvTagType `json:"tsType"`
 }
 
 func (me *coreImpEnvTypeSyn) prep() {
@@ -124,7 +154,7 @@ func (me *coreImpEnvTypeSyn) prep() {
 		me.Type.prep()
 	}
 	for _, tsa := range me.Args {
-		tsa.prep()
+		tsa.Kind.prep()
 	}
 }
 
@@ -181,17 +211,23 @@ func (me *coreImpEnvTypeDecl) prep() {
 }
 
 type coreImpEnvTypeData struct {
-	Args  map[string]*coreImpEnvTagKind   `json:"args"`
-	Ctors map[string][]*coreImpEnvTagType `json:"ctors"`
+	Args []struct {
+		Name string             `json:"dtaName"`
+		Kind *coreImpEnvTagKind `json:"dtaKind"`
+	} `json:"dtArgs"`
+	Ctors []struct {
+		Name  string               `json:"dtcName"`
+		Types []*coreImpEnvTagType `json:"dtcTypes"`
+	} `json:"dtCtors"`
 }
 
 func (me *coreImpEnvTypeData) prep() {
 	for _, tda := range me.Args {
-		tda.prep()
+		tda.Kind.prep()
 	}
-	for _, tdcs := range me.Ctors {
-		for _, tdc := range tdcs {
-			tdc.prep()
+	for _, tdc := range me.Ctors {
+		for _, tdct := range tdc.Types {
+			tdct.prep()
 		}
 	}
 }

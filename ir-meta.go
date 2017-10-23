@@ -288,13 +288,13 @@ func (me *irMeta) populateEnvTypeDataDecls() {
 			}
 		} else {
 			dt := &irMTypeDataDecl{Name: tdefname}
-			for dtargname, _ := range tdef.Decl.DataType.Args {
-				dt.Args = append(dt.Args, dtargname)
+			for _, dtarg := range tdef.Decl.DataType.Args {
+				dt.Args = append(dt.Args, dtarg.Name)
 			}
-			for dcname, dcargtypes := range tdef.Decl.DataType.Ctors {
-				dtc := &irMTypeDataCtor{Name: dcname}
-				for _, dcargtype := range dcargtypes {
-					dtc.Args = append(dtc.Args, me.newTypeRefFromEnvTag(dcargtype))
+			for _, dtctor := range tdef.Decl.DataType.Ctors {
+				dtc := &irMTypeDataCtor{Name: dtctor.Name}
+				for _, dtcargtype := range dtctor.Types {
+					dtc.Args = append(dtc.Args, me.newTypeRefFromEnvTag(dtcargtype))
 				}
 				dt.Ctors = append(dt.Ctors, dtc)
 			}
@@ -316,12 +316,12 @@ func (me *irMeta) populateEnvTypeSyns() {
 func (me *irMeta) populateEnvTypeClasses() {
 	for tcname, tcdef := range me.mod.coreimp.DeclEnv.Classes {
 		tc := &irMTypeClass{Name: tcname}
-		for tcarg, _ := range tcdef.Args {
-			tc.Args = append(tc.Args, tcarg)
+		for _, tcarg := range tcdef.Args {
+			tc.Args = append(tc.Args, tcarg.Name)
 		}
-		for tcmname, tcmdef := range tcdef.Members {
-			tref := me.newTypeRefFromEnvTag(tcmdef)
-			tc.Members = append(tc.Members, &irMNamedTypeRef{Name: tcmname, Ref: tref})
+		for _, tcmdef := range tcdef.Members {
+			tref := me.newTypeRefFromEnvTag(tcmdef.Type)
+			tc.Members = append(tc.Members, &irMNamedTypeRef{Name: tcmdef.Ident, Ref: tref})
 		}
 		for _, tcsc := range tcdef.Superclasses {
 			c := &irMTypeRefConstr{Class: tcsc.Class}
@@ -361,8 +361,8 @@ func (me *irMeta) populateFromCoreImp() {
 					}
 				} else {
 					if td := me.mod.coreimp.DeclEnv.TypeDefs[tname]; td != nil && td.Decl.DataType != nil {
-						for ctorname, _ := range td.Decl.DataType.Ctors {
-							me.Exports = append(me.Exports, tname+"ĸ"+ctorname)
+						for _, dtctor := range td.Decl.DataType.Ctors {
+							me.Exports = append(me.Exports, tname+"ĸ"+dtctor.Name)
 						}
 					}
 				}
