@@ -68,9 +68,11 @@ func main() {
 				numregen = len(allpkgimppaths)
 			}
 			dur := time.Since(starttime)
-			fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
 			if Proj.BowerJsonFile.Gonad.Out.MainDepLevel > 0 {
 				err = writeTestMainGo(allpkgimppaths)
+			}
+			if err == nil {
+				fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
 			}
 		}
 	}

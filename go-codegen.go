@@ -376,7 +376,7 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 		fmt.Fprintf(w, "type %s ", gtd.NameGo)
 	}
 	if len(gtd.RefAlias) > 0 {
-		fmt.Fprint(w, me.codeGenTypeRef(me.resolveGoTypeRefFromPsQName(gtd.RefAlias)))
+		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromPsQName(gtd.RefAlias)))
 	} else if gtd.RefUnknown != 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
@@ -396,8 +396,9 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 			fmt.Fprint(w, "interface {\n")
 			if areOverlappingInterfacesSupportedByGo {
 				for _, ifembed := range gtd.RefInterface.Embeds {
-					fmt.Fprint(w, tabind)
-					fmt.Fprintf(w, fmtembeds, me.codeGenTypeRef(me.resolveGoTypeRefFromPsQName(ifembed)))
+					fmt.Fprint(w, tabind+"\t")
+					me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromPsQName(ifembed)))
+					fmt.Fprint(w, "\n")
 				}
 			}
 			var buf bytes.Buffer
@@ -475,11 +476,4 @@ func (me *irAst) codeGenStructMethods(w io.Writer, tr *irANamedTypeRef) {
 		}
 		fmt.Fprint(w, "\n")
 	}
-}
-
-func (_ *irAst) codeGenTypeRef(pname string, tname string) string {
-	if len(pname) == 0 {
-		return tname
-	}
-	return pname + "." + tname
 }

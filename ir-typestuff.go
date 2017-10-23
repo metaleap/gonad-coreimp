@@ -252,7 +252,8 @@ func (me *irMeta) populateGoTypeDefs() {
 			}
 			gif.Methods = append(gif.Methods, ifm)
 		}
-		tgif := &irANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: false}
+		tgif := &irANamedTypeRef{Export: me.hasExport(tc.Name)}
+		tgif.setBothNamesFromPsName(tc.Name)
 		tgif.setRefFrom(gif)
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}
