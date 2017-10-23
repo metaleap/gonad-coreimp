@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metaleap/go-util-dev/bower"
-	"github.com/metaleap/go-util-fs"
-	"github.com/metaleap/go-util-misc"
+	"github.com/metaleap/go-util/dev/bower"
+	"github.com/metaleap/go-util/dev/go"
+	"github.com/metaleap/go-util/fs"
 )
 
 /*
@@ -91,7 +91,7 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 				cfg.Out.GoNamespace = filepath.Join("github.com", "gonadz")
 			}
 			if cfg.Out.GoDirSrcPath == "" {
-				for _, gopath := range ugo.GoPaths() {
+				for _, gopath := range udevgo.AllGoPaths() {
 					if cfg.Out.GoDirSrcPath = filepath.Join(gopath, "src"); ufs.DirExists(cfg.Out.GoDirSrcPath) {
 						break
 					}

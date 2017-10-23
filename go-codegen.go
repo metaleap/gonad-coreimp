@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/metaleap/go-util-str"
+	"github.com/metaleap/go-util/str"
 )
 
 /*

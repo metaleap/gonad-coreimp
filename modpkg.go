@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/metaleap/go-util-fs"
+	"github.com/metaleap/go-util/fs"
 )
 
 /*

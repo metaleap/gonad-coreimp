@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/metaleap/go-util-slice"
-	"github.com/metaleap/go-util-str"
+	"github.com/metaleap/go-util/slice"
+	"github.com/metaleap/go-util/str"
 )
 
 /*

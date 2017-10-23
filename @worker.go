@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metaleap/go-util-fs"
+	"github.com/metaleap/go-util/fs"
 )
 
 type mainWorker struct {

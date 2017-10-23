@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/go-forks/pflag"
-	"github.com/metaleap/go-util-fs"
-	"github.com/metaleap/go-util-slice"
+	"github.com/metaleap/go-util/fs"
+	"github.com/metaleap/go-util/slice"
 )
 
 var (

@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/metaleap/go-util-fs"
-	"github.com/metaleap/go-util-slice"
+	"github.com/metaleap/go-util/fs"
+	"github.com/metaleap/go-util/slice"
 )
 
 /*
