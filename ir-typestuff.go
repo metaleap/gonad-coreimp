@@ -20,7 +20,7 @@ More details in ir-meta.go.
 */
 
 const (
-	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
+	areOverlappingInterfacesSupportedByGo = true // technically would be false, see https://github.com/golang/go/issues/6977 --- in practice keep true until it's an actual issue in generated code
 	legacyIfaceEmbeds                     = false
 )
 
@@ -32,6 +32,9 @@ type irANamedTypeRefs []*irANamedTypeRef
 
 func (me irANamedTypeRefs) Len() int { return len(me) }
 func (me irANamedTypeRefs) Less(i, j int) bool {
+	if me[i].sortIndex != me[j].sortIndex {
+		return me[i].sortIndex < me[j].sortIndex
+	}
 	return strings.ToLower(me[i].NameGo) < strings.ToLower(me[j].NameGo)
 }
 func (me irANamedTypeRefs) Swap(i, j int) { me[i], me[j] = me[j], me[i] }
@@ -71,6 +74,8 @@ type irANamedTypeRef struct {
 	RefPtr       *irATypeRefPtr       `json:",omitempty"`
 
 	Export bool `json:",omitempty"`
+
+	sortIndex int
 }
 
 func (me *irANamedTypeRef) copyFrom(from *irANamedTypeRef, names bool, trefs bool, export bool) {
@@ -159,7 +164,7 @@ func (me *irATypeRefInterface) eq(cmp *irATypeRefInterface) bool {
 
 func (me *irATypeRefInterface) allMethods() (allmethods irANamedTypeRefs) {
 	allmethods = me.Methods
-	if legacyIfaceEmbeds && (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
+	if (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
 		if len(me.inheritedMethods) == 0 {
 			m := map[string]*irANamedTypeRef{}
 			for _, embed := range me.Embeds {
@@ -203,6 +208,24 @@ type irATypeRefStruct struct {
 
 func (me *irATypeRefStruct) eq(cmp *irATypeRefStruct) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.eq(cmp.Fields))
+}
+
+func (me *irMeta) goTypeDefByGoName(goname string) *irANamedTypeRef {
+	for _, gtd := range me.GoTypeDefs {
+		if gtd.NameGo == goname {
+			return gtd
+		}
+	}
+	return nil
+}
+
+func (me *irMeta) goTypeDefByPsName(psname string) *irANamedTypeRef {
+	for _, gtd := range me.GoTypeDefs {
+		if gtd.NamePs == psname {
+			return gtd
+		}
+	}
+	return nil
 }
 
 func (me *irMeta) populateGoTypeDefs() {

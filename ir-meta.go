@@ -442,24 +442,6 @@ func (me *irMeta) goValDeclByPsName(psname string) *irANamedTypeRef {
 	return nil
 }
 
-func (me *irMeta) goTypeDefByGoName(goname string) *irANamedTypeRef {
-	for _, gtd := range me.GoTypeDefs {
-		if gtd.NameGo == goname {
-			return gtd
-		}
-	}
-	return nil
-}
-
-func (me *irMeta) goTypeDefByPsName(psname string) *irANamedTypeRef {
-	for _, gtd := range me.GoTypeDefs {
-		if gtd.NamePs == psname {
-			return gtd
-		}
-	}
-	return nil
-}
-
 func (me *irMeta) writeAsJsonTo(w io.Writer) error {
 	jsonenc := json.NewEncoder(w)
 	jsonenc.SetIndent("", "\t")

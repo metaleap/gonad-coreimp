@@ -58,6 +58,7 @@ func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 }
 
 func (me *irAst) prepAddNewExtraTypes() {
+	return
 	var newextratypes irANamedTypeRefs
 	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.irM.EnvTypeClassInsts {
@@ -104,8 +105,9 @@ func (me *irAst) prepFixupExportedNames() {
 					if len(af.RefFunc.Rets) > 0 {
 						panic(notImplErr("RET values for", gvd.NamePs, me.mod.srcFilePath))
 					}
-					for _, gvdfuncret := range gvd.RefFunc.Rets {
-						af.RefFunc.Rets = append(af.RefFunc.Rets, gvdfuncret)
+					for i, gvdfuncret := range gvd.RefFunc.Rets {
+						af.RefFunc.Rets =append(af.RefFunc.Rets, &irANamedTypeRef{})
+						af.RefFunc.Rets[i].copyFrom(gvdfuncret, true, true, false)
 					}
 				}
 			}

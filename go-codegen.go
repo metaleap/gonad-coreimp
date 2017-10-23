@@ -21,8 +21,6 @@ By now we have our own intermediate-representation AST anyway
 (ir-ast-*.go), allowing for all our transform needs.
 */
 
-type goTypeRefResolver func(tref string) (pname string, tname string)
-
 const (
 	dbgEmitEmptyFuncs = false
 )
@@ -112,7 +110,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 				me.codeGenAst(w, indent, expr)
 			}
 			fmt.Fprintf(w, "%s}", tabs)
-			indent--
+			indent-- // ineffectual; keep around in case we later switch things around
 		}
 	case *irAIf:
 		fmt.Fprintf(w, "%sif ", tabs)
@@ -261,9 +259,9 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	}
 }
 
-func (me *irAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, asts []irA) {
+func (me *irAst) codeGenGroupedVals(w io.Writer, consts bool, asts []irA) {
 	if l := len(asts); l == 1 {
-		me.codeGenAst(w, indent, asts[0])
+		me.codeGenAst(w, 0, asts[0])
 	} else if l > 1 {
 		if consts {
 			fmt.Fprint(w, "const (\n")
@@ -280,7 +278,7 @@ func (me *irAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, asts [
 		}
 		for i, a := range asts {
 			val, name, typeref := valºnameºtype(a)
-			me.codeGenAst(w, indent+1, ªsetVarInGroup(name, val, typeref))
+			me.codeGenAst(w, 1, ªsetVarInGroup(name, val, typeref))
 			if i < (len(asts) - 1) {
 				if _, ok := asts[i+1].(*irAComments); ok {
 					fmt.Fprint(w, "\n")
@@ -304,7 +302,7 @@ func (me *irAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, asts [
 // 	fmt.Fprint(w, ")\n\n")
 // }
 
-func (me *irAst) codeGenFuncArgs(w io.Writer, methodargs irANamedTypeRefs, isretargs bool, withnames bool) {
+func (me *irAst) codeGenFuncArgs(w io.Writer, indent int, methodargs irANamedTypeRefs, isretargs bool, withnames bool) {
 	if dbgEmitEmptyFuncs && isretargs && withnames {
 		methodargs[0].NameGo = "ret"
 	}
@@ -318,7 +316,7 @@ func (me *irAst) codeGenFuncArgs(w io.Writer, methodargs irANamedTypeRefs, isret
 			if withnames && len(arg.NameGo) > 0 {
 				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
-			me.codeGenTypeDecl(w, arg, -1)
+			me.codeGenTypeDecl(w, arg, indent+1)
 		}
 	}
 	if parens {
@@ -407,8 +405,8 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 				if ifmethod.RefFunc == nil {
 					panic(gtd.NamePs + "." + ifmethod.NamePs + ": unexpected interface-method (not a func), please report!")
 				} else {
-					me.codeGenFuncArgs(&buf, ifmethod.RefFunc.Args, false, false)
-					me.codeGenFuncArgs(&buf, ifmethod.RefFunc.Rets, true, false)
+					me.codeGenFuncArgs(&buf, indlevel, ifmethod.RefFunc.Args, false, false)
+					me.codeGenFuncArgs(&buf, indlevel, ifmethod.RefFunc.Rets, true, false)
 				}
 				fmt.Fprint(w, tabind)
 				fmt.Fprintf(w, fmtembeds, buf.String())
@@ -449,8 +447,8 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 		if isfuncwithbodynotjustsig && len(gtd.NameGo) > 0 {
 			fmt.Fprintf(w, " %s", gtd.NameGo)
 		}
-		me.codeGenFuncArgs(w, gtd.RefFunc.Args, false, isfuncwithbodynotjustsig)
-		me.codeGenFuncArgs(w, gtd.RefFunc.Rets, true, isfuncwithbodynotjustsig)
+		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Args, false, isfuncwithbodynotjustsig)
+		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Rets, true, isfuncwithbodynotjustsig)
 	} else {
 		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
 	}
@@ -468,8 +466,8 @@ func (me *irAst) codeGenStructMethods(w io.Writer, tr *irANamedTypeRef) {
 			} else {
 				fmt.Fprintf(w, "func (%s %s) %s", mthis, tr.NameGo, method.NameGo)
 			}
-			me.codeGenFuncArgs(w, method.RefFunc.Args, false, true)
-			me.codeGenFuncArgs(w, method.RefFunc.Rets, true, true)
+			me.codeGenFuncArgs(w, 0, method.RefFunc.Args, false, true)
+			me.codeGenFuncArgs(w, 0, method.RefFunc.Rets, true, true)
 			fmt.Fprint(w, " ")
 			me.codeGenAst(w, 0, method.RefFunc.impl)
 			fmt.Fprint(w, "\n")

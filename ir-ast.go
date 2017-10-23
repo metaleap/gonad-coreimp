@@ -332,6 +332,13 @@ func (me *irAst) prepFromCoreImp() {
 	for _, cia := range me.mod.coreimp.Body {
 		me.prepAddOrCull(cia.ciAstToIrAst())
 	}
+	for i, tcf := range me.culled.typeCtorFuncs {
+		if tcfb := tcf.Base(); tcfb != nil {
+			if gtd := me.irM.goTypeDefByPsName(tcfb.NamePs); gtd != nil {
+				gtd.sortIndex = i
+			}
+		}
+	}
 	me.prepForeigns()
 	me.prepFixupExportedNames()
 	me.prepAddNewExtraTypes()
@@ -360,8 +367,8 @@ func (me *irAst) writeAsGoTo(writer io.Writer) (err error) {
 
 	toplevelconsts := me.topLevelDefs(func(a irA) bool { ac, _ := a.(*irAConst); return ac != nil })
 	toplevelvars := me.topLevelDefs(func(a irA) bool { al, _ := a.(*irALet); return al != nil })
-	me.codeGenGroupedVals(buf, 0, true, toplevelconsts)
-	me.codeGenGroupedVals(buf, 0, false, toplevelvars)
+	me.codeGenGroupedVals(buf, true, toplevelconsts)
+	me.codeGenGroupedVals(buf, false, toplevelvars)
 
 	toplevelfuncs := me.topLevelDefs(func(a irA) bool { af, _ := a.(*irAFunc); return af != nil })
 	for _, ast := range toplevelfuncs {
