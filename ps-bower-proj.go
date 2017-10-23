@@ -147,7 +147,7 @@ func (me *psBowerProject) populateModPkgIrMetas() {
 	})
 }
 
-func (me *psBowerProject) prepModPkgIrAsts() {
+func (me *psBowerProject) prepModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenIr || Flag.ForceRegenAll {
@@ -156,11 +156,11 @@ func (me *psBowerProject) prepModPkgIrAsts() {
 	})
 }
 
-func (me *psBowerProject) reGenModPkgIrAsts() {
+func (me *psBowerProject) reGenModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenIr || Flag.ForceRegenAll {
-			if err := modinfo.reGenPkgIrAst(); err != nil {
+			if err := modinfo.reGenPkirAst(); err != nil {
 				panic(err)
 			}
 		}

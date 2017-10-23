@@ -6,41 +6,41 @@ handy constructors for expressions and blocks
 except type declarations (ie. "actual code")
 */
 
-func ªA(exprs ...gIrA) *gIrALitArr {
-	a := &gIrALitArr{ArrVals: exprs}
-	a.RefArray = &gIrATypeRefArray{}
+func ªA(exprs ...irA) *irALitArr {
+	a := &irALitArr{ArrVals: exprs}
+	a.RefArray = &irATypeRefArray{}
 	typefound := false
 	for _, expr := range a.ArrVals {
 		eb := expr.Base()
 		if eb.parent = a; !typefound && eb.hasTypeInfo() {
-			a.RefArray.Of = &eb.gIrANamedTypeRef
+			a.RefArray.Of = &eb.irANamedTypeRef
 		}
 	}
 	return a
 }
 
-func ªB(literal bool) *gIrALitBool {
-	a := &gIrALitBool{LitBool: literal}
+func ªB(literal bool) *irALitBool {
+	a := &irALitBool{LitBool: literal}
 	a.RefAlias = "Prim.Boolean"
 	return a
 }
 
-func ªF(literal float64) *gIrALitDouble {
-	a := &gIrALitDouble{LitDouble: literal}
+func ªF(literal float64) *irALitNum {
+	a := &irALitNum{LitDouble: literal}
 	a.RefAlias = "Prim.Number"
 	return a
 }
 
-func ªI(literal int) *gIrALitInt {
-	a := &gIrALitInt{LitInt: literal}
+func ªI(literal int) *irALitInt {
+	a := &irALitInt{LitInt: literal}
 	a.RefAlias = "Prim.Int"
 	return a
 }
 
-func ªO(typeref *gIrANamedTypeRef, fields ...*gIrALitObjField) *gIrALitObj {
-	a := &gIrALitObj{ObjFields: fields}
+func ªO(typeref *irANamedTypeRef, fields ...*irALitObjField) *irALitObj {
+	a := &irALitObj{ObjFields: fields}
 	if typeref != nil {
-		a.gIrANamedTypeRef = *typeref
+		a.irANamedTypeRef = *typeref
 	}
 	for _, of := range a.ObjFields {
 		of.parent = a
@@ -48,27 +48,27 @@ func ªO(typeref *gIrANamedTypeRef, fields ...*gIrALitObjField) *gIrALitObj {
 	return a
 }
 
-func ªOFld(fieldval gIrA) *gIrALitObjField {
-	a := &gIrALitObjField{FieldVal: fieldval}
+func ªOFld(fieldval irA) *irALitObjField {
+	a := &irALitObjField{FieldVal: fieldval}
 	return a
 }
 
-func ªS(literal string) *gIrALitStr {
-	a := &gIrALitStr{LitStr: literal}
+func ªS(literal string) *irALitStr {
+	a := &irALitStr{LitStr: literal}
 	a.RefAlias = "Prim.String"
 	return a
 }
 
-func ªBlock(asts ...gIrA) *gIrABlock {
-	a := &gIrABlock{Body: asts}
+func ªBlock(asts ...irA) *irABlock {
+	a := &irABlock{Body: asts}
 	for _, expr := range a.Body {
 		expr.Base().parent = a
 	}
 	return a
 }
 
-func ªCall(callee gIrA, callargs ...gIrA) *gIrACall {
-	a := &gIrACall{Callee: callee, CallArgs: callargs}
+func ªCall(callee irA, callargs ...irA) *irACall {
+	a := &irACall{Callee: callee, CallArgs: callargs}
 	a.Callee.Base().parent = a
 	for _, expr := range callargs {
 		expr.Base().parent = a
@@ -76,71 +76,71 @@ func ªCall(callee gIrA, callargs ...gIrA) *gIrACall {
 	return a
 }
 
-func ªComments(comments ...*coreImpComment) *gIrAComments {
-	a := &gIrAComments{}
+func ªComments(comments ...*coreImpComment) *irAComments {
+	a := &irAComments{}
 	a.Comments = comments
 	return a
 }
 
-func ªConst(name *gIrANamedTypeRef, val gIrA) *gIrAConst {
-	a, v := &gIrAConst{ConstVal: val}, val.Base()
-	v.parent, a.gIrANamedTypeRef = a, v.gIrANamedTypeRef
+func ªConst(name *irANamedTypeRef, val irA) *irAConst {
+	a, v := &irAConst{ConstVal: val}, val.Base()
+	v.parent, a.irANamedTypeRef = a, v.irANamedTypeRef
 	a.NameGo, a.NamePs = name.NameGo, name.NamePs
 	return a
 }
 
-func ªDot(left gIrA, right gIrA) *gIrADot {
-	a := &gIrADot{DotLeft: left, DotRight: right}
+func ªDot(left irA, right irA) *irADot {
+	a := &irADot{DotLeft: left, DotRight: right}
 	a.DotLeft.Base().parent, a.DotRight.Base().parent = a, a
 	return a
 }
 
-func ªDotNamed(left string, right string) *gIrADot {
+func ªDotNamed(left string, right string) *irADot {
 	return ªDot(ªSymGo(left), ªSymGo(right))
 }
 
-func ªEq(left gIrA, right gIrA) *gIrAOp2 {
-	a := &gIrAOp2{Op2: "==", Left: left, Right: right}
+func ªEq(left irA, right irA) *irAOp2 {
+	a := &irAOp2{Op2: "==", Left: left, Right: right}
 	a.Left.Base().parent, a.Right.Base().parent = a, a
 	return a
 }
 
-func ªFor() *gIrAFor {
-	a := &gIrAFor{ForDo: ªBlock()}
+func ªFor() *irAFor {
+	a := &irAFor{ForDo: ªBlock()}
 	a.ForDo.parent = a
 	return a
 }
 
-func ªFunc() *gIrAFunc {
-	a := &gIrAFunc{FuncImpl: ªBlock()}
+func ªFunc() *irAFunc {
+	a := &irAFunc{FuncImpl: ªBlock()}
 	a.FuncImpl.parent = a
 	return a
 }
 
-func ªIf(cond gIrA) *gIrAIf {
-	a := &gIrAIf{If: cond, Then: ªBlock()}
+func ªIf(cond irA) *irAIf {
+	a := &irAIf{If: cond, Then: ªBlock()}
 	a.If.Base().parent, a.Then.parent = a, a
 	return a
 }
 
-func ªIndex(left gIrA, right gIrA) *gIrAIndex {
-	a := &gIrAIndex{IdxLeft: left, IdxRight: right}
+func ªIndex(left irA, right irA) *irAIndex {
+	a := &irAIndex{IdxLeft: left, IdxRight: right}
 	a.IdxLeft.Base().parent, a.IdxRight.Base().parent = a, a
 	return a
 }
 
-func ªIs(expr gIrA, typeexpr string) *gIrAIsType {
-	a := &gIrAIsType{ExprToTest: expr, TypeToTest: typeexpr}
+func ªIs(expr irA, typeexpr string) *irAIsType {
+	a := &irAIsType{ExprToTest: expr, TypeToTest: typeexpr}
 	a.ExprToTest.Base().parent = a
 	return a
 }
 
-func ªLet(namego string, nameps string, val gIrA) *gIrALet {
-	a := &gIrALet{LetVal: val}
+func ªLet(namego string, nameps string, val irA) *irALet {
+	a := &irALet{LetVal: val}
 	if val != nil {
 		vb := val.Base()
 		vb.parent = a
-		a.gIrANamedTypeRef = vb.gIrANamedTypeRef
+		a.irANamedTypeRef = vb.irANamedTypeRef
 	}
 	if len(namego) == 0 && len(nameps) > 0 {
 		a.setBothNamesFromPsName(nameps)
@@ -150,75 +150,75 @@ func ªLet(namego string, nameps string, val gIrA) *gIrALet {
 	return a
 }
 
-func ªNil() *gIrANil {
-	a := &gIrANil{}
+func ªNil() *irANil {
+	a := &irANil{}
 	return a
 }
 
-func ªO1(op string, operand gIrA) *gIrAOp1 {
-	a := &gIrAOp1{Op1: op, Of: operand}
+func ªO1(op string, operand irA) *irAOp1 {
+	a := &irAOp1{Op1: op, Of: operand}
 	a.Of.Base().parent = a
 	return a
 }
 
-func ªO2(left gIrA, op string, right gIrA) *gIrAOp2 {
-	a := &gIrAOp2{Op2: op, Left: left, Right: right}
+func ªO2(left irA, op string, right irA) *irAOp2 {
+	a := &irAOp2{Op2: op, Left: left, Right: right}
 	a.Left.Base().parent, a.Right.Base().parent = a, a
 	return a
 }
 
-func ªPanic(errarg gIrA) *gIrAPanic {
-	a := &gIrAPanic{PanicArg: errarg}
+func ªPanic(errarg irA) *irAPanic {
+	a := &irAPanic{PanicArg: errarg}
 	a.PanicArg.Base().parent = a
 	return a
 }
 
-func ªPkgSym(pkgname string, symbol string) *gIrAPkgSym {
-	a := &gIrAPkgSym{PkgName: pkgname, Symbol: symbol}
+func ªPkgSym(pkgname string, symbol string) *irAPkgSym {
+	a := &irAPkgSym{PkgName: pkgname, Symbol: symbol}
 	return a
 }
 
-func ªRet(retarg gIrA) *gIrARet {
-	a := &gIrARet{RetArg: retarg}
+func ªRet(retarg irA) *irARet {
+	a := &irARet{RetArg: retarg}
 	if a.RetArg != nil {
 		a.RetArg.Base().parent = a
 	}
 	return a
 }
 
-func ªSet(left gIrA, right gIrA) *gIrASet {
-	a := &gIrASet{SetLeft: left, ToRight: right}
+func ªSet(left irA, right irA) *irASet {
+	a := &irASet{SetLeft: left, ToRight: right}
 	a.SetLeft.Base().parent, a.ToRight.Base().parent = a, a
 	if rb := right.Base(); rb.hasTypeInfo() {
-		a.gIrANamedTypeRef = rb.gIrANamedTypeRef
+		a.irANamedTypeRef = rb.irANamedTypeRef
 	}
 	return a
 }
 
-func ªsetVarInGroup(namego string, right gIrA, typespec *gIrANamedTypeRef) *gIrASet {
+func ªsetVarInGroup(namego string, right irA, typespec *irANamedTypeRef) *irASet {
 	a := ªSet(ªSymGo(namego), right)
 	if typespec != nil && typespec.hasTypeInfo() {
-		a.gIrANamedTypeRef = *typespec
+		a.irANamedTypeRef = *typespec
 	}
 	a.isInVarGroup = true
 	return a
 }
 
-func ªSymGo(namego string) *gIrASym {
-	a := &gIrASym{}
+func ªSymGo(namego string) *irASym {
+	a := &irASym{}
 	a.NameGo = namego
 	return a
 }
 
-func ªSymPs(nameps string, exported bool) *gIrASym {
-	a := &gIrASym{}
+func ªSymPs(nameps string, exported bool) *irASym {
+	a := &irASym{}
 	a.Export = exported
 	a.setBothNamesFromPsName(nameps)
 	return a
 }
 
-func ªTo(expr gIrA, pname string, tname string) *gIrAToType {
-	a := &gIrAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
+func ªTo(expr irA, pname string, tname string) *irAToType {
+	a := &irAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
 	a.ExprToCast.Base().parent = a
 	return a
 }

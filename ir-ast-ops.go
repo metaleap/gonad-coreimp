@@ -11,17 +11,17 @@ various transforms and operations on the AST,
 and "post" ops are called from FinalizePostPrep.
 */
 
-func (me *gonadIrAst) prepAddOrCull(a gIrA) {
+func (me *irAst) prepAddOrCull(a irA) {
 	if a != nil {
 		culled := false
-		if ctor, _ := a.(*gIrACtor); ctor != nil {
+		if ctor, _ := a.(*irACtor); ctor != nil {
 			// PureScript CoreImp contains constructor functions for each ADT "sub-type", we drop those
 			culled, me.culled.typeCtorFuncs = true, append(me.culled.typeCtorFuncs, ctor)
 		} else if ab := a.Base(); ab != nil {
 			// check if helper function related to type-classes / type-class instances:
 			if culled = me.irM.tcInst(ab.NamePs) != nil; culled {
 				// func instname(..)
-				if afn, _ := a.(*gIrAFunc); afn != nil {
+				if afn, _ := a.(*irAFunc); afn != nil {
 					p := afn.parent
 					av := ªLet(afn.NameGo, afn.NamePs, afn)
 					av.parent = p
@@ -38,15 +38,15 @@ func (me *gonadIrAst) prepAddOrCull(a gIrA) {
 	}
 }
 
-func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrALet) {
+func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 	//	add private globals to represent all arg-less ctors (ie. "one const per enum-value")
-	nuglobals := []gIrA{}
-	nuglobalsmap = map[string]*gIrALet{}
+	nuglobals := []irA{}
+	nuglobalsmap = map[string]*irALet{}
 	for _, gtd := range me.irM.GoTypeDefs {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
 				if ctor.gtd != nil && len(ctor.Args) == 0 {
-					nuvar := ªLet("º"+ctor.Name, "", ªO(&gIrANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
+					nuvar := ªLet("º"+ctor.Name, "", ªO(&irANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
 					nuglobalsmap[ctor.Name] = nuvar
 					nuglobals = append(nuglobals, nuvar)
 				}
@@ -57,8 +57,8 @@ func (me *gonadIrAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*gIrAL
 	return
 }
 
-func (me *gonadIrAst) prepAddNewExtraTypes() {
-	var newextratypes gIrANamedTypeRefs
+func (me *irAst) prepAddNewExtraTypes() {
+	var newextratypes irANamedTypeRefs
 	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.irM.EnvTypeClassInsts {
 		if gid := findGoTypeByPsQName(tci.ClassName); gid == nil {
@@ -66,7 +66,7 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 		} else {
 			gtd := newextratypes.byPsName(tci.Name)
 			if gtd == nil {
-				gtd = &gIrANamedTypeRef{Export: true, RefStruct: &gIrATypeRefStruct{instOf: tci.ClassName}}
+				gtd = &irANamedTypeRef{Export: true, RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
 				gtd.setBothNamesFromPsName(tci.Name)
 				gtd.NameGo = "ı" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
@@ -82,19 +82,19 @@ func (me *gonadIrAst) prepAddNewExtraTypes() {
 	}
 }
 
-func (me *gonadIrAst) prepFixupExportedNames() {
-	ensure := func(isfunc bool, gntr *gIrANamedTypeRef) *gIrANamedTypeRef {
+func (me *irAst) prepFixupExportedNames() {
+	ensure := func(isfunc bool, gntr *irANamedTypeRef) *irANamedTypeRef {
 		if gvd := me.irM.goValDeclByPsName(gntr.NamePs); gvd != nil {
 			gntr.copyFrom(gvd, true, !isfunc, true)
 			return gvd
 		}
 		return nil
 	}
-	me.topLevelDefs(func(a gIrA) bool {
-		if av, _ := a.(*gIrALet); av != nil {
-			ensure(false, &av.gIrANamedTypeRef)
-		} else if af, _ := a.(*gIrAFunc); af != nil {
-			if gvd := ensure(true, &af.gIrANamedTypeRef); gvd != nil {
+	me.topLevelDefs(func(a irA) bool {
+		if av, _ := a.(*irALet); av != nil {
+			ensure(false, &av.irANamedTypeRef)
+		} else if af, _ := a.(*irAFunc); af != nil {
+			if gvd := ensure(true, &af.irANamedTypeRef); gvd != nil {
 				if gvd.RefFunc == nil {
 					panic(notImplErr("NIL RefFunc for", gvd.NamePs, me.mod.srcFilePath))
 				} else {
@@ -115,7 +115,7 @@ func (me *gonadIrAst) prepFixupExportedNames() {
 	})
 }
 
-func (me *gonadIrAst) prepForeigns() {
+func (me *irAst) prepForeigns() {
 	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
 		qn := nsPrefixDefaultFfiPkg + me.mod.qName
 		me.irM.ForeignImp = me.irM.Imports.addIfHasnt(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
@@ -123,31 +123,31 @@ func (me *gonadIrAst) prepForeigns() {
 	}
 }
 
-func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
-	me.walk(func(ast gIrA) gIrA {
+func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
+	me.walk(func(ast irA) irA {
 		if ast != nil {
 			switch a := ast.(type) {
-			case *gIrAOp2: // coreimp represents Ints JS-like as: expr|0 --- we ditch the |0 part
-				if opright, _ := a.Right.(*gIrALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
+			case *irAOp2: // coreimp represents Ints JS-like as: expr|0 --- we ditch the |0 part
+				if opright, _ := a.Right.(*irALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
 					return a.Left
 				}
-			case *gIrADot:
-				if dl, _ := a.DotLeft.(*gIrASym); dl != nil {
-					if dr, _ := a.DotRight.(*gIrASym); dr != nil {
+			case *irADot:
+				if dl, _ := a.DotLeft.(*irASym); dl != nil {
+					if dr, _ := a.DotRight.(*irASym); dr != nil {
 						//	find all CtorName.value references and change them to the new globals created in AddEnumishAdtGlobals
 						if dr.NameGo == "value" {
 							if nuglobalvar := nuglobalsmap[dl.NamePs]; nuglobalvar != nil {
 								sym4nuvar := ªSymGo(nuglobalvar.NameGo)
-								sym4nuvar.gIrANamedTypeRef = nuglobalvar.gIrANamedTypeRef
+								sym4nuvar.irANamedTypeRef = nuglobalvar.irANamedTypeRef
 								return sym4nuvar
 							}
 						} else {
 							//	if the dot's LHS refers to a package, ensure the import is marked as in-use and switch out dot for pkgsym
 							for _, imp := range me.irM.Imports {
-								if imp.N == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.irM.ForeignImp) {
+								if imp.GoName == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.irM.ForeignImp) {
 									dr.Export = true
 									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
-									return ªPkgSym(imp.N, dr.NameGo)
+									return ªPkgSym(imp.GoName, dr.NameGo)
 								}
 							}
 						}
@@ -159,24 +159,24 @@ func (me *gonadIrAst) prepMiscFixups(nuglobalsmap map[string]*gIrALet) {
 	})
 }
 
-func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
+func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
-	var gtd *gIrANamedTypeRef
-	if ocdot, _ := oc.Callee.(*gIrADot); ocdot != nil {
-		if ocdot1, _ := ocdot.DotLeft.(*gIrASym); ocdot1 != nil {
+	var gtd *irANamedTypeRef
+	if ocdot, _ := oc.Callee.(*irADot); ocdot != nil {
+		if ocdot1, _ := ocdot.DotLeft.(*irASym); ocdot1 != nil {
 			if mod := findModuleByPName(ocdot1.NamePs); mod != nil {
-				if ocdot2, _ := ocdot.DotRight.(*gIrASym); ocdot2 != nil {
+				if ocdot2, _ := ocdot.DotRight.(*irASym); ocdot2 != nil {
 					gtd = mod.irMeta.goTypeDefByPsName(ocdot2.NamePs)
 				}
 			}
 		}
 	}
-	ocv, _ := oc.Callee.(*gIrASym)
+	ocv, _ := oc.Callee.(*irASym)
 	if gtd == nil && ocv != nil {
 		gtd = me.irM.goTypeDefByPsName(ocv.NamePs)
 	}
 	if gtd != nil {
-		o := ªO(&gIrANamedTypeRef{RefAlias: gtd.NameGo})
+		o := ªO(&irANamedTypeRef{RefAlias: gtd.NameGo})
 		for _, ctorarg := range oc.CallArgs {
 			of := ªOFld(ctorarg)
 			of.parent = o
@@ -185,14 +185,14 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 		return o
 	} else if ocv != nil && ocv.NamePs == "Error" {
 		if len(oc.CallArgs) == 1 {
-			if op2, _ := oc.CallArgs[0].(*gIrAOp2); op2 != nil && op2.Op2 == "+" {
+			if op2, _ := oc.CallArgs[0].(*irAOp2); op2 != nil && op2.Op2 == "+" {
 				oc.CallArgs[0] = op2.Left
 				op2.Left.Base().parent = oc
-				if oparr := op2.Right.(*gIrALitArr); oparr != nil {
+				if oparr := op2.Right.(*irALitArr); oparr != nil {
 					for _, oparrelem := range oparr.ArrVals {
 						nucallarg := oparrelem
-						if oaedot, _ := oparrelem.(*gIrADot); oaedot != nil {
-							if oaedot2, _ := oaedot.DotLeft.(*gIrADot); oaedot2 != nil {
+						if oaedot, _ := oparrelem.(*irADot); oaedot != nil {
+							if oaedot2, _ := oaedot.DotLeft.(*irADot); oaedot2 != nil {
 								nucallarg = oaedot2.DotLeft
 							} else {
 								nucallarg = oaedot
@@ -205,7 +205,7 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 				if len(oc.CallArgs) > 1 {
 					me.irM.Imports.addIfHasnt("reflect", "reflect", "")
 					me.irM.save = true
-					oc.CallArgs[0].(*gIrALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
+					oc.CallArgs[0].(*irALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
 				}
 			}
 		}
@@ -219,10 +219,10 @@ func (me *gonadIrAst) postFixupAmpCtor(a *gIrAOp1, oc *gIrACall) gIrA {
 	return a
 }
 
-func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
+func (me *irAst) postLinkTcInstFuncsToImplStructs() {
 	return
 	for _, ifx := range me.culled.tcInstDecls {
-		ifv, _ := ifx.(*gIrALet)
+		ifv, _ := ifx.(*irALet)
 		gtd := me.irM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
 		gtdInstOf := findGoTypeByPsQName(gtd.RefStruct.instOf)
 		ifv.Export = gtdInstOf.Export
@@ -241,59 +241,59 @@ func (me *gonadIrAst) postLinkTcInstFuncsToImplStructs() {
 				for _, gtdmethod := range gtd.RefStruct.Methods {
 					if gtdmethod.NamePs == instfuncarg.NamePs {
 						switch ifvx := ifv.LetVal.(type) {
-						case *gIrALitObj:
+						case *irALitObj:
 							panic("This again?!")
 							ifofv := ifvx.ObjFields[i].FieldVal
 							switch ifa := ifofv.(type) {
-							case *gIrAFunc:
+							case *irAFunc:
 								gtdmethod.RefFunc.impl = ifa.FuncImpl
 							default:
 								oldp := ifofv.Parent()
 								gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
 								gtdmethod.RefFunc.impl.parent = oldp
 							}
-						case *gIrADot:
-							callargs := []gIrA{}
+						case *irADot:
+							callargs := []irA{}
 							for _, gma := range gtdmethod.RefFunc.Args {
 								callargs = append(callargs, ªSymGo(gma.NameGo))
 							}
 							gtdmethod.RefFunc.impl = ªBlock(ªRet(ªCall(ifvx, callargs...)))
-						case *gIrAOp1:
+						case *irAOp1:
 							// println("OP1\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
-						case *gIrAFunc:
+						case *irAFunc:
 							// println("FUN\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
 						default:
-							println(ifv.LetVal.(*gIrALitObj).NamePs)
+							println(ifv.LetVal.(*irALitObj).NamePs)
 						}
 						break
 					}
 				}
 			}
 		}
-		nuctor := ªO(&gIrANamedTypeRef{RefAlias: gtd.NameGo})
+		nuctor := ªO(&irANamedTypeRef{RefAlias: gtd.NameGo})
 		nuctor.parent = ifv
 		ifv.LetVal = nuctor
 		ifv.RefAlias = gtd.RefStruct.instOf
 	}
 }
 
-func (me *gonadIrAst) postMiscFixups() {
-	me.walk(func(ast gIrA) gIrA {
+func (me *irAst) postMiscFixups() {
+	me.walk(func(ast irA) irA {
 		switch a := ast.(type) {
-		case *gIrALet:
+		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts
-				return ªConst(&a.gIrANamedTypeRef, a.LetVal)
+				return ªConst(&a.irANamedTypeRef, a.LetVal)
 			}
-		case *gIrAFunc:
-			if a.gIrANamedTypeRef.RefFunc != nil {
+		case *irAFunc:
+			if a.irANamedTypeRef.RefFunc != nil {
 				// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
-				if len(a.gIrANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
+				if len(a.irANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
 					// otherwise, add an empty-for-now 'unknown' (aka interface{}) return type
-					a.gIrANamedTypeRef.RefFunc.Rets = gIrANamedTypeRefs{&gIrANamedTypeRef{}}
+					a.irANamedTypeRef.RefFunc.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
 				}
 			} else {
-				panic(me.mod.srcFilePath + ": please report as bug, a gIrAFunc ('" + a.NameGo + "' / '" + a.NamePs + "') had no RefFunc set")
+				panic(me.mod.srcFilePath + ": please report as bug, a irAFunc ('" + a.NameGo + "' / '" + a.NamePs + "') had no RefFunc set")
 			}
 		}
 		return ast

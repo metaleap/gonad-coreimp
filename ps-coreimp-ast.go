@@ -147,9 +147,9 @@ type coreImpAst struct {
 	root   *coreImp
 }
 
-func (me *coreImpAst) astForceIntoBlock(into *gIrABlock) {
-	switch maybebody := me.ciAstToGIrAst().(type) {
-	case *gIrABlock:
+func (me *coreImpAst) astForceIntoBlock(into *irABlock) {
+	switch maybebody := me.ciAstToIrAst().(type) {
+	case *irABlock:
 		into.Body = maybebody.Body
 		for _, a := range into.Body {
 			a.Base().parent = into
@@ -159,7 +159,7 @@ func (me *coreImpAst) astForceIntoBlock(into *gIrABlock) {
 	}
 }
 
-func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
+func (me *coreImpAst) ciAstToIrAst() (a irA) {
 	istopleveldecl := (me.parent == nil)
 	switch me.AstTag {
 	case "StringLiteral":
@@ -176,35 +176,35 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 	case "Block":
 		b := ªBlock()
 		for _, c := range me.Block {
-			b.Add(c.ciAstToGIrAst())
+			b.Add(c.ciAstToIrAst())
 		}
 		a = b
 	case "While":
 		f := ªFor()
-		f.ForCond = me.While.ciAstToGIrAst()
+		f.ForCond = me.While.ciAstToIrAst()
 		f.ForCond.Base().parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "ForIn":
 		f := ªFor()
-		f.ForRange = ªLet("", me.ForIn, me.AstFor1.ciAstToGIrAst())
+		f.ForRange = ªLet("", me.ForIn, me.AstFor1.ciAstToIrAst())
 		f.ForRange.parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "For":
 		f := ªFor()
 		fs := ªSymPs(me.For, me.root.mod.irMeta.hasExport(me.For))
-		f.ForInit = []*gIrALet{ªLet("", me.For, me.AstFor1.ciAstToGIrAst())}
+		f.ForInit = []*irALet{ªLet("", me.For, me.AstFor1.ciAstToIrAst())}
 		f.ForInit[0].parent = f
 		fscmp, fsset, fsadd := *fs, *fs, *fs // quirky that we need these copies but we do
-		f.ForCond = ªO2(&fscmp, "<", me.AstFor2.ciAstToGIrAst())
+		f.ForCond = ªO2(&fscmp, "<", me.AstFor2.ciAstToIrAst())
 		f.ForCond.Base().parent = f
-		f.ForStep = []*gIrASet{ªSet(&fsset, ªO2(&fsadd, "+", ªI(1)))}
+		f.ForStep = []*irASet{ªSet(&fsset, ªO2(&fsadd, "+", ªI(1)))}
 		f.ForStep[0].parent = f
 		me.AstBody.astForceIntoBlock(f.ForDo)
 		a = f
 	case "IfElse":
-		i := ªIf(me.IfElse.ciAstToGIrAst())
+		i := ªIf(me.IfElse.ciAstToIrAst())
 		me.AstThen.astForceIntoBlock(i.Then)
 		if me.AstElse != nil {
 			i.Else = ªBlock()
@@ -213,56 +213,56 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		}
 		a = i
 	case "App":
-		c := ªCall(me.App.ciAstToGIrAst())
+		c := ªCall(me.App.ciAstToIrAst())
 		for _, carg := range me.AstApplArgs {
-			arg := carg.ciAstToGIrAst()
+			arg := carg.ciAstToIrAst()
 			arg.Base().parent = c
 			c.CallArgs = append(c.CallArgs, arg)
 		}
 		a = c
 	case "VariableIntroduction":
 		v := ªLet("", me.VariableIntroduction, nil)
-		var wastypefunc *gIrAFunc
+		var wastypefunc *irAFunc
 		if me.AstRight != nil {
-			v.LetVal = me.AstRight.ciAstToGIrAst()
+			v.LetVal = me.AstRight.ciAstToIrAst()
 			vlvb := v.LetVal.Base()
 			vlvb.parent = v
 			if v.LetVal != nil && vlvb.RefFunc != nil {
 				if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
-					wastypefunc = v.LetVal.(*gIrAFunc)
+					wastypefunc = v.LetVal.(*irAFunc)
 				}
-			} else if vlvc, _ := v.LetVal.(*gIrACall); vlvc != nil {
+			} else if vlvc, _ := v.LetVal.(*irACall); vlvc != nil {
 				if vlvcb := vlvc.Callee.Base(); vlvcb.RefFunc != nil {
 					if istopleveldecl && ustr.BeginsUpper(me.VariableIntroduction) {
-						wastypefunc = vlvc.Callee.(*gIrAFunc)
+						wastypefunc = vlvc.Callee.(*irAFunc)
 					}
 				}
 			}
 		}
 		if wastypefunc != nil {
-			a = &gIrACtor{gIrAFunc: *wastypefunc}
+			a = &irACtor{irAFunc: *wastypefunc}
 		} else {
 			a = v
 		}
 	case "Function":
 		wastypefunc := istopleveldecl && len(me.Function) > 0 && ustr.BeginsUpper(me.Function)
 		f := ªFunc()
-		f.RefFunc = &gIrATypeRefFunc{}
+		f.RefFunc = &irATypeRefFunc{}
 		f.setBothNamesFromPsName(me.Function)
 		for _, fpn := range me.AstFuncParams {
-			arg := &gIrANamedTypeRef{}
+			arg := &irANamedTypeRef{}
 			arg.setBothNamesFromPsName(fpn)
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
 		f.RefFunc.impl = f.FuncImpl
 		me.AstBody.astForceIntoBlock(f.FuncImpl)
 		if wastypefunc {
-			a = &gIrACtor{gIrAFunc: *f}
+			a = &irACtor{irAFunc: *f}
 		} else {
 			a = f
 		}
 	case "Unary":
-		o := ªO1(me.AstOp, me.Unary.ciAstToGIrAst())
+		o := ªO1(me.AstOp, me.Unary.ciAstToIrAst())
 		switch o.Op1 {
 		case "Negate":
 			o.Op1 = "-"
@@ -279,7 +279,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		}
 		a = o
 	case "Binary":
-		o := ªO2(me.Binary.ciAstToGIrAst(), me.AstOp, me.AstRight.ciAstToGIrAst())
+		o := ªO2(me.Binary.ciAstToIrAst(), me.AstOp, me.AstRight.ciAstToIrAst())
 		switch o.Op2 {
 		case "Add":
 			o.Op2 = "+"
@@ -330,7 +330,7 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		o := ªO(nil)
 		for _, namevaluepair := range me.ObjectLiteral {
 			for onekey, oneval := range namevaluepair {
-				ofv := ªOFld(oneval.ciAstToGIrAst())
+				ofv := ªOFld(oneval.ciAstToIrAst())
 				ofv.setBothNamesFromPsName(onekey)
 				ofv.parent = o
 				o.ObjFields = append(o.ObjFields, ofv)
@@ -342,34 +342,34 @@ func (me *coreImpAst) ciAstToGIrAst() (a gIrA) {
 		r := ªRet(nil)
 		a = r
 	case "Return":
-		r := ªRet(me.Return.ciAstToGIrAst())
+		r := ªRet(me.Return.ciAstToIrAst())
 		a = r
 	case "Throw":
-		r := ªPanic(me.Throw.ciAstToGIrAst())
+		r := ªPanic(me.Throw.ciAstToIrAst())
 		a = r
 	case "ArrayLiteral":
-		exprs := make([]gIrA, 0, len(me.ArrayLiteral))
+		exprs := make([]irA, 0, len(me.ArrayLiteral))
 		for _, v := range me.ArrayLiteral {
-			exprs = append(exprs, v.ciAstToGIrAst())
+			exprs = append(exprs, v.ciAstToIrAst())
 		}
 		l := ªA(exprs...)
 		a = l
 	case "Assignment":
-		o := ªSet(me.Assignment.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
+		o := ªSet(me.Assignment.ciAstToIrAst(), me.AstRight.ciAstToIrAst())
 		a = o
 	case "Indexer":
 		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
 			dv := ªSymPs(me.AstRight.StringLiteral, me.root.mod.irMeta.hasExport(me.AstRight.StringLiteral))
-			a = ªDot(me.Indexer.ciAstToGIrAst(), dv)
+			a = ªDot(me.Indexer.ciAstToIrAst(), dv)
 		} else {
-			a = ªIndex(me.Indexer.ciAstToGIrAst(), me.AstRight.ciAstToGIrAst())
+			a = ªIndex(me.Indexer.ciAstToIrAst(), me.AstRight.ciAstToIrAst())
 		}
 	case "InstanceOf":
 		if len(me.AstRight.Var) > 0 {
-			a = ªIs(me.InstanceOf.ciAstToGIrAst(), me.AstRight.Var)
+			a = ªIs(me.InstanceOf.ciAstToIrAst(), me.AstRight.Var)
 		} else /*if me.AstRight.Indexer != nil*/ {
-			adot := me.AstRight.ciAstToGIrAst().(*gIrADot)
-			a = ªIs(me.InstanceOf.ciAstToGIrAst(), findModuleByPName(adot.DotLeft.(*gIrASym).NamePs).qName+"."+adot.DotRight.(*gIrASym).NamePs)
+			adot := me.AstRight.ciAstToIrAst().(*irADot)
+			a = ªIs(me.InstanceOf.ciAstToIrAst(), findModuleByPName(adot.DotLeft.(*irASym).NamePs).qName+"."+adot.DotRight.(*irASym).NamePs)
 		}
 	default:
 		panic(fmt.Errorf(me.root.mod.srcFilePath+": unrecognized coreImp AST-tag '%s' just below %v, please report", me.parent, me.AstTag))

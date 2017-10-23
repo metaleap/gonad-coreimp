@@ -28,13 +28,13 @@ const (
 	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
 )
 
-func (_ *gonadIrAst) codeGenCommaIf(w io.Writer, i int) {
+func (_ *irAst) codeGenCommaIf(w io.Writer, i int) {
 	if i > 0 {
 		fmt.Fprint(w, ", ")
 	}
 }
 
-func (_ *gonadIrAst) codeGenComments(w io.Writer, singlelineprefix string, comments ...*coreImpComment) {
+func (_ *irAst) codeGenComments(w io.Writer, singlelineprefix string, comments ...*coreImpComment) {
 	for _, c := range comments {
 		if len(c.BlockComment) > 0 {
 			fmt.Fprintf(w, "/*%s*/", c.BlockComment)
@@ -44,7 +44,7 @@ func (_ *gonadIrAst) codeGenComments(w io.Writer, singlelineprefix string, comme
 	}
 }
 
-func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
+func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	if ast == nil {
 		return
 	}
@@ -53,28 +53,28 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 		tabs = strings.Repeat("\t", indent)
 	}
 	switch a := ast.(type) {
-	case *gIrALitStr:
+	case *irALitStr:
 		fmt.Fprintf(w, "%q", a.LitStr)
-	case *gIrALitBool:
+	case *irALitBool:
 		fmt.Fprintf(w, "%t", a.LitBool)
-	case *gIrALitDouble:
+	case *irALitNum:
 		s := fmt.Sprintf("%f", a.LitDouble)
 		for strings.HasSuffix(s, "0") {
 			s = s[:len(s)-1]
 		}
 		fmt.Fprint(w, s)
-	case *gIrALitInt:
+	case *irALitInt:
 		fmt.Fprintf(w, "%d", a.LitInt)
-	case *gIrALitArr:
-		me.codeGenTypeDecl(w, &a.gIrANamedTypeRef, indent)
+	case *irALitArr:
+		me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
 		fmt.Fprint(w, "{")
 		for i, expr := range a.ArrVals {
 			me.codeGenCommaIf(w, i)
 			me.codeGenAst(w, indent, expr)
 		}
 		fmt.Fprint(w, "}")
-	case *gIrALitObj:
-		me.codeGenTypeDecl(w, &a.gIrANamedTypeRef, -1)
+	case *irALitObj:
+		me.codeGenTypeDecl(w, &a.irANamedTypeRef, -1)
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			me.codeGenCommaIf(w, i)
@@ -84,20 +84,20 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 			me.codeGenAst(w, indent, namevaluepair.FieldVal)
 		}
 		fmt.Fprint(w, "}")
-	case *gIrAConst:
+	case *irAConst:
 		fmt.Fprintf(w, "%sconst %s ", tabs, a.NameGo)
-		me.codeGenTypeDecl(w, &a.gIrANamedTypeRef, -1)
+		me.codeGenTypeDecl(w, &a.irANamedTypeRef, -1)
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.ConstVal)
 		fmt.Fprint(w, "\n")
-	case *gIrASym:
+	case *irASym:
 		fmt.Fprint(w, a.NameGo)
-	case *gIrALet:
+	case *irALet:
 		fmt.Fprintf(w, "%svar %s", tabs, a.NameGo)
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.LetVal)
 		fmt.Fprint(w, "\n")
-	case *gIrABlock:
+	case *irABlock:
 		if dbgEmitEmptyFuncs && a != nil && a.parent != nil {
 			me.codeGenAst(w, indent, ªRet(nil))
 		} else if a == nil || len(a.Body) == 0 {
@@ -115,7 +115,7 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 			fmt.Fprintf(w, "%s}", tabs)
 			indent--
 		}
-	case *gIrAIf:
+	case *irAIf:
 		fmt.Fprintf(w, "%sif ", tabs)
 		me.codeGenAst(w, indent, a.If)
 		fmt.Fprint(w, " ")
@@ -125,7 +125,7 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 			me.codeGenAst(w, indent, a.Else)
 		}
 		fmt.Fprint(w, "\n")
-	case *gIrACall:
+	case *irACall:
 		me.codeGenAst(w, indent, a.Callee)
 		fmt.Fprint(w, "(")
 		for i, expr := range a.CallArgs {
@@ -135,12 +135,12 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 			me.codeGenAst(w, indent, expr)
 		}
 		fmt.Fprint(w, ")")
-	case *gIrAFunc:
-		me.codeGenTypeDecl(w, &a.gIrANamedTypeRef, indent)
+	case *irAFunc:
+		me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
 		me.codeGenAst(w, indent, a.FuncImpl)
-	case *gIrAComments:
+	case *irAComments:
 		me.codeGenComments(w, tabs, a.Comments...)
-	case *gIrARet:
+	case *irARet:
 		if a.RetArg == nil {
 			fmt.Fprintf(w, "%sreturn", tabs)
 		} else {
@@ -150,27 +150,27 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 		if indent >= 0 {
 			fmt.Fprint(w, "\n")
 		}
-	case *gIrAPanic:
+	case *irAPanic:
 		fmt.Fprintf(w, "%spanic(", tabs)
 		me.codeGenAst(w, indent, a.PanicArg)
 		fmt.Fprint(w, ")\n")
-	case *gIrADot:
+	case *irADot:
 		me.codeGenAst(w, indent, a.DotLeft)
 		fmt.Fprint(w, ".")
 		me.codeGenAst(w, indent, a.DotRight)
-	case *gIrAIndex:
+	case *irAIndex:
 		me.codeGenAst(w, indent, a.IdxLeft)
 		fmt.Fprint(w, "[")
 		me.codeGenAst(w, indent, a.IdxRight)
 		fmt.Fprint(w, "]")
-	case *gIrAIsType:
+	case *irAIsType:
 		fmt.Fprint(w, "_,øĸ := ")
 		me.codeGenAst(w, indent, a.ExprToTest)
 		fmt.Fprint(w, ".(")
 		fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromPsQName(a.TypeToTest)))
 		// me.codeGenAst(w, indent, a.TypeToTest)
 		fmt.Fprint(w, "); øĸ")
-	case *gIrAToType:
+	case *irAToType:
 		if len(a.TypePkg) == 0 {
 			fmt.Fprintf(w, "%s(", a.TypeName)
 		} else {
@@ -178,7 +178,7 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 		}
 		me.codeGenAst(w, indent, a.ExprToCast)
 		fmt.Fprint(w, ")")
-	case *gIrAPkgSym:
+	case *irAPkgSym:
 		if len(a.PkgName) > 0 {
 			if pkgimp := me.irM.Imports.byImpName(a.PkgName); pkgimp != nil {
 				pkgimp.emitted = true
@@ -186,17 +186,17 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 			fmt.Fprintf(w, "%s.", a.PkgName)
 		}
 		fmt.Fprint(w, a.Symbol)
-	case *gIrASet:
+	case *irASet:
 		fmt.Fprint(w, tabs)
 		me.codeGenAst(w, indent, a.SetLeft)
 		if a.isInVarGroup {
 			fmt.Fprint(w, " ")
-			me.codeGenTypeDecl(w, &a.gIrANamedTypeRef, indent)
+			me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
 		}
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.ToRight)
 		fmt.Fprint(w, "\n")
-	case *gIrAOp1:
+	case *irAOp1:
 		isinop := a.isParentOp()
 		if isinop {
 			fmt.Fprint(w, "(")
@@ -206,7 +206,7 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 		if isinop {
 			fmt.Fprint(w, ")")
 		}
-	case *gIrAOp2:
+	case *irAOp2:
 		isinop := a.isParentOp()
 		if isinop {
 			fmt.Fprint(w, "(")
@@ -217,9 +217,9 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 		if isinop {
 			fmt.Fprint(w, ")")
 		}
-	case *gIrANil:
+	case *irANil:
 		fmt.Fprint(w, "nil")
-	case *gIrAFor:
+	case *irAFor:
 		if a.ForRange != nil {
 			fmt.Fprintf(w, "%sfor _, %s := range ", tabs, a.ForRange.NameGo)
 			me.codeGenAst(w, indent, a.ForRange.LetVal)
@@ -262,7 +262,7 @@ func (me *gonadIrAst) codeGenAst(w io.Writer, indent int, ast gIrA) {
 	}
 }
 
-func (me *gonadIrAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, asts []gIrA) {
+func (me *irAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, asts []irA) {
 	if l := len(asts); l == 1 {
 		me.codeGenAst(w, indent, asts[0])
 	} else if l > 1 {
@@ -271,11 +271,11 @@ func (me *gonadIrAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, a
 		} else {
 			fmt.Fprint(w, "var (\n")
 		}
-		valºnameºtype := func(a gIrA) (val gIrA, name string, typeref *gIrANamedTypeRef) {
-			if ac, _ := a.(*gIrAConst); ac != nil && consts {
-				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.gIrANamedTypeRef
-			} else if av, _ := a.(*gIrALet); av != nil {
-				val, name, typeref = av.LetVal, av.NameGo, &av.gIrANamedTypeRef
+		valºnameºtype := func(a irA) (val irA, name string, typeref *irANamedTypeRef) {
+			if ac, _ := a.(*irAConst); ac != nil && consts {
+				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.irANamedTypeRef
+			} else if av, _ := a.(*irALet); av != nil {
+				val, name, typeref = av.LetVal, av.NameGo, &av.irANamedTypeRef
 			}
 			return
 		}
@@ -283,7 +283,7 @@ func (me *gonadIrAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, a
 			val, name, typeref := valºnameºtype(a)
 			me.codeGenAst(w, indent+1, ªsetVarInGroup(name, val, typeref))
 			if i < (len(asts) - 1) {
-				if _, ok := asts[i+1].(*gIrAComments); ok {
+				if _, ok := asts[i+1].(*irAComments); ok {
 					fmt.Fprint(w, "\n")
 				}
 			}
@@ -292,7 +292,7 @@ func (me *gonadIrAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, a
 	}
 }
 
-// func (_ *gonadIrAst) codeGenEnumConsts(w io.Writer, enumconstnames []string, enumconsttype string) {
+// func (_ *irAst) codeGenEnumConsts(w io.Writer, enumconstnames []string, enumconsttype string) {
 // 	fmt.Fprint(w, "const (\n")
 // 	fmt.Fprintf(w, "\t_ %v= iota\n", strings.Repeat(" ", len(enumconsttype)+len(enumconstnames[0])))
 // 	for i, enumconstname := range enumconstnames {
@@ -305,7 +305,7 @@ func (me *gonadIrAst) codeGenGroupedVals(w io.Writer, indent int, consts bool, a
 // 	fmt.Fprint(w, ")\n\n")
 // }
 
-func (me *gonadIrAst) codeGenFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs, isretargs bool, withnames bool) {
+func (me *irAst) codeGenFuncArgs(w io.Writer, methodargs irANamedTypeRefs, isretargs bool, withnames bool) {
 	if dbgEmitEmptyFuncs && isretargs && withnames {
 		methodargs[0].NameGo = "ret"
 	}
@@ -330,9 +330,9 @@ func (me *gonadIrAst) codeGenFuncArgs(w io.Writer, methodargs gIrANamedTypeRefs,
 	}
 }
 
-func (me *gonadIrAst) codeGenModImps(w io.Writer) (err error) {
+func (me *irAst) codeGenModImps(w io.Writer) (err error) {
 	if len(me.irM.Imports) > 0 {
-		modimps := make(gIrMPkgRefs, 0, len(me.irM.Imports))
+		modimps := make(irMPkgRefs, 0, len(me.irM.Imports))
 		for _, modimp := range me.irM.Imports {
 			if modimp.emitted {
 				modimps = append(modimps, modimp)
@@ -342,10 +342,10 @@ func (me *gonadIrAst) codeGenModImps(w io.Writer) (err error) {
 			sort.Sort(modimps)
 			if _, err = fmt.Fprint(w, "import (\n"); err == nil {
 				for _, modimp := range modimps {
-					if modimp.N == modimp.P {
-						_, err = fmt.Fprintf(w, "\t%q\n", modimp.P)
+					if modimp.GoName == modimp.ImpPath {
+						_, err = fmt.Fprintf(w, "\t%q\n", modimp.ImpPath)
 					} else {
-						_, err = fmt.Fprintf(w, "\t%s %q\n", modimp.N, modimp.P)
+						_, err = fmt.Fprintf(w, "\t%s %q\n", modimp.GoName, modimp.ImpPath)
 					}
 					if err != nil {
 						break
@@ -360,14 +360,14 @@ func (me *gonadIrAst) codeGenModImps(w io.Writer) (err error) {
 	return
 }
 
-func (me *gonadIrAst) codeGenPkgDecl(w io.Writer) (err error) {
+func (me *irAst) codeGenPkgDecl(w io.Writer) (err error) {
 	_, err = fmt.Fprintf(w, "package %s\n\n", me.mod.pName)
 	return
 }
 
-func (me *gonadIrAst) codeGenTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlevel int) {
+func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int) {
 	if gtd == nil {
-		fmt.Fprint(w, "interface{/*gIrANamedTypeRef=Nil*/}")
+		fmt.Fprint(w, "interface{/*irANamedTypeRef=Nil*/}")
 		return
 	}
 	toplevel := (indlevel == 0)
@@ -459,7 +459,7 @@ func (me *gonadIrAst) codeGenTypeDecl(w io.Writer, gtd *gIrANamedTypeRef, indlev
 	}
 }
 
-func (me *gonadIrAst) codeGenStructMethods(w io.Writer, tr *gIrANamedTypeRef) {
+func (me *irAst) codeGenStructMethods(w io.Writer, tr *irANamedTypeRef) {
 	if tr.RefStruct != nil && len(tr.RefStruct.Methods) > 0 {
 		for _, method := range tr.RefStruct.Methods {
 			mthis := "_"
@@ -478,7 +478,7 @@ func (me *gonadIrAst) codeGenStructMethods(w io.Writer, tr *gIrANamedTypeRef) {
 	}
 }
 
-func (_ *gonadIrAst) codeGenTypeRef(pname string, tname string) string {
+func (_ *irAst) codeGenTypeRef(pname string, tname string) string {
 	if len(pname) == 0 {
 		return tname
 	}

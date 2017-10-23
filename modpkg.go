@@ -29,8 +29,8 @@ type modPkg struct {
 	goOutDirPath   string //	eg	Control/Monad/Eff/Uncurried, My/Main etc
 	goOutFilePath  string //	eg	Control/Monad/Eff/Uncurried/Uncurried.go, My/Main/Main.go etc
 
-	irMeta        *gonadIrMeta
-	irAst         *gonadIrAst
+	irMeta        *irMeta
+	irAst         *irAst
 	proj          *psBowerProject // parent
 	gopkgfilepath string          // full target file path (not necessarily absolute but starting with the given gopath)
 	ext           *psExt
@@ -90,7 +90,7 @@ func (me *modPkg) reGenPkgIrMeta() (err error) {
 			if jsonbytes, err = ioutil.ReadFile(me.impFilePath); err == nil {
 				if err = json.Unmarshal(jsonbytes, &me.coreimp); err == nil {
 					me.coreimp.mod = me
-					me.irMeta = &gonadIrMeta{save: true, mod: me, proj: me.proj}
+					me.irMeta = &irMeta{save: true, mod: me, proj: me.proj}
 				}
 			}
 		}
@@ -100,11 +100,11 @@ func (me *modPkg) reGenPkgIrMeta() (err error) {
 
 func (me *modPkg) prepIrAst() {
 	me.coreimp.preProcessTopLevel()
-	me.irAst = &gonadIrAst{mod: me, proj: me.proj, irM: me.irMeta}
+	me.irAst = &irAst{mod: me, proj: me.proj, irM: me.irMeta}
 	me.irAst.prepFromCoreImp()
 }
 
-func (me *modPkg) reGenPkgIrAst() (err error) {
+func (me *modPkg) reGenPkirAst() (err error) {
 	me.irAst.finalizePostPrep()
 	var buf bytes.Buffer
 	if Flag.DumpAst {

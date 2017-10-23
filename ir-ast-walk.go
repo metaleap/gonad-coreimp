@@ -10,10 +10,10 @@ Golang intermediate-representation AST:
 traversals of the abstract syntax tree
 */
 
-func gIrALookupInAncestorBlocks(a gIrA, check func(gIrA) bool) gIrA {
+func irALookupInAncestorBlocks(a irA, check func(irA) bool) irA {
 	for nextparent := a.Parent(); nextparent != nil; nextparent = nextparent.Parent() {
 		switch p := nextparent.(type) {
-		case *gIrABlock:
+		case *irABlock:
 			for _, stmt := range p.Body {
 				if check(stmt) {
 					return stmt
@@ -24,7 +24,7 @@ func gIrALookupInAncestorBlocks(a gIrA, check func(gIrA) bool) gIrA {
 	return nil
 }
 
-func (me *gonadIrAst) topLevelDefs(okay func(gIrA) bool) (defs []gIrA) {
+func (me *irAst) topLevelDefs(okay func(irA) bool) (defs []irA) {
 	for _, ast := range me.Body {
 		if okay(ast) {
 			defs = append(defs, ast)
@@ -33,7 +33,7 @@ func (me *gonadIrAst) topLevelDefs(okay func(gIrA) bool) (defs []gIrA) {
 	return
 }
 
-func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
+func (me *irAst) walk(on func(irA) irA) {
 	for i, a := range me.Body {
 		if a != nil {
 			me.Body[i] = walk(a, on)
@@ -43,105 +43,105 @@ func (me *gonadIrAst) walk(on func(gIrA) gIrA) {
 		if tr.RefStruct != nil {
 			for _, trm := range tr.RefStruct.Methods {
 				if trm.RefFunc.impl != nil {
-					trm.RefFunc.impl, _ = walk(trm.RefFunc.impl, on).(*gIrABlock)
+					trm.RefFunc.impl, _ = walk(trm.RefFunc.impl, on).(*irABlock)
 				}
 			}
 		}
 	}
 	for i, tcf := range me.culled.typeCtorFuncs {
-		me.culled.typeCtorFuncs[i] = walk(tcf, on).(*gIrACtor)
+		me.culled.typeCtorFuncs[i] = walk(tcf, on).(*irACtor)
 	}
 }
 
-func walk(ast gIrA, on func(gIrA) gIrA) gIrA {
+func walk(ast irA, on func(irA) irA) irA {
 	if ast != nil {
 		switch a := ast.(type) {
 		// why extra nil checks some places below: we do have the rare case of ast!=nil and ast.(type) set and still holding a null-ptr
 		// why not everywhere: due to the nature of the ASTs constructed from coreimp, only those cases can potentially be nil if they exist at all
-		case *gIrABlock:
+		case *irABlock:
 			if a != nil {
 				for i, _ := range a.Body {
 					a.Body[i] = walk(a.Body[i], on)
 				}
 			}
-		case *gIrACall:
+		case *irACall:
 			a.Callee = walk(a.Callee, on)
 			for i, _ := range a.CallArgs {
 				a.CallArgs[i] = walk(a.CallArgs[i], on)
 			}
-		case *gIrAConst:
+		case *irAConst:
 			a.ConstVal = walk(a.ConstVal, on)
-		case *gIrADot:
+		case *irADot:
 			a.DotLeft, a.DotRight = walk(a.DotLeft, on), walk(a.DotRight, on)
-		case *gIrAFor:
+		case *irAFor:
 			a.ForCond = walk(a.ForCond, on)
-			if tmp, _ := walk(a.ForRange, on).(*gIrALet); tmp != nil {
+			if tmp, _ := walk(a.ForRange, on).(*irALet); tmp != nil {
 				a.ForRange = tmp
 			}
-			if tmp, _ := walk(a.ForDo, on).(*gIrABlock); tmp != nil {
+			if tmp, _ := walk(a.ForDo, on).(*irABlock); tmp != nil {
 				a.ForDo = tmp
 			}
 			for i, fi := range a.ForInit {
-				if tmp, _ := walk(fi, on).(*gIrALet); tmp != nil {
+				if tmp, _ := walk(fi, on).(*irALet); tmp != nil {
 					a.ForInit[i] = tmp
 				}
 			}
 			for i, fs := range a.ForStep {
-				if tmp, _ := walk(fs, on).(*gIrASet); tmp != nil {
+				if tmp, _ := walk(fs, on).(*irASet); tmp != nil {
 					a.ForStep[i] = tmp
 				}
 			}
-		case *gIrACtor:
-			if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
+		case *irACtor:
+			if tmp, _ := walk(a.FuncImpl, on).(*irABlock); tmp != nil {
 				a.FuncImpl = tmp
 			}
-		case *gIrAFunc:
-			if tmp, _ := walk(a.FuncImpl, on).(*gIrABlock); tmp != nil {
+		case *irAFunc:
+			if tmp, _ := walk(a.FuncImpl, on).(*irABlock); tmp != nil {
 				a.FuncImpl = tmp
 			}
-		case *gIrAIf:
+		case *irAIf:
 			a.If = walk(a.If, on)
-			if tmp, _ := walk(a.Then, on).(*gIrABlock); tmp != nil {
+			if tmp, _ := walk(a.Then, on).(*irABlock); tmp != nil {
 				a.Then = tmp
 			}
-			if tmp, _ := walk(a.Else, on).(*gIrABlock); tmp != nil {
+			if tmp, _ := walk(a.Else, on).(*irABlock); tmp != nil {
 				a.Else = tmp
 			}
-		case *gIrAIndex:
+		case *irAIndex:
 			a.IdxLeft, a.IdxRight = walk(a.IdxLeft, on), walk(a.IdxRight, on)
-		case *gIrAOp1:
+		case *irAOp1:
 			a.Of = walk(a.Of, on)
-		case *gIrAOp2:
+		case *irAOp2:
 			a.Left, a.Right = walk(a.Left, on), walk(a.Right, on)
-		case *gIrAPanic:
+		case *irAPanic:
 			a.PanicArg = walk(a.PanicArg, on)
-		case *gIrARet:
+		case *irARet:
 			a.RetArg = walk(a.RetArg, on)
-		case *gIrASet:
+		case *irASet:
 			a.SetLeft, a.ToRight = walk(a.SetLeft, on), walk(a.ToRight, on)
-		case *gIrALet:
+		case *irALet:
 			if a != nil {
 				a.LetVal = walk(a.LetVal, on)
 			}
-		case *gIrAIsType:
+		case *irAIsType:
 			a.ExprToTest = walk(a.ExprToTest, on)
-		case *gIrAToType:
+		case *irAToType:
 			a.ExprToCast = walk(a.ExprToCast, on)
-		case *gIrALitArr:
+		case *irALitArr:
 			for i, av := range a.ArrVals {
 				a.ArrVals[i] = walk(av, on)
 			}
-		case *gIrALitObj:
+		case *irALitObj:
 			for i, av := range a.ObjFields {
-				if tmp, _ := walk(av, on).(*gIrALitObjField); tmp != nil {
+				if tmp, _ := walk(av, on).(*irALitObjField); tmp != nil {
 					a.ObjFields[i] = tmp
 				}
 			}
-		case *gIrALitObjField:
+		case *irALitObjField:
 			a.FieldVal = walk(a.FieldVal, on)
-		case *gIrAComments, *gIrAPkgSym, *gIrANil, *gIrALitBool, *gIrALitDouble, *gIrALitInt, *gIrALitStr, *gIrASym:
+		case *irAComments, *irAPkgSym, *irANil, *irALitBool, *irALitNum, *irALitInt, *irALitStr, *irASym:
 		default:
-			panic(fmt.Errorf("walk() not handling gIrA type '%v' (value: %v), please report", reflect.TypeOf(a), a))
+			panic(fmt.Errorf("walk() not handling irA type '%v' (value: %v), please report", reflect.TypeOf(a), a))
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {
