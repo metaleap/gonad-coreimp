@@ -9,6 +9,7 @@ import (
 
 	"github.com/metaleap/go-util-dev/bower"
 	"github.com/metaleap/go-util-fs"
+	"github.com/metaleap/go-util-misc"
 )
 
 /*
@@ -16,20 +17,38 @@ Represents either the given PureScript main `src` project
 or one of its dependency libs usually found in `bower_components`.
 */
 
+type psBowerFile struct {
+	udevbower.BowerFile
+
+	Gonad struct { // all settings in here apply to all Deps equally as they do to the main Proj --- ie. the former get a copy of the latter, ignoring their own Gonad field even if present
+		In struct {
+			CoreImpDumpsDirPath string // dir path containing Some.Module.QName/coreimp.json files
+		}
+		Out struct {
+			ForceAll     bool
+			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
+			MainDepLevel int    // temporary option
+			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
+			GoNamespace  string // defaults to github.com/gonadz (or github.com\gonadz under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
+		}
+
+		loadedFromJson bool
+	}
+}
+
 type psBowerProject struct {
-	JsonFilePath     string
-	SrcDirPath       string
-	DepsDirPath      string
-	DumpsDirProjPath string
-	JsonFile         udevbower.BowerFile
-	Modules          []*modPkg
-	GoOut            struct {
+	BowerJsonFile     psBowerFile
+	BowerJsonFilePath string
+	DepsDirPath       string
+	SrcDirPath        string
+	Modules           []*modPkg
+	GoOut             struct {
 		PkgDirPath string
 	}
 }
 
 func (me *psBowerProject) ensureOutDirs() (err error) {
-	dirpath := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
+	dirpath := filepath.Join(Proj.BowerJsonFile.Gonad.Out.GoDirSrcPath, me.GoOut.PkgDirPath)
 	if err = ufs.EnsureDirExists(dirpath); err == nil {
 		for _, depmod := range me.Modules {
 			if err = ufs.EnsureDirExists(filepath.Join(dirpath, depmod.goOutDirPath)); err != nil {
@@ -59,45 +78,69 @@ func (me *psBowerProject) moduleByPName(pname string) *modPkg {
 }
 
 func (me *psBowerProject) loadFromJsonFile() (err error) {
-	if err = udevbower.LoadFromFile(me.JsonFilePath, &me.JsonFile); err == nil {
-		me.GoOut.PkgDirPath = Flag.GoNamespace
-		if repourl := me.JsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {
-			if i := strings.LastIndex(repourl.Path, "."); i > 0 {
-				me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, repourl.Path[:i])
-			} else {
-				me.GoOut.PkgDirPath = filepath.Join(Flag.GoNamespace, repourl.Path)
+	if err = udevbower.LoadFromFile(me.BowerJsonFilePath, &me.BowerJsonFile); err == nil {
+		// populate defaults for Gonad sub-fields
+		cfg, isdep := &me.BowerJsonFile.Gonad, me != &Proj
+		if isdep {
+			cfg = &Proj.BowerJsonFile.Gonad
+		} else {
+			if cfg.In.CoreImpDumpsDirPath == "" {
+				cfg.In.CoreImpDumpsDirPath = "output"
 			}
-		}
-		if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.JsonFile.Name) {
-			me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Name)
-		}
-		if len(me.JsonFile.Version) > 0 {
-			me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.JsonFile.Version)
-		}
-		gopkgdir := filepath.Join(Flag.GoDirSrcPath, me.GoOut.PkgDirPath)
-		ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
-			if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
-				me.addModPkgFromPsSrcFileIfCoreimp(relpath, gopkgdir)
+			if cfg.Out.GoNamespace == "" {
+				cfg.Out.GoNamespace = filepath.Join("github.com", "gonadz")
 			}
-			return true
-		})
+			if cfg.Out.GoDirSrcPath == "" {
+				for _, gopath := range ugo.GoPaths() {
+					if cfg.Out.GoDirSrcPath = filepath.Join(gopath, "src"); ufs.DirExists(cfg.Out.GoDirSrcPath) {
+						break
+					}
+				}
+			}
+			err = ufs.EnsureDirExists(cfg.Out.GoDirSrcPath)
+			cfg.loadedFromJson = true
+		}
+		if err == nil {
+			// proceed
+			me.GoOut.PkgDirPath = cfg.Out.GoNamespace
+			if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {
+				if i := strings.LastIndex(repourl.Path, "."); i > 0 {
+					me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path[:i])
+				} else {
+					me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path)
+				}
+			}
+			if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.BowerJsonFile.Name) {
+				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Name)
+			}
+			if len(me.BowerJsonFile.Version) > 0 {
+				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Version)
+			}
+			gopkgdir := filepath.Join(cfg.Out.GoDirSrcPath, me.GoOut.PkgDirPath)
+			ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
+				if relpath = strings.TrimLeft(relpath[len(me.SrcDirPath):], "\\/"); strings.HasSuffix(relpath, ".purs") {
+					me.addModPkgFromPsSrcFileIfCoreimp(relpath, gopkgdir)
+				}
+				return true
+			})
+		}
 	}
 	if err != nil {
-		err = errors.New(me.JsonFilePath + ": " + err.Error())
+		err = errors.New(me.BowerJsonFilePath + ": " + err.Error())
 	}
 	return
 }
 
 func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgdir string) {
-	i, l := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5
+	i, l, opt := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5, Proj.BowerJsonFile.Gonad
 	modinfo := &modPkg{
 		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
 		qName: strReplSlash2Dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
 	}
-	if modinfo.impFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
+	if modinfo.impFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
 		modinfo.pName = strReplDot2Underscore.Replace(modinfo.qName)
-		modinfo.extFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "externs.json")
-		modinfo.irMetaFilePath = filepath.Join(Proj.DumpsDirProjPath, modinfo.qName, "gonad.json")
+		modinfo.extFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "externs.json")
+		modinfo.irMetaFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.qName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
@@ -127,7 +170,7 @@ func (me *psBowerProject) ensureModPkgIrMetas() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		var err error
-		if modinfo.reGenIr || Flag.ForceRegenAll {
+		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
 			err = modinfo.reGenPkgIrMeta()
 		} else if err = modinfo.loadPkgIrMeta(); err != nil {
 			modinfo.reGenIr = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd IRs
@@ -150,7 +193,7 @@ func (me *psBowerProject) populateModPkgIrMetas() {
 func (me *psBowerProject) prepModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenIr || Flag.ForceRegenAll {
+		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
 			modinfo.prepIrAst()
 		}
 	})
@@ -159,7 +202,7 @@ func (me *psBowerProject) prepModPkirAsts() {
 func (me *psBowerProject) reGenModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenIr || Flag.ForceRegenAll {
+		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
 			if err := modinfo.reGenPkirAst(); err != nil {
 				panic(err)
 			}
@@ -172,7 +215,7 @@ func (me *psBowerProject) writeOutDirtyIrMetas(isagain bool) (err error) {
 	me.forAll(func(wg *sync.WaitGroup, m *modPkg) {
 		defer wg.Done()
 		shouldwrite := (isagain && m.irMeta.save) ||
-			(isfirst && (m.reGenIr || m.irMeta.save || Flag.ForceRegenAll))
+			(isfirst && (m.reGenIr || m.irMeta.save || Proj.BowerJsonFile.Gonad.Out.ForceAll))
 		if shouldwrite {
 			var buf bytes.Buffer
 			if err = m.irMeta.writeAsJsonTo(&buf); err == nil {

@@ -24,8 +24,7 @@ By now we have our own intermediate-representation AST anyway
 type goTypeRefResolver func(tref string) (pname string, tname string)
 
 const (
-	dbgEmitEmptyFuncs                     = false
-	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
+	dbgEmitEmptyFuncs = false
 )
 
 func (_ *irAst) codeGenCommaIf(w io.Writer, i int) {

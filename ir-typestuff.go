@@ -19,6 +19,11 @@ is embedded both in declarations that have a name and/or a type
 More details in ir-meta.go.
 */
 
+const (
+	areOverlappingInterfacesSupportedByGo = false // this might change hopefully, see https://github.com/golang/go/issues/6977
+	legacyIfaceEmbeds                     = false
+)
+
 var (
 	strReplSanitizer = strings.NewReplacer("'", "ˇ", "$", "Ø")
 )
@@ -154,7 +159,7 @@ func (me *irATypeRefInterface) eq(cmp *irATypeRefInterface) bool {
 
 func (me *irATypeRefInterface) allMethods() (allmethods irANamedTypeRefs) {
 	allmethods = me.Methods
-	if (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
+	if legacyIfaceEmbeds && (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
 		if len(me.inheritedMethods) == 0 {
 			m := map[string]*irANamedTypeRef{}
 			for _, embed := range me.Embeds {
@@ -216,7 +221,7 @@ func (me *irMeta) populateGoTypeDefs() {
 			for _, tcca := range tcc.Args {
 				ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
 			}
-			if !uslice.StrHas(gif.Embeds, tcc.Class) {
+			if legacyIfaceEmbeds && !uslice.StrHas(gif.Embeds, tcc.Class) {
 				gif.Embeds = append(gif.Embeds, tcc.Class)
 			}
 		}
@@ -247,7 +252,7 @@ func (me *irMeta) populateGoTypeDefs() {
 			}
 			gif.Methods = append(gif.Methods, ifm)
 		}
-		tgif := &irANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: me.hasExport(tc.Name)}
+		tgif := &irANamedTypeRef{NamePs: tc.Name, NameGo: tc.Name, Export: false}
 		tgif.setRefFrom(gif)
 		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 	}

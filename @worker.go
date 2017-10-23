@@ -25,7 +25,7 @@ func (me *mainWorker) checkIfDepDirHasBowerFile(locker sync.Locker, reldirpath s
 	jsonfilepath := filepath.Join(reldirpath, ".bower.json")
 	if depname := strings.TrimLeft(reldirpath[len(Proj.DepsDirPath):], "\\/"); ufs.FileExists(jsonfilepath) {
 		bproj := &psBowerProject{
-			DepsDirPath: Proj.DepsDirPath, JsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
+			DepsDirPath: Proj.DepsDirPath, BowerJsonFilePath: jsonfilepath, SrcDirPath: filepath.Join(reldirpath, "src"),
 		}
 		defer locker.Unlock()
 		locker.Lock()

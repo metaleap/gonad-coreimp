@@ -107,7 +107,7 @@ func (me *modPkg) prepIrAst() {
 func (me *modPkg) reGenPkirAst() (err error) {
 	me.irAst.finalizePostPrep()
 	var buf bytes.Buffer
-	if Flag.DumpAst {
+	if Proj.BowerJsonFile.Gonad.Out.DumpAst {
 		if err = me.irAst.writeAsJsonTo(&buf); err == nil {
 			err = ufs.WriteBinaryFile(me.irMetaFilePath[:len(me.irMetaFilePath)-len(".json")]+".ast.json", buf.Bytes())
 		}
