@@ -450,7 +450,7 @@ func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname strin
 	}
 }
 
-func findFucker(qname string) (mod *modPkg, tr interface{}) {
+func findPsTypeByQName(qname string) (mod *modPkg, tr interface{}) {
 	var pname, tname string
 	i := strings.LastIndex(qname, ".")
 	if tname = qname[i+1:]; i > 0 {
