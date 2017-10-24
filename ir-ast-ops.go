@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -20,36 +21,62 @@ func (me *irAst) prepAddOrCull(a irA) {
 			culled, me.culled.typeCtorFuncs = true, append(me.culled.typeCtorFuncs, ctor)
 		} else if ab := a.Base(); ab != nil {
 			// check if helper function related to type-classes / type-class instances:
-			if culled = me.irM.tcInst(ab.NamePs) != nil; culled {
-				var thething irA
-				// func instname(..)
-				switch ax := a.(type) {
-				case *irAFunc:
-					if len(ax.RefFunc.Args) != 1 || !strings.HasPrefix(ax.RefFunc.Args[0].NamePs, "dict") {
-						panic(notImplErr("RefFunc args for", ab.NamePs, me.mod.srcFilePath))
-					} else if fnret, _ := ax.RefFunc.impl.Body[0].(*irARet); fnret == nil || len(ax.RefFunc.impl.Body) != 1 {
-						panic(notImplErr("RefFunc rets for", ab.NamePs, me.mod.srcFilePath))
-					} else {
-						thething = fnret.RetArg
+			tci := me.irM.tcInst(ab.NamePs)
+			if culled = (tci != nil); culled {
+				tlval, couldbefunc, tcinst := a, true, irTcInst{tciName: tci.Name}
+
+				for couldbefunc {
+					tldb := tlval.Base()
+					switch topleveldecl := tlval.(type) {
+					case *irAFunc:
+						if len(topleveldecl.RefFunc.Args) != 1 || !strings.HasPrefix(topleveldecl.RefFunc.Args[0].NamePs, "dict") {
+							panic(notImplErr("RefFunc args for", tldb.NamePs, me.mod.srcFilePath))
+						} else if fnret, _ := topleveldecl.RefFunc.impl.Body[0].(*irARet); fnret == nil || len(topleveldecl.RefFunc.impl.Body) != 1 {
+							panic(notImplErr("RefFunc rets for", tldb.NamePs, me.mod.srcFilePath))
+						} else {
+							tlval = fnret.RetArg
+							_, couldbefunc = tlval.(*irAFunc)
+						}
+					case *irALet:
+						couldbefunc = false
+						tlval = topleveldecl.LetVal
+					default:
+						_ = tlval.(*irAFunc).NamePs // panic to see the type of what we're dealing with
 					}
-				case *irALet:
-					thething = ax.LetVal
-				default:
-					println(a.(*irAFunc).NamePs) // panic to see the type of what we're dealing with
 				}
-				switch thething.(type) {
+
+				switch x := tlval.(type) {
 				case *irAOp1:
-					if strings.HasPrefix(me.mod.srcFilePath, "src/") {
-						println(me.mod.srcFilePath + "\tOP1\t" + ab.NamePs)
+					if tcctorcall, _ := x.Of.(*irACall); tcctorcall == nil || x.Op1 != "&" {
+						panic(notImplErr(ab.NamePs+" operator and/or operand", x.Op1, me.mod.srcFilePath))
+					} else {
+						var tcx interface{}
+						var tcm *modPkg
+						switch dotºsym := tcctorcall.Callee.(type) {
+						case *irASym:
+							tcm, tcx = findPsTypeByQName(me.mod.qName + "." + dotºsym.NamePs)
+						case *irADot:
+							tcm, tcx = findPsTypeByQName(findModuleByPName(dotºsym.DotLeft.Base().NamePs).qName + "." + dotºsym.DotRight.Base().NamePs)
+						}
+						switch maybetc := tcx.(type) {
+						case *irMTypeClass:
+							if tcinst.tcClass = tcm.qName + "." + maybetc.Name; tcinst.tcClass != tci.ClassName {
+								panic(notImplErr(ab.NamePs+" instance type-class", tcinst.tcClass, me.mod.srcFilePath))
+							}
+						default:
+							panic(notImplErr(ab.NamePs+" instance type-class", reflect.TypeOf(tcx).String(), me.mod.srcFilePath))
+						}
+						tcinst.tcMemberImpls = tcctorcall.CallArgs
 					}
 				case *irASym:
 				case *irACall:
-				case *irAFunc:
+					calldot := x.Callee.(*irADot)
+					tcinst.tciAlias = findModuleByPName(calldot.DotLeft.Base().NamePs).qName + "." + calldot.DotRight.Base().NamePs
 				case *irADot:
 				default:
-					println(thething.(*irAOp1).NamePs) // panic to see the type of what we're dealing with
+					_ = tlval.(*irAOp1).NamePs // panic to see the type of what we're dealing with
 				}
-				me.culled.tcInstDecls = append(me.culled.tcInstDecls, thething)
+				me.culled.tcInstDecls = append(me.culled.tcInstDecls, &tcinst)
 			} else if culled = me.irM.tcMember(ab.NamePs) != nil; culled {
 				me.culled.tcDictDecls = append(me.culled.tcDictDecls, a)
 			}
@@ -247,69 +274,68 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 }
 
 func (me *irAst) postLinkTcInstFuncsToImplStructs() {
-	return
-	for _, ifx := range me.culled.tcInstDecls {
-		instvar, _ := ifx.(*irALet)
-		instvar.Export = me.irM.hasExport(instvar.NamePs)
-		instvar.setBothNamesFromPsName(instvar.NamePs)
-		gtdinst := me.irM.goTypeDefByPsName(instvar.NamePs) // the private implementer struct-type
-		tcmod, tcx := findPsTypeByQName(gtdinst.RefStruct.instOf)
-		tc := tcx.(*irMTypeClass)
+	// for _, ifx := range me.culled.tcInstDecls {
+	// 	instvar, _ := ifx.(*irALet)
+	// 	instvar.Export = me.irM.hasExport(instvar.NamePs)
+	// 	instvar.setBothNamesFromPsName(instvar.NamePs)
+	// 	gtdinst := me.irM.goTypeDefByPsName(instvar.NamePs) // the private implementer struct-type
+	// 	tcmod, tcx := findPsTypeByQName(gtdinst.RefStruct.instOf)
+	// 	tc := tcx.(*irMTypeClass)
 
-		if tcjsctorfunc := tcmod.irAst.typeCtorFunc(tc.Name); tcjsctorfunc == nil {
-			panic(me.mod.srcFilePath + ": type-class ctor func not found for type-class '" + tc.Name + "' / '" + gtdinst.RefStruct.instOf + "' of instance '" + instvar.NamePs + "', please report")
-		} else {
-			for tcjsctorfuncargindex, tcjsctorfuncarg := range tcjsctorfunc.RefFunc.Args { // we want to preserve this ordering
-				for _, gtdinstmethod := range gtdinst.RefStruct.Methods { // we find and use the impl-struct method..
-					if gtdinstmethod.NamePs == tcjsctorfuncarg.NamePs { // .. associated with this JS-ctor-func arg
-						if tcjsctorfuncargindex >= 0 {
-						}
-						// switch instvarx := instvar.LetVal.(type) {
-						// case *irALitObj:
-						// 	panic("This again?!")
-						// 	ifofv := instvarx.ObjFields[tcjsctorfuncargindex].FieldVal
-						// 	switch ifa := ifofv.(type) {
-						// 	case *irAFunc:
-						// 		gtdinstmethod.RefFunc.impl = ifa.FuncImpl
-						// 	default:
-						// 		oldp := ifofv.Parent()
-						// 		gtdinstmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
-						// 		gtdinstmethod.RefFunc.impl.parent = oldp
-						// 	}
-						// case *irADot:
-						// 	callargs := []irA{}
-						// 	for _, gma := range gtdinstmethod.RefFunc.Args {
-						// 		callargs = append(callargs, ªSymGo(gma.NameGo))
-						// 	}
-						// 	gtdinstmethod.RefFunc.impl = ªBlock(ªRet(ªCall(instvarx, callargs...)))
-						// case *irAOp1:
-						// 	if opcall, _ := instvarx.Of.(*irACall); opcall == nil || instvarx.Op1 != "&" {
-						// 		panic(notImplErr("operator and/or operand", instvarx.Op1, me.mod.srcFilePath))
-						// 	} else if opcb := opcall.Callee.Base(); opcb.NamePs != tcjsctorfunc.NamePs {
-						// 		panic(notImplErr("tc-inst-ctor callee", opcb.NamePs, me.mod.srcFilePath))
-						// 	} else {
-						// 		if strings.HasPrefix(me.mod.srcFilePath, "src/") || strings.Contains(me.mod.srcFilePath, "Data/Show") {
-						// 			println(opcall.Callee.Base().NamePs)
-						// 		}
-						// 	}
-						// case *irAFunc:
-						// 	if strings.HasPrefix(me.mod.srcFilePath, "src/") || strings.Contains(me.mod.srcFilePath, "Data/Show") {
-						// 		println("FUN\t" + me.mod.srcFilePath + "\t\t" + instvar.NamePs)
-						// 	}
-						// default:
-						// 	println(instvar.LetVal.(*irALitObj).NamePs) // panic to let us know what we're dealing with
-						// }
-						break
-					}
-				}
-			}
-		}
-		nuctor := ªO(&irANamedTypeRef{RefAlias: gtdinst.NameGo})
-		nuctor.parent = instvar
-		instvar.LetVal = nuctor
-		instvar.RefAlias = gtdinst.RefStruct.instOf
-		me.Prepend(instvar)
-	}
+	// 	if tcjsctorfunc := tcmod.irAst.typeCtorFunc(tc.Name); tcjsctorfunc == nil {
+	// 		panic(me.mod.srcFilePath + ": type-class ctor func not found for type-class '" + tc.Name + "' / '" + gtdinst.RefStruct.instOf + "' of instance '" + instvar.NamePs + "', please report")
+	// 	} else {
+	// 		for tcjsctorfuncargindex, tcjsctorfuncarg := range tcjsctorfunc.RefFunc.Args { // we want to preserve this ordering
+	// 			for _, gtdinstmethod := range gtdinst.RefStruct.Methods { // we find and use the impl-struct method..
+	// 				if gtdinstmethod.NamePs == tcjsctorfuncarg.NamePs { // .. associated with this JS-ctor-func arg
+	// 					if tcjsctorfuncargindex >= 0 {
+	// 					}
+	// 					switch instvarx := instvar.LetVal.(type) {
+	// 					case *irALitObj:
+	// 						panic("This again?!")
+	// 						ifofv := instvarx.ObjFields[tcjsctorfuncargindex].FieldVal
+	// 						switch ifa := ifofv.(type) {
+	// 						case *irAFunc:
+	// 							gtdinstmethod.RefFunc.impl = ifa.FuncImpl
+	// 						default:
+	// 							oldp := ifofv.Parent()
+	// 							gtdinstmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
+	// 							gtdinstmethod.RefFunc.impl.parent = oldp
+	// 						}
+	// 					case *irADot:
+	// 						callargs := []irA{}
+	// 						for _, gma := range gtdinstmethod.RefFunc.Args {
+	// 							callargs = append(callargs, ªSymGo(gma.NameGo))
+	// 						}
+	// 						gtdinstmethod.RefFunc.impl = ªBlock(ªRet(ªCall(instvarx, callargs...)))
+	// 					case *irAOp1:
+	// 						if opcall, _ := instvarx.Of.(*irACall); opcall == nil || instvarx.Op1 != "&" {
+	// 							panic(notImplErr("operator and/or operand", instvarx.Op1, me.mod.srcFilePath))
+	// 						} else if opcb := opcall.Callee.Base(); opcb.NamePs != tcjsctorfunc.NamePs {
+	// 							panic(notImplErr("tc-inst-ctor callee", opcb.NamePs, me.mod.srcFilePath))
+	// 						} else {
+	// 							if strings.HasPrefix(me.mod.srcFilePath, "src/") || strings.Contains(me.mod.srcFilePath, "Data/Show") {
+	// 								println(opcall.Callee.Base().NamePs)
+	// 							}
+	// 						}
+	// 					case *irAFunc:
+	// 						if strings.HasPrefix(me.mod.srcFilePath, "src/") || strings.Contains(me.mod.srcFilePath, "Data/Show") {
+	// 							println("FUN\t" + me.mod.srcFilePath + "\t\t" + instvar.NamePs)
+	// 						}
+	// 					default:
+	// 						_ = instvar.LetVal.(*irALitObj).NamePs // panic to let us know what we're dealing with
+	// 					}
+	// 					break
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// 	nuctor := ªO(&irANamedTypeRef{RefAlias: gtdinst.NameGo})
+	// 	nuctor.parent = instvar
+	// 	instvar.LetVal = nuctor
+	// 	instvar.RefAlias = gtdinst.RefStruct.instOf
+	// 	me.Prepend(instvar)
+	// }
 }
 
 func (me *irAst) postMiscFixups() {

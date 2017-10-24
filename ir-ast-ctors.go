@@ -91,7 +91,8 @@ func ªConst(name *irANamedTypeRef, val irA) *irAConst {
 
 func ªDot(left irA, right irA) *irADot {
 	a := &irADot{DotLeft: left, DotRight: right}
-	a.DotLeft.Base().parent, a.DotRight.Base().parent = a, a
+	lb, rb := left.Base(), right.Base()
+	lb.parent, rb.parent = a, a
 	return a
 }
 
