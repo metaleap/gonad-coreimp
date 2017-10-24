@@ -165,6 +165,13 @@ func (me *irABlock) Add(asts ...irA) {
 	me.Body = append(me.Body, asts...)
 }
 
+func (me *irABlock) Prepend(asts ...irA) {
+	for _, a := range asts {
+		a.Base().parent = me
+	}
+	me.Body = append(asts, me.Body...)
+}
+
 type irAComments struct {
 	irABase
 }
@@ -293,9 +300,9 @@ type irAPkgSym struct {
 	Symbol  string `json:",omitempty"`
 }
 
-func (me *irAst) typeCtorFunc(namego string) *irACtor {
+func (me *irAst) typeCtorFunc(nameps string) *irACtor {
 	for _, tcf := range me.culled.typeCtorFuncs {
-		if tcf.NameGo == namego {
+		if tcf.NamePs == nameps {
 			return tcf
 		}
 	}

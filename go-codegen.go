@@ -164,7 +164,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, "_,øĸ := ")
 		me.codeGenAst(w, indent, a.ExprToTest)
 		fmt.Fprint(w, ".(")
-		fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromPsQName(a.TypeToTest)))
+		fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromQName(a.TypeToTest)))
 		// me.codeGenAst(w, indent, a.TypeToTest)
 		fmt.Fprint(w, "); øĸ")
 	case *irAToType:
@@ -395,7 +395,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.RefFunc.impl != nil
 	if len(gtd.RefAlias) > 0 {
-		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromPsQName(gtd.RefAlias)))
+		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromQName(gtd.RefAlias)))
 	} else if gtd.RefUnknown != 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
@@ -416,7 +416,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 			if areOverlappingInterfacesSupportedByGo {
 				for _, ifembed := range gtd.RefInterface.Embeds {
 					fmt.Fprint(w, tabind+"\t")
-					me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromPsQName(ifembed)))
+					me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromQName(ifembed)))
 					fmt.Fprint(w, "\n")
 				}
 			}

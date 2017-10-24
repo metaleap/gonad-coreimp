@@ -67,8 +67,9 @@ func (me *irAst) prepAddNewExtraTypes() {
 		} else {
 			gtd := newextratypes.byPsName(tci.Name)
 			if gtd == nil {
-				gtd = &irANamedTypeRef{Export: me.irM.hasExport(tci.Name), RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
+				gtd = &irANamedTypeRef{Export: false, RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
 				gtd.setBothNamesFromPsName(tci.Name)
+				gtd.NameGo = "ı" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
 			}
 			for _, method := range gid.RefInterface.Methods {
@@ -226,58 +227,54 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 
 func (me *irAst) postLinkTcInstFuncsToImplStructs() {
 	for _, ifx := range me.culled.tcInstDecls {
-		ifv, _ := ifx.(*irALet)
-		gtd := me.irM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
-		gtdInstOf := findGoTypeByPsQName(gtd.RefStruct.instOf)
-		ifv.Export = gtdInstOf.Export
-		ifv.setBothNamesFromPsName(ifv.NamePs)
-		var mod *modPkg
-		pname, tctnamego := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf)
-		if len(pname) == 0 || pname == me.mod.pName {
-			mod = me.mod
+		instvar, _ := ifx.(*irALet)
+		instvar.Export = me.irM.hasExport(instvar.NamePs)
+		instvar.setBothNamesFromPsName(instvar.NamePs)
+		gtdinst := me.irM.goTypeDefByPsName(instvar.NamePs) // the private implementer struct-type
+		tcmod, tcx := findPsTypeByQName(gtdinst.RefStruct.instOf)
+		tc := tcx.(*irMTypeClass)
+
+		if tcctor := tcmod.irAst.typeCtorFunc(tc.Name); tcctor == nil {
+			panic(me.mod.srcFilePath + ": type-class ctor func not found for type-class '" + tc.Name + "' / '" + gtdinst.RefStruct.instOf + "' of instance '" + instvar.NamePs + "', please report")
 		} else {
-			mod = findModuleByPName(pname)
+			// for i, instfuncarg := range tcctor.RefFunc.Args {
+			// 	for _, gtdinst := range gtdinst.RefStruct.Methods {
+			// 		if gtdinst.NamePs == instfuncarg.NamePs {
+			// 			switch instvarx := instvar.LetVal.(type) {
+			// 			case *irALitObj:
+			// 				panic("This again?!")
+			// 				ifofv := instvarx.ObjFields[i].FieldVal
+			// 				switch ifa := ifofv.(type) {
+			// 				case *irAFunc:
+			// 					gtdinst.RefFunc.impl = ifa.FuncImpl
+			// 				default:
+			// 					oldp := ifofv.Parent()
+			// 					gtdinst.RefFunc.impl = ªBlock(ªRet(ifofv))
+			// 					gtdinst.RefFunc.impl.parent = oldp
+			// 				}
+			// 			case *irADot:
+			// 				callargs := []irA{}
+			// 				for _, gma := range gtdinst.RefFunc.Args {
+			// 					callargs = append(callargs, ªSymGo(gma.NameGo))
+			// 				}
+			// 				gtdinst.RefFunc.impl = ªBlock(ªRet(ªCall(instvarx, callargs...)))
+			// 			case *irAOp1:
+			// 				// println("OP1\t" + me.mod.srcFilePath + "\t\t" + instvar.NamePs)
+			// 			case *irAFunc:
+			// 				// println("FUN\t" + me.mod.srcFilePath + "\t\t" + instvar.NamePs)
+			// 			default:
+			// 				println(instvar.LetVal.(*irALitObj).NamePs)
+			// 			}
+			// 			break
+			// 		}
+			// 	}
+			// }
 		}
-		if tcctor := mod.irAst.typeCtorFunc(tctnamego); tcctor == nil {
-			panic(me.mod.srcFilePath + ": type-class ctor func not found for type-class '" + tctnamego + "' / '" + gtd.RefStruct.instOf + "' of instance '" + ifv.NamePs + "', please report")
-		} else {
-			for i, instfuncarg := range tcctor.RefFunc.Args {
-				for _, gtdmethod := range gtd.RefStruct.Methods {
-					if gtdmethod.NamePs == instfuncarg.NamePs {
-						switch ifvx := ifv.LetVal.(type) {
-						case *irALitObj:
-							panic("This again?!")
-							ifofv := ifvx.ObjFields[i].FieldVal
-							switch ifa := ifofv.(type) {
-							case *irAFunc:
-								gtdmethod.RefFunc.impl = ifa.FuncImpl
-							default:
-								oldp := ifofv.Parent()
-								gtdmethod.RefFunc.impl = ªBlock(ªRet(ifofv))
-								gtdmethod.RefFunc.impl.parent = oldp
-							}
-						case *irADot:
-							callargs := []irA{}
-							for _, gma := range gtdmethod.RefFunc.Args {
-								callargs = append(callargs, ªSymGo(gma.NameGo))
-							}
-							gtdmethod.RefFunc.impl = ªBlock(ªRet(ªCall(ifvx, callargs...)))
-						case *irAOp1:
-							// println("OP1\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
-						case *irAFunc:
-							// println("FUN\t" + me.mod.srcFilePath + "\t\t" + ifv.NamePs)
-						default:
-							println(ifv.LetVal.(*irALitObj).NamePs)
-						}
-						break
-					}
-				}
-			}
-		}
-		nuctor := ªO(&irANamedTypeRef{RefAlias: gtd.NameGo})
-		nuctor.parent = ifv
-		ifv.LetVal = nuctor
-		ifv.RefAlias = gtd.RefStruct.instOf
+		nuctor := ªO(&irANamedTypeRef{RefAlias: gtdinst.NameGo})
+		nuctor.parent = instvar
+		instvar.LetVal = nuctor
+		instvar.RefAlias = gtdinst.RefStruct.instOf
+		me.Prepend(instvar)
 	}
 }
 

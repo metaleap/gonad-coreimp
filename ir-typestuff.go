@@ -284,7 +284,7 @@ func (me *irMeta) populateGoTypeDefs() {
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toIrADataTypeDefs(me.EnvTypeDataDecls)...)
 }
 
-func (me *irAst) resolveGoTypeRefFromPsQName(tref string) (pname string, tname string) {
+func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname string) {
 	var mod *modPkg
 	wasprim := false
 	i := strings.LastIndex(tref, ".")
@@ -339,7 +339,9 @@ func (me *irAst) resolveGoTypeRefFromPsQName(tref string) (pname string, tname s
 		mod = me.mod
 	}
 	if (!wasprim) && mod != nil {
-		tname = mod.irMeta.goTypeDefByPsName(tname).NameGo
+		if gtd := mod.irMeta.goTypeDefByPsName(tname); gtd != nil {
+			tname = gtd.NameGo
+		}
 	}
 	return
 }
