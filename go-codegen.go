@@ -424,7 +424,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 			for _, ifmethod := range gtd.RefInterface.allMethods() {
 				fmt.Fprint(&buf, ifmethod.NameGo)
 				if ifmethod.RefFunc == nil {
-					panic(gtd.NamePs + "." + ifmethod.NamePs + ": unexpected interface-method (not a func), please report!")
+					panic(notImplErr("interface-method (not a func)", ifmethod.NamePs, gtd.NamePs))
 				} else {
 					me.codeGenFuncArgs(&buf, indlevel, ifmethod.RefFunc.Args, false, false)
 					me.codeGenFuncArgs(&buf, indlevel, ifmethod.RefFunc.Rets, true, false)

@@ -1,10 +1,5 @@
 package main
 
-import (
-	"fmt"
-	"reflect"
-)
-
 /*
 Golang intermediate-representation AST:
 traversals of the abstract syntax tree
@@ -141,7 +136,7 @@ func walk(ast irA, on func(irA) irA) irA {
 			a.FieldVal = walk(a.FieldVal, on)
 		case *irAComments, *irAPkgSym, *irANil, *irALitBool, *irALitNum, *irALitInt, *irALitStr, *irASym:
 		default:
-			panic(fmt.Errorf("walk() not handling irA type '%v' (value: %v), please report", reflect.TypeOf(a), a))
+			panicWithType(ast.Base().SrcFilePath(), ast, "walk")
 		}
 		if nuast := on(ast); nuast != ast {
 			if oldp := ast.Parent(); nuast != nil {

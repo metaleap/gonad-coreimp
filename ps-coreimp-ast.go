@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/metaleap/go-util/str"
 )
 
@@ -16,10 +13,6 @@ In here we mostly deal with the stuff in Body
 whereas DeclAnns and DeclEnv (PureScript types &
 signatures) are mostly handled in ps-coreimp-decls.go.
 */
-
-var (
-	strReplUnsanitize = strings.NewReplacer("$prime", "'", "$$", "")
-)
 
 type coreImp struct { // we skip unmarshaling what isn't used for now, but DO keep these around commented-out:
 	// BuiltWith  string            `json:"builtWith"`
@@ -275,7 +268,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		case "New":
 			o.Op1 = "&"
 		default:
-			panic(me.root.mod.srcFilePath + ": unrecognized unary op '" + o.Op1 + "', please report")
+			panic(notImplErr("Unary", o.Op1, me.root.mod.srcFilePath))
 		}
 		a = o
 	case "Binary":
@@ -320,7 +313,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		case "ZeroFillShiftRight":
 			o.Op2 = "&^"
 		default:
-			panic(me.root.mod.srcFilePath + ": unrecognized binary op '" + o.Op2 + "', please report")
+			panic(notImplErr("Binary", o.Op2, me.root.mod.srcFilePath))
 		}
 		a = o
 	case "Comment":
@@ -372,7 +365,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 			a = ªIs(me.InstanceOf.ciAstToIrAst(), findModuleByPName(adot.DotLeft.(*irASym).NamePs).qName+"."+adot.DotRight.(*irASym).NamePs)
 		}
 	default:
-		panic(fmt.Errorf(me.root.mod.srcFilePath+": unrecognized coreImp AST-tag '%s' just below %v, please report", me.parent, me.AstTag))
+		panic(notImplErr("CoreImp AST tag", me.AstTag, me.root.mod.srcFilePath))
 	}
 	if ab := a.Base(); ab != nil {
 		ab.Comments = me.Comment
@@ -407,7 +400,7 @@ func (me *coreImp) preProcessTopLevel() {
 				a.parent, me.Body[i] = nil, a
 			}
 		} else if a.AstTag != "Function" && a.AstTag != "VariableIntroduction" && a.AstTag != "Comment" {
-			panic(fmt.Errorf("Encountered unexpected top-level AST tag, please report: %s", a.AstTag))
+			panic(notImplErr("top-level CoreImp AST tag", a.AstTag, me.mod.srcFilePath))
 		}
 	}
 }
@@ -419,7 +412,7 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 	for i := 0; i < len(asts); i++ {
 		if cia := asts[i]; cia != nil && cia.AstTag == "Comment" && cia.AstCommentDecl != nil {
 			if cia.AstCommentDecl.AstTag == "Comment" {
-				panic(me.mod.srcFilePath + ": encountered comments nesting, please report")
+				panic(notImplErr("comments", "nesting", me.mod.srcFilePath))
 			}
 			cdecl := cia.AstCommentDecl
 			cia.AstCommentDecl = nil

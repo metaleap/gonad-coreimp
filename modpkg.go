@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"strings"
 
 	"github.com/metaleap/go-util/fs"
 )
@@ -36,12 +35,6 @@ type modPkg struct {
 	ext           *psExt
 	coreimp       *coreImp
 }
-
-var (
-	strReplSlash2Dot      = strings.NewReplacer("\\", ".", "/", ".")
-	strReplDot2Slash      = strings.NewReplacer(".", "/")
-	strReplDot2Underscore = strings.NewReplacer(".", "_")
-)
 
 func findModuleByQName(qname string) (modinfo *modPkg) {
 	if modinfo = Proj.moduleByQName(qname); modinfo == nil {

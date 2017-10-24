@@ -11,14 +11,6 @@ type-classes, type-class instances, and the signatures
 of top-level functions.
 */
 
-const (
-	msgfmt = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
-)
-
-func notImplErr(cat string, name string, in interface{}) error {
-	return fmt.Errorf(msgfmt, cat, name, in)
-}
-
 type coreImpEnv struct {
 	TypeSyns   map[string]*coreImpEnvTypeSyn           `json:"typeSynonyms"`
 	TypeDefs   map[string]*coreImpEnvTypeDef           `json:"types"`

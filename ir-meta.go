@@ -98,6 +98,10 @@ type irMPkgRef struct {
 	emitted bool
 }
 
+func (me *modPkg) newModImp() *irMPkgRef {
+	return &irMPkgRef{GoName: me.pName, PsModQName: me.qName, ImpPath: path.Join(me.proj.GoOut.PkgDirPath, me.goOutDirPath)}
+}
+
 type irMNamedTypeRef struct {
 	Name string      `json:"tnn,omitempty"`
 	Ref  *irMTypeRef `json:"tnr,omitempty"`
@@ -207,10 +211,6 @@ type irMTypeRefSkolem struct {
 
 func (me *irMTypeRefSkolem) eq(cmp *irMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
-}
-
-func newModImp(impmod *modPkg) *irMPkgRef {
-	return &irMPkgRef{GoName: impmod.pName, PsModQName: impmod.qName, ImpPath: path.Join(impmod.proj.GoOut.PkgDirPath, impmod.goOutDirPath)}
 }
 
 func (me *irMeta) hasExport(name string) bool {
@@ -382,7 +382,7 @@ func (me *irMeta) populateFromCoreImp() {
 		}
 	}
 	for _, impmod := range me.imports {
-		me.Imports = append(me.Imports, newModImp(impmod))
+		me.Imports = append(me.Imports, impmod.newModImp())
 	}
 	// transform 100% complete coreimp structures
 	// into lean, only-what-we-use irMeta structures (still representing PS-not-Go decls)

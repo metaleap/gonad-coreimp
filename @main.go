@@ -27,7 +27,7 @@ var (
 func main() {
 	// runtime.SetGCPercent(-1) // turn off GC, we're a quickly-in-and-out-again program
 	starttime := time.Now()
-	// args partially match those of purs and/or pulp where there's overlap
+	// args match those of purs and/or pulp where there's overlap, other config goes in bower.json's `Gonad` field (see `psBowerFile`)
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
 	pflag.StringVar(&Proj.DepsDirPath, "dependency-path", "bower_components", "Dependencies directory path")
 	pflag.StringVar(&Proj.BowerJsonFilePath, "bower-file", "bower.json", "Project file path (further configuration options possible in the Gonad field)")
@@ -36,12 +36,10 @@ func main() {
 	pflag.Parse()
 	var err error
 	if !ufs.DirExists(Proj.DepsDirPath) {
-		panic("No such `dependency-path` directory: " + Proj.DepsDirPath)
-	}
-	if !ufs.DirExists(Proj.SrcDirPath) {
-		panic("No such `src-path` directory: " + Proj.SrcDirPath)
-	}
-	if err = Proj.loadFromJsonFile(); err == nil {
+		err = fmt.Errorf("No such `dependency-path` directory: %s", Proj.DepsDirPath)
+	} else if !ufs.DirExists(Proj.SrcDirPath) {
+		err = fmt.Errorf("No such `src-path` directory: %s", Proj.SrcDirPath)
+	} else if err = Proj.loadFromJsonFile(); err == nil {
 		var do mainWorker
 		var mutex sync.Mutex
 		ufs.WalkDirsIn(Proj.DepsDirPath, func(reldirpath string) bool {

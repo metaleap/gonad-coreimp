@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/metaleap/go-util/slice"
-	"github.com/metaleap/go-util/str"
 )
 
 /*
@@ -22,10 +20,6 @@ More details in ir-meta.go.
 const (
 	areOverlappingInterfacesSupportedByGo = true // technically would be false, see https://github.com/golang/go/issues/6977 --- in practice keep true until it's an actual issue in generated code
 	legacyIfaceEmbeds                     = false
-)
-
-var (
-	strReplSanitizer = strings.NewReplacer("'", "ˇ", "$", "Ø")
 )
 
 type irANamedTypeRefs []*irANamedTypeRef
@@ -129,7 +123,7 @@ func (me *irANamedTypeRef) setRefFrom(tref interface{}) {
 		me.RefAlias = tr
 	case nil:
 	default:
-		println(tref.(string)) // in case of future oversight, this triggers immediate panic-msg with actual-type included
+		panicWithType("setRefFrom", tref, "tref")
 	}
 }
 
@@ -169,7 +163,7 @@ func (me *irATypeRefInterface) allMethods() (allmethods irANamedTypeRefs) {
 			m := map[string]*irANamedTypeRef{}
 			for _, embed := range me.Embeds {
 				if gtd := findGoTypeByPsQName(embed); gtd == nil || gtd.RefInterface == nil {
-					panic(fmt.Errorf("%s: references unknown interface/type-class %s, please report", me.xtc.Name, embed))
+					panic(notImplErr("reference to interface-type-class", embed, me.xtc.Name))
 				} else {
 					for _, method := range gtd.RefInterface.allMethods() {
 						if dupl := m[method.NameGo]; dupl == nil {
@@ -264,7 +258,7 @@ func (me *irMeta) populateGoTypeDefs() {
 					}
 					ifm.RefAlias = ""
 				} else if ifm.RefArray != nil || ifm.RefPtr != nil || ifm.RefStruct != nil || ifm.RefUnknown > 0 {
-					panic(me.mod.srcFilePath + ": some ifm.RefFoo was set, please report to handle")
+					panic(notImplErr("RefType", "ifm", me.mod.srcFilePath))
 				} else {
 					ifm.RefFunc = &irATypeRefFunc{
 						Rets: irANamedTypeRefs{&irANamedTypeRef{}},
@@ -307,15 +301,15 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 			case "Int":
 				tname = "int"
 			default:
-				panic("Unknown Prim type: " + tname)
+				panic(notImplErr("Prim type", tname, me.mod.srcFilePath))
 			}
 		} else {
 			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
 			if isffi {
 				pname = strReplDot2Underscore.Replace(pname)
 			} else {
-				if mod = findModuleByQName(pname); mod == nil {
-					panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
+				if mod = findModuleByQName(qn); mod == nil {
+					panic(notImplErr("module qname", qn, me.mod.srcFilePath))
 				}
 				pname = mod.pName
 			}
@@ -330,7 +324,7 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 				if isffi {
 					imp = &irMPkgRef{ImpPath: "github.com/metaleap/gonad/" + strReplDot2Slash.Replace(qn), PsModQName: qn, GoName: pname}
 				} else {
-					imp = newModImp(mod)
+					imp = mod.newModImp()
 				}
 				me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp)
 			}
@@ -350,7 +344,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 	for _, td := range typedatadecls {
 		tdict := map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
-			panic(fmt.Errorf("%s: unexpected ctor absence in %s, please report: %v", me.mod.srcFilePath, td.Name, td))
+			panic(notImplErr(me.mod.srcFilePath+": unexpected ctor absence for", td.Name, td))
 		} else {
 			isnewtype, hasselfref, hasctorargs := false, false, false
 			gid := &irANamedTypeRef{RefInterface: &irATypeRefInterface{xtd: td}, Export: me.hasExport(td.Name)}
@@ -443,97 +437,4 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		}
 	}
 	return nil
-}
-
-func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname string) {
-	if ifaces4tvar := tdict[tvar]; !uslice.StrHas(ifaces4tvar, ifacetname) {
-		ifaces4tvar = append(ifaces4tvar, ifacetname)
-		tdict[tvar] = ifaces4tvar
-	}
-}
-
-func findPsTypeByQName(qname string) (mod *modPkg, tr interface{}) {
-	var pname, tname string
-	i := strings.LastIndex(qname, ".")
-	if tname = qname[i+1:]; i > 0 {
-		pname = qname[:i]
-		if mod = findModuleByQName(pname); mod == nil {
-			panic(fmt.Errorf("Unknown module qname %s", pname))
-		} else {
-			for _, ets := range mod.irMeta.EnvTypeSyns {
-				if ets.Name == tname {
-					tr = ets
-					return
-				}
-			}
-			for _, etc := range mod.irMeta.EnvTypeClasses {
-				if etc.Name == tname {
-					tr = etc
-					return
-				}
-			}
-			for _, eti := range mod.irMeta.EnvTypeClassInsts {
-				if eti.Name == tname {
-					tr = eti
-					return
-				}
-			}
-			for _, etd := range mod.irMeta.EnvTypeDataDecls {
-				if etd.Name == tname {
-					tr = etd
-					return
-				}
-			}
-		}
-	} else {
-		panic("Unexpected non-qualified type-name encountered, please report with your *.purs code-base (and its output-directory *.json files)!")
-	}
-	return
-}
-
-func findGoTypeByPsQName(qname string) *irANamedTypeRef {
-	var pname, tname string
-	i := strings.LastIndex(qname, ".")
-	if tname = qname[i+1:]; i > 0 {
-		pname = qname[:i]
-		if mod := findModuleByQName(pname); mod == nil {
-			panic(fmt.Errorf("Unknown module qname %s", pname))
-		} else {
-			return mod.irMeta.goTypeDefByPsName(tname)
-		}
-	} else {
-		panic("Unexpected non-qualified type-name encountered, please report with your *.purs code-base (and its output-directory *.json files)!")
-	}
-}
-
-func sanitizeSymbolForGo(name string, upper bool) string {
-	if len(name) == 0 {
-		return name
-	}
-	if upper {
-		runes := []rune(name)
-		runes[0] = unicode.ToUpper(runes[0])
-		name = string(runes)
-	} else {
-		if ustr.BeginsUpper(name) {
-			runes := []rune(name)
-			runes[0] = unicode.ToLower(runes[0])
-			name = string(runes)
-		} else {
-			switch name {
-			case "append", "false", "iota", "nil", "true":
-				return "ˇ" + name + "ˇ"
-			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "ˇ" + name
-			}
-		}
-	}
-	return strReplSanitizer.Replace(name)
-}
-
-func typeNameWithPkgName(pkgname string, typename string) (fullname string) {
-	if fullname = typename; len(pkgname) > 0 {
-		fullname = pkgname + "." + fullname
-	}
-	return
 }

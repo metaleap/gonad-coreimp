@@ -34,10 +34,11 @@ type irAst struct {
 }
 
 type irTcInst struct {
-	tcClass       string
-	tciName       string
-	tciAlias      string
-	tcMemberImpls []irA
+	tciAlias       string
+	tciPassThrough bool
+	tcClass        string
+	tciName        string
+	tcMemberImpls  []irA
 }
 
 type irA interface {
@@ -76,6 +77,13 @@ func (me *irABase) isParentOp() (isparentop bool) {
 
 func (me *irABase) Parent() irA {
 	return me.parent
+}
+
+func (me *irABase) SrcFilePath() (srcfilepath string) {
+	if root := me.Ast(); root != nil {
+		srcfilepath = root.mod.srcFilePath
+	}
+	return
 }
 
 type irAConstable interface {
