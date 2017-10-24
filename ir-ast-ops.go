@@ -22,7 +22,7 @@ func (me *irAst) prepAddOrCull(a irA) {
 			// check if helper function related to type-classes / type-class instances:
 			tci := me.irM.tcInst(ab.NamePs)
 			if culled = (tci != nil); culled {
-				dictargname, tlval, again, tcinst := "", a, true, irTcInst{tciName: tci.Name}
+				dictargname, tlval, again, tcinst := "", a, true, irTcInstImpl{tci: tci}
 				for again {
 					tldb := tlval.Base()
 					switch topleveldecl := tlval.(type) {
@@ -50,28 +50,28 @@ func (me *irAst) prepAddOrCull(a irA) {
 							panic(notImplErr(ab.NamePs+" operator and/or operand", tlvx.Op1, me.mod.srcFilePath))
 						} else {
 							var tcx interface{}
-							var tcm *modPkg
 							switch dotºsym := tcctorcall.Callee.(type) {
 							case *irASym:
-								tcm, tcx = findPsTypeByQName(me.mod.qName + "." + dotºsym.NamePs)
+								tcinst.tciProper.tcMod, tcx = findPsTypeByQName(me.mod.qName + "." + dotºsym.NamePs)
 							case *irADot:
-								tcm, tcx = findPsTypeByQName(findModuleByPName(dotºsym.DotLeft.Base().NamePs).qName + "." + dotºsym.DotRight.Base().NamePs)
+								tcinst.tciProper.tcMod, tcx = findPsTypeByQName(findModuleByPName(dotºsym.DotLeft.Base().NamePs).qName + "." + dotºsym.DotRight.Base().NamePs)
 							}
 							switch maybetc := tcx.(type) {
 							case *irMTypeClass:
-								if tcinst.tcClass = tcm.qName + "." + maybetc.Name; tcinst.tcClass != tci.ClassName {
-									panic(notImplErr(ab.NamePs+" instance type-class", tcinst.tcClass, me.mod.srcFilePath))
+								if tcname := tcinst.tciProper.tcMod.qName + "." + maybetc.Name; tcname != tci.ClassName {
+									panic(notImplErr(ab.NamePs+" instance type-class", tcname, me.mod.srcFilePath))
 								}
+								tcinst.tciProper.tc = maybetc
 							default:
 								panicWithType(me.mod.srcFilePath, maybetc, tci.Name+":tcx")
 							}
-							tcinst.tcMemberImpls = tcctorcall.CallArgs
+							tcinst.tciProper.tcMemberImpls = tcctorcall.CallArgs
 						}
 					case *irASym:
-						tcinst.tciPassThrough = true
 						if tlvx.NamePs != dictargname {
 							panic(notImplErr(tci.Name+" constructor pass-through", tlvx.NamePs, me.mod.srcFilePath))
 						}
+						tcinst.tciPassThrough = true
 					case *irACall:
 						again, tlval = true, tlvx.Callee.(*irADot) // keep the `dot`, go `again`, it'll jump to:
 					case *irADot:
@@ -80,7 +80,7 @@ func (me *irAst) prepAddOrCull(a irA) {
 						panicWithType(me.mod.srcFilePath, tlval, tci.Name+":tlvx")
 					}
 				}
-				me.culled.tcInstDecls = append(me.culled.tcInstDecls, &tcinst)
+				me.culled.tcInstImpls = append(me.culled.tcInstImpls, &tcinst)
 			} else if culled = me.irM.tcMember(ab.NamePs) != nil; culled {
 				me.culled.tcDictDecls = append(me.culled.tcDictDecls, a)
 			}
@@ -121,7 +121,7 @@ func (me *irAst) prepAddNewExtraTypes() {
 			if gtd == nil {
 				gtd = &irANamedTypeRef{Export: false, RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
 				gtd.setBothNamesFromPsName(tci.Name)
-				gtd.NameGo = "ı" + gtd.NameGo
+				gtd.NameGo = "ıˇ" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
 			}
 			for _, method := range gid.RefInterface.Methods {
@@ -278,7 +278,33 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 }
 
 func (me *irAst) postLinkTcInstFuncsToImplStructs() {
-	// for _, ifx := range me.culled.tcInstDecls {
+	for _, impl := range me.culled.tcInstImpls {
+		if impl.tciPassThrough {
+			//	not sure yet how to handle =)
+		} else {
+			gtdinst := me.irM.goTypeDefByPsName(impl.tci.Name) // the private implementer struct-type
+			instvar := ªLet("", "", nil)
+			instvar.Export = me.irM.hasExport(impl.tci.Name)
+			instvar.setBothNamesFromPsName(impl.tci.Name)
+			nuctor := ªO(&irANamedTypeRef{RefAlias: gtdinst.NameGo})
+			nuctor.parent = instvar
+			instvar.LetVal = nuctor
+			instvar.RefAlias = gtdinst.RefStruct.instOf
+			me.Prepend(instvar)
+
+			if len(impl.tciAlias) > 0 {
+				println("ALIAS:\t" + me.mod.srcFilePath + "\t" + impl.tci.Name)
+			} else {
+				for _, tcim := range impl.tciProper.tcMemberImpls {
+					if tcim != nil {
+					}
+				}
+			}
+
+		}
+	}
+
+	// for _, ifx := range me.culled.tcInstImpls {
 	// 	instvar, _ := ifx.(*irALet)
 	// 	instvar.Export = me.irM.hasExport(instvar.NamePs)
 	// 	instvar.setBothNamesFromPsName(instvar.NamePs)

@@ -26,19 +26,21 @@ type irAst struct {
 	culled struct {
 		typeCtorFuncs []*irACtor
 		tcDictDecls   []irA
-		tcInstDecls   []*irTcInst
+		tcInstImpls   []*irTcInstImpl
 	}
-	mod  *modPkg
-	proj *psBowerProject
-	irM  *irMeta
+	mod *modPkg
+	irM *irMeta
 }
 
-type irTcInst struct {
+type irTcInstImpl struct {
+	tci            *irMTypeClassInst
 	tciAlias       string
 	tciPassThrough bool
-	tcClass        string
-	tciName        string
-	tcMemberImpls  []irA
+	tciProper      struct {
+		tc            *irMTypeClass
+		tcMod         *modPkg
+		tcMemberImpls []irA
+	}
 }
 
 type irA interface {
