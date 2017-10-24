@@ -284,6 +284,66 @@ func (me *irMeta) populateGoTypeDefs() {
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toIrADataTypeDefs(me.EnvTypeDataDecls)...)
 }
 
+func (me *irAst) resolveGoTypeRefFromPsQName(tref string) (pname string, tname string) {
+	var mod *modPkg
+	wasprim := false
+	i := strings.LastIndex(tref, ".")
+	if tname = tref[i+1:]; i > 0 {
+		pname = tref[:i]
+		if pname == me.mod.qName {
+			pname = ""
+			mod = me.mod
+		} else if wasprim = (pname == "Prim"); wasprim {
+			pname = ""
+			switch tname {
+			case "Char":
+				tname = "rune"
+			case "String":
+				tname = "string"
+			case "Boolean":
+				tname = "bool"
+			case "Number":
+				tname = "float64"
+			case "Int":
+				tname = "int"
+			default:
+				panic("Unknown Prim type: " + tname)
+			}
+		} else {
+			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
+			if isffi {
+				pname = strReplDot2Underscore.Replace(pname)
+			} else {
+				if mod = findModuleByQName(pname); mod == nil {
+					panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
+				}
+				pname = mod.pName
+			}
+			for _, imp := range me.irM.Imports {
+				if imp.PsModQName == qn {
+					foundimport = true
+					break
+				}
+			}
+			if !foundimport {
+				var imp *irMPkgRef
+				if isffi {
+					imp = &irMPkgRef{ImpPath: "github.com/metaleap/gonad/" + strReplDot2Slash.Replace(qn), PsModQName: qn, GoName: pname}
+				} else {
+					imp = newModImp(mod)
+				}
+				me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp)
+			}
+		}
+	} else {
+		mod = me.mod
+	}
+	if (!wasprim) && mod != nil {
+		tname = mod.irMeta.goTypeDefByPsName(tname).NameGo
+	}
+	return
+}
+
 func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irANamedTypeRefs) {
 	for _, td := range typedatadecls {
 		tdict := map[string][]string{}
@@ -352,8 +412,10 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &irATypeRefStruct{PassByPtr: true, Fields: irANamedTypeRefs{&irANamedTypeRef{NamePs: tr.RCons.Label, NameGo: sanitizeSymbolForGo(tr.RCons.Label, false)}}}
+		rectype := &irATypeRefStruct{PassByPtr: true, Fields: irANamedTypeRefs{&irANamedTypeRef{Export: true}}}
+		rectype.Fields[0].setBothNamesFromPsName(tr.RCons.Label)
 		rectype.Fields[0].setRefFrom(me.toIrATypeRef(tdict, tr.RCons.Left))
+
 		if nextrow := me.toIrATypeRef(tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*irATypeRefStruct).Fields...)
 		}
@@ -386,6 +448,45 @@ func ensureIfaceForTvar(tdict map[string][]string, tvar string, ifacetname strin
 		ifaces4tvar = append(ifaces4tvar, ifacetname)
 		tdict[tvar] = ifaces4tvar
 	}
+}
+
+func findFucker(qname string) (mod *modPkg, tr interface{}) {
+	var pname, tname string
+	i := strings.LastIndex(qname, ".")
+	if tname = qname[i+1:]; i > 0 {
+		pname = qname[:i]
+		if mod = findModuleByQName(pname); mod == nil {
+			panic(fmt.Errorf("Unknown module qname %s", pname))
+		} else {
+			for _, ets := range mod.irMeta.EnvTypeSyns {
+				if ets.Name == tname {
+					tr = ets
+					return
+				}
+			}
+			for _, etc := range mod.irMeta.EnvTypeClasses {
+				if etc.Name == tname {
+					tr = etc
+					return
+				}
+			}
+			for _, eti := range mod.irMeta.EnvTypeClassInsts {
+				if eti.Name == tname {
+					tr = eti
+					return
+				}
+			}
+			for _, etd := range mod.irMeta.EnvTypeDataDecls {
+				if etd.Name == tname {
+					tr = etd
+					return
+				}
+			}
+		}
+	} else {
+		panic("Unexpected non-qualified type-name encountered, please report with your *.purs code-base (and its output-directory *.json files)!")
+	}
+	return
 }
 
 func findGoTypeByPsQName(qname string) *irANamedTypeRef {

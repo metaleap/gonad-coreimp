@@ -63,7 +63,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irALitInt:
 		fmt.Fprintf(w, "%d", a.LitInt)
 	case *irALitArr:
-		me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
+		me.codeGenTypeRef(w, &a.irANamedTypeRef, indent)
 		fmt.Fprint(w, "{")
 		for i, expr := range a.ArrVals {
 			me.codeGenCommaIf(w, i)
@@ -71,7 +71,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		}
 		fmt.Fprint(w, "}")
 	case *irALitObj:
-		me.codeGenTypeDecl(w, &a.irANamedTypeRef, -1)
+		me.codeGenTypeRef(w, &a.irANamedTypeRef, -1)
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			me.codeGenCommaIf(w, i)
@@ -83,7 +83,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, "}")
 	case *irAConst:
 		fmt.Fprintf(w, "%sconst %s ", tabs, a.NameGo)
-		me.codeGenTypeDecl(w, &a.irANamedTypeRef, -1)
+		me.codeGenTypeRef(w, &a.irANamedTypeRef, -1)
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.ConstVal)
 		fmt.Fprint(w, "\n")
@@ -133,7 +133,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		}
 		fmt.Fprint(w, ")")
 	case *irAFunc:
-		me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
+		me.codeGenTypeRef(w, &a.irANamedTypeRef, indent)
 		me.codeGenAst(w, indent, a.FuncImpl)
 	case *irAComments:
 		me.codeGenComments(w, tabs, a.Comments...)
@@ -188,7 +188,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		me.codeGenAst(w, indent, a.SetLeft)
 		if a.isInVarGroup {
 			fmt.Fprint(w, " ")
-			me.codeGenTypeDecl(w, &a.irANamedTypeRef, indent)
+			me.codeGenTypeRef(w, &a.irANamedTypeRef, indent)
 		}
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.ToRight)
@@ -316,7 +316,7 @@ func (me *irAst) codeGenFuncArgs(w io.Writer, indent int, methodargs irANamedTyp
 			if withnames && len(arg.NameGo) > 0 {
 				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
-			me.codeGenTypeDecl(w, arg, indent+1)
+			me.codeGenTypeRef(w, arg, indent+1)
 		}
 	}
 	if parens {
@@ -362,27 +362,48 @@ func (me *irAst) codeGenPkgDecl(w io.Writer) (err error) {
 	return
 }
 
-func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int) {
+func (me *irAst) codeGenStructMethods(w io.Writer, tr *irANamedTypeRef) {
+	if tr.RefStruct != nil && len(tr.RefStruct.Methods) > 0 {
+		for _, method := range tr.RefStruct.Methods {
+			mthis := "_"
+			if tr.RefStruct.PassByPtr {
+				fmt.Fprintf(w, "func (%s *%s) %s", mthis, tr.NameGo, method.NameGo)
+			} else {
+				fmt.Fprintf(w, "func (%s %s) %s", mthis, tr.NameGo, method.NameGo)
+			}
+			me.codeGenFuncArgs(w, -1, method.RefFunc.Args, false, true)
+			me.codeGenFuncArgs(w, -1, method.RefFunc.Rets, true, true)
+			fmt.Fprint(w, " ")
+			me.codeGenAst(w, 0, method.RefFunc.impl)
+			fmt.Fprint(w, "\n")
+		}
+		fmt.Fprint(w, "\n")
+	}
+}
+
+func (me *irAst) codeGenTypeDef(w io.Writer, gtd *irANamedTypeRef) {
+	fmt.Fprintf(w, "type %s ", gtd.NameGo)
+	me.codeGenTypeRef(w, gtd, 0)
+	fmt.Fprint(w, "\n\n")
+}
+
+func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int) {
 	if gtd == nil {
 		fmt.Fprint(w, "interface{/*irANamedTypeRef=Nil*/}")
 		return
 	}
-	toplevel := (indlevel == 0)
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.RefFunc.impl != nil
-	if toplevel && !isfuncwithbodynotjustsig {
-		fmt.Fprintf(w, "type %s ", gtd.NameGo)
-	}
 	if len(gtd.RefAlias) > 0 {
 		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromPsQName(gtd.RefAlias)))
 	} else if gtd.RefUnknown != 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
 		fmt.Fprint(w, "[]")
-		me.codeGenTypeDecl(w, gtd.RefArray.Of, -1)
+		me.codeGenTypeRef(w, gtd.RefArray.Of, -1)
 	} else if gtd.RefPtr != nil {
 		fmt.Fprint(w, "*")
-		me.codeGenTypeDecl(w, gtd.RefPtr.Of, -1)
+		me.codeGenTypeRef(w, gtd.RefPtr.Of, -1)
 	} else if gtd.RefInterface != nil {
 		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
 			fmt.Fprint(w, "interface{}")
@@ -435,7 +456,7 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 			}
 			var buf bytes.Buffer
 			for _, structfield := range gtd.RefStruct.Fields {
-				me.codeGenTypeDecl(&buf, structfield, indlevel+1)
+				me.codeGenTypeRef(&buf, structfield, indlevel+1)
 				fmt.Fprint(w, tabind)
 				fmt.Fprintf(w, fmtembeds, ustr.PadRight(structfield.NameGo, fnlen)+" "+buf.String())
 				buf.Reset()
@@ -451,27 +472,5 @@ func (me *irAst) codeGenTypeDecl(w io.Writer, gtd *irANamedTypeRef, indlevel int
 		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Rets, true, isfuncwithbodynotjustsig)
 	} else {
 		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
-	}
-	if toplevel && !isfuncwithbodynotjustsig {
-		fmt.Fprint(w, "\n\n")
-	}
-}
-
-func (me *irAst) codeGenStructMethods(w io.Writer, tr *irANamedTypeRef) {
-	if tr.RefStruct != nil && len(tr.RefStruct.Methods) > 0 {
-		for _, method := range tr.RefStruct.Methods {
-			mthis := "_"
-			if tr.RefStruct.PassByPtr {
-				fmt.Fprintf(w, "func (%s *%s) %s", mthis, tr.NameGo, method.NameGo)
-			} else {
-				fmt.Fprintf(w, "func (%s %s) %s", mthis, tr.NameGo, method.NameGo)
-			}
-			me.codeGenFuncArgs(w, 0, method.RefFunc.Args, false, true)
-			me.codeGenFuncArgs(w, 0, method.RefFunc.Rets, true, true)
-			fmt.Fprint(w, " ")
-			me.codeGenAst(w, 0, method.RefFunc.impl)
-			fmt.Fprint(w, "\n")
-		}
-		fmt.Fprint(w, "\n")
 	}
 }

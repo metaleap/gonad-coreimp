@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strings"
 )
 
@@ -58,7 +59,6 @@ func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 }
 
 func (me *irAst) prepAddNewExtraTypes() {
-	return
 	var newextratypes irANamedTypeRefs
 	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.irM.EnvTypeClassInsts {
@@ -67,9 +67,8 @@ func (me *irAst) prepAddNewExtraTypes() {
 		} else {
 			gtd := newextratypes.byPsName(tci.Name)
 			if gtd == nil {
-				gtd = &irANamedTypeRef{Export: true, RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
+				gtd = &irANamedTypeRef{Export: me.irM.hasExport(tci.Name), RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
 				gtd.setBothNamesFromPsName(tci.Name)
-				gtd.NameGo = "ı" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
 			}
 			for _, method := range gid.RefInterface.Methods {
@@ -79,6 +78,10 @@ func (me *irAst) prepAddNewExtraTypes() {
 		}
 	}
 	if len(newextratypes) > 0 {
+		sort.Sort(newextratypes)
+		for i, gtd := range newextratypes {
+			gtd.sortIndex = i + len(me.irM.GoTypeDefs)
+		}
 		me.irM.GoTypeDefs = append(me.irM.GoTypeDefs, newextratypes...)
 	}
 }
@@ -106,7 +109,7 @@ func (me *irAst) prepFixupExportedNames() {
 						panic(notImplErr("RET values for", gvd.NamePs, me.mod.srcFilePath))
 					}
 					for i, gvdfuncret := range gvd.RefFunc.Rets {
-						af.RefFunc.Rets =append(af.RefFunc.Rets, &irANamedTypeRef{})
+						af.RefFunc.Rets = append(af.RefFunc.Rets, &irANamedTypeRef{})
 						af.RefFunc.Rets[i].copyFrom(gvdfuncret, true, true, false)
 					}
 				}
@@ -222,7 +225,6 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 }
 
 func (me *irAst) postLinkTcInstFuncsToImplStructs() {
-	return
 	for _, ifx := range me.culled.tcInstDecls {
 		ifv, _ := ifx.(*irALet)
 		gtd := me.irM.goTypeDefByPsName(ifv.NamePs) // the private implementer struct-type
@@ -230,14 +232,14 @@ func (me *irAst) postLinkTcInstFuncsToImplStructs() {
 		ifv.Export = gtdInstOf.Export
 		ifv.setBothNamesFromPsName(ifv.NamePs)
 		var mod *modPkg
-		pname, tcname := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf)
+		pname, tctnamego := me.resolveGoTypeRefFromPsQName(gtd.RefStruct.instOf)
 		if len(pname) == 0 || pname == me.mod.pName {
 			mod = me.mod
 		} else {
 			mod = findModuleByPName(pname)
 		}
-		if tcctor := mod.irAst.typeCtorFunc(tcname); tcctor == nil {
-			panic(me.mod.srcFilePath + ": instance ctor func not found for " + ifv.NamePs + ", please report")
+		if tcctor := mod.irAst.typeCtorFunc(tctnamego); tcctor == nil {
+			panic(me.mod.srcFilePath + ": type-class ctor func not found for type-class '" + tctnamego + "' / '" + gtd.RefStruct.instOf + "' of instance '" + ifv.NamePs + "', please report")
 		} else {
 			for i, instfuncarg := range tcctor.RefFunc.Args {
 				for _, gtdmethod := range gtd.RefStruct.Methods {

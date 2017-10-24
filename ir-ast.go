@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 )
 
 const (
@@ -294,9 +293,9 @@ type irAPkgSym struct {
 	Symbol  string `json:",omitempty"`
 }
 
-func (me *irAst) typeCtorFunc(nameps string) *irACtor {
+func (me *irAst) typeCtorFunc(namego string) *irACtor {
 	for _, tcf := range me.culled.typeCtorFuncs {
-		if tcf.NamePs == nameps {
+		if tcf.NameGo == namego {
 			return tcf
 		}
 	}
@@ -361,7 +360,7 @@ func (me *irAst) writeAsGoTo(writer io.Writer) (err error) {
 
 	sort.Sort(me.irM.GoTypeDefs)
 	for _, gtd := range me.irM.GoTypeDefs {
-		me.codeGenTypeDecl(buf, gtd, 0)
+		me.codeGenTypeDef(buf, gtd)
 		me.codeGenStructMethods(buf, gtd)
 	}
 
@@ -379,66 +378,6 @@ func (me *irAst) writeAsGoTo(writer io.Writer) (err error) {
 	if err = me.codeGenPkgDecl(writer); err == nil {
 		if err = me.codeGenModImps(writer); err == nil {
 			_, err = buf.WriteTo(writer)
-		}
-	}
-	return
-}
-
-func (me *irAst) resolveGoTypeRefFromPsQName(tref string) (pname string, tname string) {
-	var mod *modPkg
-	wasprim := false
-	i := strings.LastIndex(tref, ".")
-	if tname = tref[i+1:]; i > 0 {
-		pname = tref[:i]
-		if pname == me.mod.qName {
-			pname = ""
-			mod = me.mod
-		} else if wasprim = pname == "Prim"; wasprim {
-			pname = ""
-			switch tname {
-			case "String":
-				tname = "string"
-			case "Boolean":
-				tname = "bool"
-			case "Number":
-				tname = "float64"
-			case "Int":
-				tname = "int"
-			default:
-				panic("Unknown Prim type: " + tname)
-			}
-		} else {
-			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
-			if isffi {
-				pname = strReplDot2Underscore.Replace(pname)
-			} else {
-				if mod = findModuleByQName(pname); mod == nil {
-					panic(fmt.Errorf("%s: unknown module qname %s", me.mod.srcFilePath, qn))
-				}
-				pname = mod.pName
-			}
-			for _, imp := range me.irM.Imports {
-				if imp.PsModQName == qn {
-					foundimport = true
-					break
-				}
-			}
-			if !foundimport {
-				var imp *irMPkgRef
-				if isffi {
-					imp = &irMPkgRef{ImpPath: "github.com/metaleap/gonad/" + strReplDot2Slash.Replace(qn), PsModQName: qn, GoName: pname}
-				} else {
-					imp = newModImp(mod)
-				}
-				me.irM.imports, me.irM.Imports = append(me.irM.imports, mod), append(me.irM.Imports, imp)
-			}
-		}
-	} else {
-		mod = me.mod
-	}
-	if (!wasprim) && mod != nil {
-		if tref := mod.irMeta.goTypeDefByPsName(tname); tref != nil {
-			tname = mod.irMeta.goTypeDefByPsName(tname).NameGo
 		}
 	}
 	return
