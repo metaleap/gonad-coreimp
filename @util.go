@@ -78,16 +78,16 @@ func findPsTypeByQName(qname string) (mod *modPkg, tr interface{}) {
 	return
 }
 
-func findGoTypeByGoQName(me *modPkg, qname string) *irANamedTypeRef {
+func findGoTypeByGoQName(me *modPkg, qname string) (mod *modPkg, tref *irANamedTypeRef) {
 	pname, tname := ustr.SplitOnce(qname, '.')
-	mod := findModuleByPName(pname)
-	if mod == nil {
+	if mod = findModuleByPName(pname); mod == nil {
 		mod = me
 	}
-	return mod.irMeta.goTypeDefByGoName(tname)
+	tref = mod.irMeta.goTypeDefByGoName(tname)
+	return
 }
 
-func findGoTypeByPsQName(qname string) *irANamedTypeRef {
+func findGoTypeByPsQName(qname string) (*modPkg, *irANamedTypeRef) {
 	var pname, tname string
 	i := strings.LastIndex(qname, ".")
 	if tname = qname[i+1:]; i > 0 {
@@ -95,7 +95,7 @@ func findGoTypeByPsQName(qname string) *irANamedTypeRef {
 		if mod := findModuleByQName(pname); mod == nil {
 			panic(notImplErr("module qname", pname, qname))
 		} else {
-			return mod.irMeta.goTypeDefByPsName(tname)
+			return mod, mod.irMeta.goTypeDefByPsName(tname)
 		}
 	} else {
 		panic(notImplErr("non-qualified type-name", qname, "a *.purs file of yours"))

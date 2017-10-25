@@ -38,10 +38,12 @@ type modPkg struct {
 }
 
 func findModuleByQName(qname string) (modinfo *modPkg) {
-	if modinfo = Proj.moduleByQName(qname); modinfo == nil {
-		for _, dep := range Deps {
-			if modinfo = dep.moduleByQName(qname); modinfo != nil {
-				return
+	if len(qname) > 0 {
+		if modinfo = Proj.moduleByQName(qname); modinfo == nil {
+			for _, dep := range Deps {
+				if modinfo = dep.moduleByQName(qname); modinfo != nil {
+					return
+				}
 			}
 		}
 	}
@@ -49,10 +51,12 @@ func findModuleByQName(qname string) (modinfo *modPkg) {
 }
 
 func findModuleByPName(pname string) (modinfo *modPkg) {
-	if modinfo = Proj.moduleByPName(pname); modinfo == nil {
-		for _, dep := range Deps {
-			if modinfo = dep.moduleByPName(pname); modinfo != nil {
-				return
+	if len(pname) > 0 {
+		if modinfo = Proj.moduleByPName(pname); modinfo == nil {
+			for _, dep := range Deps {
+				if modinfo = dep.moduleByPName(pname); modinfo != nil {
+					return
+				}
 			}
 		}
 	}

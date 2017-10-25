@@ -202,13 +202,9 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
 	var gtd *irANamedTypeRef
 	var mod *modPkg
-	if ocdot, _ := oc.Callee.(*irADot); ocdot != nil {
-		if ocdot1, _ := ocdot.DotLeft.(*irASym); ocdot1 != nil {
-			if mod = findModuleByPName(ocdot1.NamePs); mod != nil {
-				if ocdot2, _ := ocdot.DotRight.(*irASym); ocdot2 != nil {
-					gtd = mod.irMeta.goTypeDefByPsName(ocdot2.NamePs)
-				}
-			}
+	if ocpkgsym, _ := oc.Callee.(*irAPkgSym); ocpkgsym != nil {
+		if mod = findModuleByPName(ocpkgsym.PkgName); mod != nil {
+			gtd = mod.irMeta.goTypeDefByPsName(ocpkgsym.Symbol)
 		}
 	}
 	ocv, _ := oc.Callee.(*irASym)
@@ -297,7 +293,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							panic(notImplErr(tci.ClassName+" type-class instance '"+tci.Name+"' func arg", fndictarg.NamePs, me.mod.srcFilePath))
 						} else if len(ax.RefFunc.Rets) > 0 {
 							panic(notImplErr(tci.ClassName+" type-class instance func ret-args for", tci.Name, me.mod.srcFilePath))
-						} else if gtd := findGoTypeByPsQName(tci.ClassName); gtd == nil {
+						} else if tcmod, gtd := findGoTypeByPsQName(tci.ClassName); gtd == nil {
 							panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
 						} else if len(ax.RefFunc.impl.Body) != 1 {
 							panic(notImplErr(tci.ClassName+" type-class instance func body for", tci.Name, me.mod.srcFilePath))
@@ -307,27 +303,35 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							if fndictarg.RefAlias = tci.ClassName; gtd.RefStruct.PassByPtr {
 								fndictarg.turnRefAliasIntoRefPtr()
 							}
-							fnretarg := irANamedTypeRef{}
+							var retgtd *irANamedTypeRef
+							var retmod *modPkg
 							switch axr := afnreturn.RetArg.(type) {
 							case *irALitObj:
-								if ctorgtd := findGoTypeByGoQName(me.mod, axr.RefAlias); ctorgtd != gtd {
+								if retmod, retgtd = findGoTypeByGoQName(me.mod, axr.RefAlias); retgtd != gtd {
 									panic(notImplErr("obj-lit type-ref", axr.RefAlias, me.mod.srcFilePath))
 								} else {
-									if gtd.RefStruct.PassByPtr {
+									if retgtd.RefStruct.PassByPtr {
 										afnreturn.RetArg = ªO1("&", axr)
-									}
-									if fnretarg.copyFrom(&axr.irANamedTypeRef, false, true, false); gtd.RefStruct.PassByPtr {
-										fnretarg.turnRefAliasIntoRefPtr()
 									}
 								}
 							case *irAFunc:
 							case *irASym:
 							case *irACall:
-								println(me.mod.srcFilePath + "\t" + tci.Name)
+								// assumption for now
+								retmod, retgtd = tcmod, gtd
 							default:
 								panicWithType(me.mod.srcFilePath, axr, tci.Name)
 							}
-							ax.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
+							if retgtd != nil {
+								fnretarg := irANamedTypeRef{RefAlias: retgtd.NameGo}
+								if retmod != nil {
+									fnretarg.RefAlias = retmod.pName + "." + fnretarg.RefAlias
+								}
+								if retgtd.RefStruct.PassByPtr {
+									fnretarg.turnRefAliasIntoRefPtr()
+								}
+								ax.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
+							}
 						}
 					case *irALet:
 					default:

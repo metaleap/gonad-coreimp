@@ -21,7 +21,7 @@ This latter 'design accident' should probably be revamped.
 */
 
 type irAst struct {
-	irABlock `json:",omitempty"`
+	irABlock
 
 	culled struct {
 		typeCtorFuncs []*irACtor
@@ -50,8 +50,8 @@ type irA interface {
 }
 
 type irABase struct {
-	irANamedTypeRef `json:",omitempty"` // don't use all of this, but exprs with names and/or types do as needed
-	Comments        []*coreImpComment   `json:",omitempty"`
+	irANamedTypeRef                   // don't use all of this, but exprs with names and/or types do as needed
+	Comments        []*coreImpComment `json:",omitempty"`
 	parent          irA
 	ast             *irAst // usually nil but set in top-level irABlock. for the rare occasions a irA impl needs this, it uses Ast() which traverses parents to the root then stores in ast --- rather than passing the root to all irA constructors etc
 }
@@ -94,14 +94,14 @@ type irAConstable interface {
 
 type irAConst struct {
 	irABase
-	ConstVal irA `json:",omitempty"`
+	ConstVal irA
 }
 
 func (me *irAConst) isConstable() bool { return true }
 
 type irALet struct {
 	irABase
-	LetVal irA `json:",omitempty"`
+	LetVal irA
 }
 
 func (me *irALet) isConstable() bool {
@@ -114,6 +114,7 @@ func (me *irALet) isConstable() bool {
 type irASym struct {
 	irABase
 	refto irA
+	Sym__ interface{} // useless except we want to see it in the gonadast.json
 }
 
 func (me *irASym) refTo() irA {
@@ -138,7 +139,7 @@ func (me *irASym) isConstable() bool {
 
 type irAFunc struct {
 	irABase
-	FuncImpl *irABlock `json:",omitempty"`
+	FuncImpl *irABlock
 }
 
 type irALitStr struct {
@@ -172,7 +173,7 @@ func (_ irALitInt) isConstable() bool { return true }
 type irABlock struct {
 	irABase
 
-	Body []irA `json:",omitempty"`
+	Body []irA
 }
 
 func (me *irABlock) Add(asts ...irA) {
@@ -195,12 +196,13 @@ type irAComments struct {
 
 type irACtor struct {
 	irAFunc
+	Ctor__ interface{} // useless except we want to see it in the gonadast.json
 }
 
 type irAOp1 struct {
 	irABase
-	Op1 string `json:",omitempty"`
-	Of  irA    `json:",omitempty"`
+	Op1 string
+	Of  irA
 }
 
 func (me irAOp1) isConstable() bool {
@@ -212,9 +214,9 @@ func (me irAOp1) isConstable() bool {
 
 type irAOp2 struct {
 	irABase
-	Left  irA    `json:",omitempty"`
-	Op2   string `json:",omitempty"`
-	Right irA    `json:",omitempty"`
+	Left  irA
+	Op2   string
+	Right irA
 }
 
 func (me irAOp2) isConstable() bool {
@@ -228,93 +230,93 @@ func (me irAOp2) isConstable() bool {
 
 type irASet struct {
 	irABase
-	SetLeft irA `json:",omitempty"`
-	ToRight irA `json:",omitempty"`
+	SetLeft irA
+	ToRight irA
 
 	isInVarGroup bool
 }
 
 type irAFor struct {
 	irABase
-	ForDo    *irABlock `json:",omitempty"`
-	ForCond  irA       `json:",omitempty"`
-	ForInit  []*irALet `json:",omitempty"`
-	ForStep  []*irASet `json:",omitempty"`
-	ForRange *irALet   `json:",omitempty"`
+	ForDo    *irABlock
+	ForCond  irA
+	ForInit  []*irALet
+	ForStep  []*irASet
+	ForRange *irALet
 }
 
 type irAIf struct {
 	irABase
-	If   irA       `json:",omitempty"`
-	Then *irABlock `json:",omitempty"`
-	Else *irABlock `json:",omitempty"`
+	If   irA
+	Then *irABlock
+	Else *irABlock
 }
 
 type irACall struct {
 	irABase
-	Callee   irA   `json:",omitempty"`
-	CallArgs []irA `json:",omitempty"`
+	Callee   irA
+	CallArgs []irA
 }
 
 type irALitObj struct {
 	irABase
-	ObjFields []*irALitObjField `json:",omitempty"`
+	ObjFields []*irALitObjField
 }
 
 type irALitObjField struct {
 	irABase
-	FieldVal irA `json:",omitempty"`
+	FieldVal irA
 }
 
 type irANil struct {
 	irABase
-	Nil interface{} // useless except we want to see it in the gonadast.json
+	Nil__ interface{} // useless except we want to see it in the gonadast.json
 }
 
 type irARet struct {
 	irABase
-	RetArg irA `json:",omitempty"`
+	RetArg irA
 }
 
 type irAPanic struct {
 	irABase
-	PanicArg irA `json:",omitempty"`
+	PanicArg irA
 }
 
 type irALitArr struct {
 	irABase
-	ArrVals []irA `json:",omitempty"`
+	ArrVals []irA
 }
 
 type irAIndex struct {
 	irABase
-	IdxLeft  irA `json:",omitempty"`
-	IdxRight irA `json:",omitempty"`
+	IdxLeft  irA
+	IdxRight irA
 }
 
 type irADot struct {
 	irABase
-	DotLeft  irA `json:",omitempty"`
-	DotRight irA `json:",omitempty"`
+	DotLeft  irA
+	DotRight irA
 }
 
 type irAIsType struct {
 	irABase
-	ExprToTest irA    `json:",omitempty"`
-	TypeToTest string `json:",omitempty"`
+	ExprToTest irA
+	TypeToTest string
 }
 
 type irAToType struct {
 	irABase
-	ExprToCast irA    `json:",omitempty"`
-	TypePkg    string `json:",omitempty"`
-	TypeName   string `json:",omitempty"`
+	ExprToCast irA
+	TypePkg    string
+	TypeName   string
 }
 
 type irAPkgSym struct {
 	irABase
-	PkgName string `json:",omitempty"`
-	Symbol  string `json:",omitempty"`
+	PkgName string
+	Symbol  string
 }
 
 func (me *irAst) typeCtorFunc(nameps string) *irACtor {

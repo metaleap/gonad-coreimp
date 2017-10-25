@@ -1,5 +1,9 @@
 package main
 
+import (
+	"github.com/metaleap/go-util/str"
+)
+
 /*
 Golang intermediate-representation AST:
 handy constructors for expressions and blocks
@@ -175,6 +179,11 @@ func ªPanic(errarg irA) *irAPanic {
 }
 
 func ªPkgSym(pkgname string, symbol string) *irAPkgSym {
+	if pkgname != "" {
+		if mod := findModuleByPName(pkgname); mod != nil {
+			symbol = ustr.Upper.Ensure(symbol, 0)
+		}
+	}
 	a := &irAPkgSym{PkgName: pkgname, Symbol: symbol}
 	return a
 }

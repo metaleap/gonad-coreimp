@@ -351,18 +351,25 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		o := ªSet(me.Assignment.ciAstToIrAst(), me.AstRight.ciAstToIrAst())
 		a = o
 	case "Indexer":
-		if me.AstRight.AstTag == "StringLiteral" { // TODO will need to differentiate better between a real property or an obj-dict-key
-			dv := ªSymPs(me.AstRight.StringLiteral, me.root.mod.irMeta.hasExport(me.AstRight.StringLiteral))
-			a = ªDot(me.Indexer.ciAstToIrAst(), dv)
-		} else {
+		if me.AstRight.AstTag != "StringLiteral" {
 			a = ªIndex(me.Indexer.ciAstToIrAst(), me.AstRight.ciAstToIrAst())
+		} else { // TODO will need to differentiate better between a real property or an obj-dict-key
+			if me.Indexer.AstTag == "Var" {
+				if mod := findModuleByPName(me.Indexer.Var); mod != nil {
+					a = ªPkgSym(mod.pName, me.AstRight.StringLiteral)
+				}
+			}
+			if a == nil {
+				dv := ªSymPs(me.AstRight.StringLiteral, me.root.mod.irMeta.hasExport(me.AstRight.StringLiteral))
+				a = ªDot(me.Indexer.ciAstToIrAst(), dv)
+			}
 		}
 	case "InstanceOf":
 		if len(me.AstRight.Var) > 0 {
 			a = ªIs(me.InstanceOf.ciAstToIrAst(), me.AstRight.Var)
 		} else /*if me.AstRight.Indexer != nil*/ {
-			adot := me.AstRight.ciAstToIrAst().(*irADot)
-			a = ªIs(me.InstanceOf.ciAstToIrAst(), findModuleByPName(adot.DotLeft.(*irASym).NamePs).qName+"."+adot.DotRight.(*irASym).NamePs)
+			apkgsym := me.AstRight.ciAstToIrAst().(*irAPkgSym)
+			a = ªIs(me.InstanceOf.ciAstToIrAst(), findModuleByPName(apkgsym.PkgName).qName+"."+apkgsym.Symbol)
 		}
 	default:
 		panic(notImplErr("CoreImp AST tag", me.AstTag, me.root.mod.srcFilePath))

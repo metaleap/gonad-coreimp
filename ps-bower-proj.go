@@ -64,18 +64,22 @@ func (me *psBowerProject) ensureOutDirs() (err error) {
 }
 
 func (me *psBowerProject) moduleByQName(qname string) *modPkg {
-	for _, m := range me.Modules {
-		if m.qName == qname {
-			return m
+	if qname != "" {
+		for _, m := range me.Modules {
+			if m.qName == qname {
+				return m
+			}
 		}
 	}
 	return nil
 }
 
 func (me *psBowerProject) moduleByPName(pname string) *modPkg {
-	for _, m := range me.Modules {
-		if m.pName == pname {
-			return m
+	if pname != "" {
+		for _, m := range me.Modules {
+			if m.pName == pname {
+				return m
+			}
 		}
 	}
 	return nil
