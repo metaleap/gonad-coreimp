@@ -272,6 +272,14 @@ func (me *irAst) postLinkUpTcMemberFuncs() {
 }
 
 func (me *irAst) postLinkUpTcInstDecls() {
+	checkObj := func(tci *irMTypeClassInst, obj *irALitObj, gtd *irANamedTypeRef) (retmod *modPkg, retgtd *irANamedTypeRef) {
+		if retmod, retgtd = findGoTypeByGoQName(me.mod, obj.RefAlias); retgtd != gtd {
+			panic(notImplErr("obj-lit type-ref", obj.RefAlias, me.mod.srcFilePath))
+		} else if len(obj.ObjFields) != len(gtd.RefStruct.Fields) {
+			panic(notImplErr("fields mismatch between constructor and struct definition for type-class "+tci.ClassName+" instance", tci.Name, me.mod.srcFilePath))
+		}
+		return
+	}
 	me.walkTopLevelDefs(func(a irA) {
 		if ab := a.Base(); a != nil {
 			if tci := me.irM.tcInst(ab.NamePs); tci != nil {
@@ -282,16 +290,11 @@ func (me *irAst) postLinkUpTcInstDecls() {
 					case *irALet:
 						switch axlv := ax.LetVal.(type) {
 						case *irALitObj:
-							if _, objgtd := findGoTypeByGoQName(me.mod, axlv.RefAlias); objgtd != gtd {
-								panic(notImplErr("obj-lit type-ref", axlv.RefAlias, me.mod.srcFilePath))
-							} else if len(axlv.ObjFields) != len(gtd.RefStruct.Fields) {
-								panic(notImplErr("fields mismatch between constructor and struct definition for type-class "+tci.ClassName+" instance", tci.Name, me.mod.srcFilePath))
-							} else {
-								for i := 0; i < len(gtd.RefStruct.Fields); i++ {
-									axlv.ObjFields[i].FieldVal.Base().copyFrom(gtd.RefStruct.Fields[i], false, true, false)
-								}
-								ax.RefAlias = axlv.RefAlias
+							checkObj(tci, axlv, gtd)
+							for i := 0; i < len(gtd.RefStruct.Fields); i++ {
+								axlv.ObjFields[i].FieldVal.Base().copyFrom(gtd.RefStruct.Fields[i], false, true, false)
 							}
+							ax.RefAlias = axlv.RefAlias
 						case *irAPkgSym:
 							ax.RefAlias = tci.ClassName
 						default:
