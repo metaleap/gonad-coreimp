@@ -265,8 +265,6 @@ func (me *irMeta) populateGoTypeDefs() {
 		tsynfound := false
 		for _, ts := range me.EnvTypeSyns {
 			if tsynfound = (ts.Name == tc.Name); tsynfound {
-				gtd := me.goTypeDefByPsName(ts.Name)
-				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, gtd.RefStruct.Fields[0])[1:]
 				break
 			}
 		}

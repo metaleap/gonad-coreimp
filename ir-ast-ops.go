@@ -16,6 +16,21 @@ func (me *irAst) prepAddOrCull(a irA) {
 		culled := false
 		if ctor, _ := a.(*irACtor); ctor != nil {
 			// PureScript CoreImp contains constructor functions for each ADT "sub-type", we drop those
+			if ab := a.Base(); ab != nil && ctor.RefFunc != nil { // but first, check if type-class ctor-func
+				if tc := me.irM.tc(ab.NamePs); tc != nil { // constructs type-class tc
+					if gtd := me.irM.goTypeDefByPsName(tc.Name); gtd != nil && gtd.RefStruct != nil { // our struct for the type-class
+						if numargs := len(ctor.RefFunc.Args); numargs != len(gtd.RefStruct.Fields) {
+							panic(notImplErr("args-num mismatch for type-class ", tc.Name, me.mod.srcFilePath))
+						} else { // for some freakish reason, ctor-func args are OFTEN BUT NOT ALWAYS in the same order as struct-from-type-syn fields: we fix the field order to match ctor-func args order
+							reordered := make(irANamedTypeRefs, numargs, numargs)
+							for i := 0; i < numargs; i++ {
+								reordered[i] = gtd.RefStruct.Fields.byPsName(ctor.RefFunc.Args[i].NamePs)
+							}
+							gtd.RefStruct.Fields = reordered
+						}
+					}
+				}
+			}
 			culled, me.culled.typeCtorFuncs = true, append(me.culled.typeCtorFuncs, ctor)
 		}
 		if !culled {
