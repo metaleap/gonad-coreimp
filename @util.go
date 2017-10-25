@@ -78,6 +78,15 @@ func findPsTypeByQName(qname string) (mod *modPkg, tr interface{}) {
 	return
 }
 
+func findGoTypeByGoQName(me *modPkg, qname string) *irANamedTypeRef {
+	pname, tname := ustr.SplitOnce(qname, '.')
+	mod := findModuleByPName(pname)
+	if mod == nil {
+		mod = me
+	}
+	return mod.irMeta.goTypeDefByGoName(tname)
+}
+
 func findGoTypeByPsQName(qname string) *irANamedTypeRef {
 	var pname, tname string
 	i := strings.LastIndex(qname, ".")

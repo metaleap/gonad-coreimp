@@ -342,11 +342,10 @@ func (me *irAst) finalizePostPrep() {
 		return ast
 	})
 
-	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
-		me.postLinkUpTcInstFuncs()
-	} else {
-		me.postLinkupTcMemberFuncs()
+	if !Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
+		me.postLinkUpTcMemberFuncs()
 	}
+	me.postLinkUpTcInstDecls()
 	me.postMiscFixups()
 	me.resolveAllArgTypes()
 }

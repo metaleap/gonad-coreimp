@@ -28,6 +28,12 @@ func (me *irAst) topLevelDefs(okay func(irA) bool) (defs []irA) {
 	return
 }
 
+func (me *irAst) walkTopLevelDefs(on func(irA)) {
+	for _, ast := range me.Body {
+		on(ast)
+	}
+}
+
 func (me *irAst) walk(on func(irA) irA) {
 	for i, a := range me.Body {
 		if a != nil {

@@ -321,7 +321,9 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 				pname = strReplDot2Underscore.Replace(pname)
 			} else {
 				if mod = findModuleByQName(qn); mod == nil {
-					panic(notImplErr("module qname", qn, me.mod.srcFilePath))
+					if mod = findModuleByPName(qn); mod == nil {
+						panic(notImplErr("module qname", qn, me.mod.srcFilePath))
+					}
 				}
 				pname = mod.pName
 			}
