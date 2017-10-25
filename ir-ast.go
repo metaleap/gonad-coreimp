@@ -388,6 +388,7 @@ func (me *irAst) finalizePostPrep() {
 	me.postLinkUpTcInstDecls()
 	me.postMiscFixups()
 	me.postEnsureArgTypes()
+	me.postEnsureIfaceCasts()
 }
 
 func (me *irAst) prepFromCoreImp() {

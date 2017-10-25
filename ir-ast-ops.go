@@ -157,7 +157,7 @@ func (me *irAst) postEnsureArgTypes() {
 						panic(notImplErr("multiple ret-args in func", ax.NamePs, me.mod.srcFilePath))
 					}
 					if len(ax.RefFunc.Rets) > 0 && !ax.RefFunc.Rets[0].hasTypeInfo() {
-						walk(ax.RefFunc.impl, false, func(stmt irA) irA {
+						walk(ax.FuncImpl, false, func(stmt irA) irA {
 							if !ax.RefFunc.Rets[0].hasTypeInfo() {
 								if ret, _ := stmt.(*irARet); ret != nil {
 									if tret := ret.ExprType(); tret != nil {
@@ -170,7 +170,7 @@ func (me *irAst) postEnsureArgTypes() {
 					}
 					for _, arg := range ax.RefFunc.Args {
 						if !arg.hasTypeInfo() {
-							walk(ax.RefFunc.impl, false, func(stmt irA) irA {
+							walk(ax.FuncImpl, false, func(stmt irA) irA {
 								if !arg.hasTypeInfo() {
 									if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
 										if tsym := sym.ExprType(); tsym != nil {
@@ -187,6 +187,17 @@ func (me *irAst) postEnsureArgTypes() {
 			return a
 		})
 	}
+}
+
+func (me *irAst) postEnsureIfaceCasts() {
+	me.walk(func(a irA) irA {
+		switch ax := a.(type) {
+		case *irAFunc:
+			if ax != nil {
+			}
+		}
+		return a
+	})
 }
 
 func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
@@ -292,7 +303,10 @@ func (me *irAst) postLinkUpTcInstDecls() {
 						case *irALitObj:
 							checkObj(tci, axlv, gtd)
 							for i := 0; i < len(gtd.RefStruct.Fields); i++ {
-								axlv.ObjFields[i].FieldVal.Base().copyFrom(gtd.RefStruct.Fields[i], false, true, false)
+								switch fvx := axlv.ObjFields[i].FieldVal.(type) {
+								case *irAFunc:
+									fvx.RefFunc.copyArgTypesOnlyFrom(true, gtd.RefStruct.Fields[i].RefFunc)
+								}
 							}
 							ax.RefAlias = axlv.RefAlias
 						case *irAPkgSym:
@@ -319,12 +333,8 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							var retmod *modPkg
 							switch axr := afnreturn.RetArg.(type) {
 							case *irALitObj:
-								if retmod, retgtd = findGoTypeByGoQName(me.mod, axr.RefAlias); retgtd != gtd {
-									panic(notImplErr("obj-lit type-ref", axr.RefAlias, me.mod.srcFilePath))
-								} else {
-									if retgtd.RefStruct.PassByPtr {
-										afnreturn.RetArg = ªO1("&", axr)
-									}
+								if retmod, retgtd = checkObj(tci, axr, gtd); retgtd.RefStruct.PassByPtr {
+									afnreturn.RetArg = ªO1("&", axr)
 								}
 							case *irAFunc:
 								fnretarg := irANamedTypeRef{RefFunc: axr.RefFunc.toSig(true)}

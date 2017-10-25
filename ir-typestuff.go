@@ -174,6 +174,27 @@ type irATypeRefFunc struct {
 	impl *irABlock
 }
 
+func (me *irATypeRefFunc) copyArgTypesOnlyFrom(namesIfMeNil bool, from *irATypeRefFunc) {
+	copyargs := func(meargs irANamedTypeRefs, fromargs irANamedTypeRefs) irANamedTypeRefs {
+		if numargsme := len(meargs); numargsme == 0 {
+			for _, arg := range fromargs {
+				mearg := &irANamedTypeRef{}
+				mearg.copyFrom(arg, namesIfMeNil, true, false)
+				meargs = append(meargs, mearg)
+			}
+		} else if numargsfrom := len(fromargs); numargsme != numargsfrom {
+			panic(notImplErr("args-num mismatch", fmt.Sprintf("%v vs %v", numargsme, numargsfrom), "copyArgTypesFrom"))
+		} else {
+			for i := 0; i < numargsme; i++ {
+				meargs[i].copyFrom(fromargs[i], false, true, false)
+			}
+		}
+		return meargs
+	}
+	me.Args = copyargs(me.Args, from.Args)
+	me.Rets = copyargs(me.Rets, from.Rets)
+}
+
 func (me *irATypeRefFunc) eq(cmp *irATypeRefFunc) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.eq(cmp.Args) && me.Rets.eq(cmp.Rets))
 }
