@@ -152,10 +152,6 @@ func (me *irAst) postEnsureArgTypes() {
 		me.walk(func(a irA) irA {
 			switch ax := a.(type) {
 			case *irAFunc:
-				if ax.RefFunc == nil {
-					println(ax.Base().NamePs + "\t" + me.mod.srcFilePath)
-					return a
-				}
 				if !ax.RefFunc.haveAllArgsTypeInfo() {
 					if len(ax.RefFunc.Rets) > 1 {
 						panic(notImplErr("multiple ret-args in func", ax.NamePs, me.mod.srcFilePath))
@@ -376,7 +372,7 @@ func (me *irAst) postMiscFixups() {
 					a.irANamedTypeRef.RefFunc.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
 				}
 			} else {
-				// panic(notImplErr("lack of RefFunc in irAFunc", a.NameGo+"/"+a.NamePs, me.mod.srcFilePath))
+				panic(notImplErr("lack of RefFunc in irAFunc", a.NameGo+"/"+a.NamePs, me.mod.srcFilePath))
 			}
 		}
 		return ast
