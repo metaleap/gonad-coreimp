@@ -8,10 +8,6 @@ import (
 	"sort"
 )
 
-const (
-	nsPrefixDefaultFfiPkg = "ps2goFFI."
-)
-
 /*
 Golang intermediate-representation AST:
 represents the code in a generated Go package, minus
@@ -19,6 +15,17 @@ represents the code in a generated Go package, minus
 (see ir-meta & ir-typestuff), also struct methods.
 This latter 'design accident' should probably be revamped.
 */
+
+const (
+	nsPrefixDefaultFfiPkg = "ps2goFFI."
+)
+
+var (
+	exprTypeInt  = &irANamedTypeRef{RefAlias: "Prim.Int"}
+	exprTypeNum  = &irANamedTypeRef{RefAlias: "Prim.Number"}
+	exprTypeStr  = &irANamedTypeRef{RefAlias: "Prim.String"}
+	exprTypeBool = &irANamedTypeRef{RefAlias: "Prim.Boolean"}
+)
 
 type irAst struct {
 	irABlock
@@ -46,6 +53,7 @@ type irTcInstImpl struct {
 type irA interface {
 	Ast() *irAst
 	Base() *irABase
+	ExprType() *irANamedTypeRef
 	Parent() irA
 }
 
@@ -53,18 +61,23 @@ type irABase struct {
 	irANamedTypeRef                   // don't use all of this, but exprs with names and/or types do as needed
 	Comments        []*coreImpComment `json:",omitempty"`
 	parent          irA
-	ast             *irAst // usually nil but set in top-level irABlock. for the rare occasions a irA impl needs this, it uses Ast() which traverses parents to the root then stores in ast --- rather than passing the root to all irA constructors etc
+	root            *irAst // usually nil but set in top-level irABlock. for the rare occasions a irA impl needs this, it uses Ast() which traverses parents to the root then stores in ast --- rather than passing the root to all irA constructors etc
+	exprType        *irANamedTypeRef
 }
 
 func (me *irABase) Ast() *irAst {
-	if me.ast == nil && me.parent != nil {
-		me.ast = me.parent.Ast()
+	if me.root == nil && me.parent != nil {
+		me.root = me.parent.Ast()
 	}
-	return me.ast
+	return me.root
 }
 
 func (me *irABase) Base() *irABase {
 	return me
+}
+
+func (me *irABase) ExprType() *irANamedTypeRef {
+	return me.exprType
 }
 
 func (me *irABase) isParentOp() (isparentop bool) {
@@ -81,7 +94,7 @@ func (me *irABase) Parent() irA {
 	return me.parent
 }
 
-func (me *irABase) SrcFilePath() (srcfilepath string) {
+func (me *irABase) srcFilePath() (srcfilepath string) {
 	if root := me.Ast(); root != nil {
 		srcfilepath = root.mod.srcFilePath
 	}
@@ -117,6 +130,27 @@ type irASym struct {
 	Sym__ interface{} // useless except we want to see it in the gonadast.json
 }
 
+func (me *irASym) ExprType() *irANamedTypeRef {
+	if me.exprType == nil {
+		switch px := me.parent.(type) {
+		case *irAIf:
+			me.exprType = exprTypeBool
+		case *irAOp1:
+			if px.Op1 == "!" {
+				me.exprType = exprTypeBool
+			}
+		}
+	}
+	return me.exprType
+}
+
+func (me *irASym) isConstable() bool {
+	if c, _ := me.refTo().(irAConstable); c != nil {
+		return c.isConstable()
+	}
+	return false
+}
+
 func (me *irASym) refTo() irA {
 	if me.refto == nil {
 		me.refto = irALookupInAncestorBlocks(me, func(stmt irA) (isref bool) {
@@ -130,13 +164,6 @@ func (me *irASym) refTo() irA {
 	return me.refto
 }
 
-func (me *irASym) isConstable() bool {
-	if c, _ := me.refTo().(irAConstable); c != nil {
-		return c.isConstable()
-	}
-	return false
-}
-
 type irAFunc struct {
 	irABase
 	FuncImpl *irABlock
@@ -147,28 +174,32 @@ type irALitStr struct {
 	LitStr string
 }
 
-func (me *irALitStr) isConstable() bool { return true }
+func (_ *irALitStr) ExprType() *irANamedTypeRef { return exprTypeStr }
+func (me *irALitStr) isConstable() bool         { return true }
 
 type irALitBool struct {
 	irABase
 	LitBool bool
 }
 
-func (_ irALitBool) isConstable() bool { return true }
+func (_ *irALitBool) ExprType() *irANamedTypeRef { return exprTypeBool }
+func (_ irALitBool) isConstable() bool           { return true }
 
 type irALitNum struct {
 	irABase
 	LitDouble float64
 }
 
-func (_ irALitNum) isConstable() bool { return true }
+func (_ *irALitNum) ExprType() *irANamedTypeRef { return exprTypeNum }
+func (_ irALitNum) isConstable() bool           { return true }
 
 type irALitInt struct {
 	irABase
 	LitInt int
 }
 
-func (_ irALitInt) isConstable() bool { return true }
+func (_ *irALitInt) ExprType() *irANamedTypeRef { return exprTypeInt }
+func (_ irALitInt) isConstable() bool           { return true }
 
 type irABlock struct {
 	irABase
@@ -176,14 +207,14 @@ type irABlock struct {
 	Body []irA
 }
 
-func (me *irABlock) Add(asts ...irA) {
+func (me *irABlock) add(asts ...irA) {
 	for _, a := range asts {
 		a.Base().parent = me
 	}
 	me.Body = append(me.Body, asts...)
 }
 
-func (me *irABlock) Prepend(asts ...irA) {
+func (me *irABlock) prepend(asts ...irA) {
 	for _, a := range asts {
 		a.Base().parent = me
 	}
@@ -252,6 +283,8 @@ type irAIf struct {
 	Else *irABlock
 }
 
+func (_ *irAIf) ExprType() *irANamedTypeRef { return exprTypeBool }
+
 type irACall struct {
 	irABase
 	Callee   irA
@@ -276,6 +309,13 @@ type irANil struct {
 type irARet struct {
 	irABase
 	RetArg irA
+}
+
+func (me *irARet) ExprType() *irANamedTypeRef {
+	if me.exprType == nil && me.RetArg != nil {
+		me.exprType = me.RetArg.ExprType()
+	}
+	return me.exprType
 }
 
 type irAPanic struct {
@@ -349,11 +389,11 @@ func (me *irAst) finalizePostPrep() {
 	}
 	me.postLinkUpTcInstDecls()
 	me.postMiscFixups()
-	me.resolveAllArgTypes()
+	me.postEnsureArgTypes()
 }
 
 func (me *irAst) prepFromCoreImp() {
-	me.irABlock.ast = me
+	me.irABlock.root = me
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
 	//	mostly focus on discovering new type-defs, final transforms once all
 	//	type-defs in all modules are known happen in FinalizePostPrep
@@ -374,10 +414,6 @@ func (me *irAst) prepFromCoreImp() {
 	}
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)
-}
-
-func (me *irAst) resolveAllArgTypes() {
-	//	first pass: walk all literals and propagate to parent expressions
 }
 
 func (me *irAst) writeAsJsonTo(w io.Writer) error {

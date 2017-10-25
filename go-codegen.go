@@ -323,9 +323,7 @@ func (me *irAst) codeGenFuncArgs(w io.Writer, indent int, methodargs irANamedTyp
 	if parens {
 		fmt.Fprint(w, ")")
 	}
-	if !isretargs {
-		fmt.Fprint(w, " ")
-	}
+	fmt.Fprint(w, " ")
 }
 
 func (me *irAst) codeGenModImps(w io.Writer) (err error) {

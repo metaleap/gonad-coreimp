@@ -148,7 +148,7 @@ func (me *coreImpAst) astForceIntoBlock(into *irABlock) {
 			a.Base().parent = into
 		}
 	default:
-		into.Add(maybebody)
+		into.add(maybebody)
 	}
 }
 
@@ -169,7 +169,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 	case "Block":
 		b := ªBlock()
 		for _, c := range me.Block {
-			b.Add(c.ciAstToIrAst())
+			b.add(c.ciAstToIrAst())
 		}
 		a = b
 	case "While":

@@ -85,7 +85,7 @@ func (me *irAst) prepAddOrCull(a irA) {
 			// }
 		}
 		if !culled {
-			me.Add(a)
+			me.add(a)
 		}
 	}
 }
@@ -105,7 +105,7 @@ func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 			}
 		}
 	}
-	me.Add(nuglobals...)
+	me.add(nuglobals...)
 	return
 }
 
@@ -196,6 +196,48 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 		}
 		return ast
 	})
+}
+
+func (me *irAst) postEnsureArgTypes() {
+	for again := true; again; again = false {
+		me.walk(func(a irA) irA {
+			switch ax := a.(type) {
+			case *irAFunc:
+				if !ax.RefFunc.haveAllArgsTypeInfo() {
+					if len(ax.RefFunc.Rets) > 1 {
+						panic(notImplErr("multiple ret-args in func", ax.NamePs, me.mod.srcFilePath))
+					}
+					if len(ax.RefFunc.Rets) > 0 && !ax.RefFunc.Rets[0].hasTypeInfo() {
+						walk(ax.RefFunc.impl, false, func(stmt irA) irA {
+							if !ax.RefFunc.Rets[0].hasTypeInfo() {
+								if ret, _ := stmt.(*irARet); ret != nil {
+									if tret := ret.ExprType(); tret != nil {
+										ax.RefFunc.Rets[0].copyFrom(tret, false, true, false)
+									}
+								}
+							}
+							return stmt
+						})
+					}
+					for _, arg := range ax.RefFunc.Args {
+						if !arg.hasTypeInfo() {
+							walk(ax.RefFunc.impl, false, func(stmt irA) irA {
+								if !arg.hasTypeInfo() {
+									if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
+										if tsym := sym.ExprType(); tsym != nil {
+											// arg.copyFrom(tsym, false, true, false)
+										}
+									}
+								}
+								return stmt
+							})
+						}
+					}
+				}
+			}
+			return a
+		})
+	}
 }
 
 func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {

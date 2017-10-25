@@ -198,6 +198,38 @@ type irATypeRefFunc struct {
 	impl *irABlock
 }
 
+func (me *irATypeRefFunc) eq(cmp *irATypeRefFunc) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.eq(cmp.Args) && me.Rets.eq(cmp.Rets))
+}
+
+func (me *irATypeRefFunc) haveAllArgsTypeInfo() bool {
+	for _, arg := range me.Args {
+		if !arg.hasTypeInfo() {
+			return false
+		}
+	}
+	for _, ret := range me.Rets {
+		if !ret.hasTypeInfo() {
+			return false
+		}
+	}
+	return true
+}
+
+func (me *irATypeRefFunc) haveAnyArgsTypeInfo() bool {
+	for _, arg := range me.Args {
+		if arg.hasTypeInfo() {
+			return true
+		}
+	}
+	for _, ret := range me.Rets {
+		if ret.hasTypeInfo() {
+			return true
+		}
+	}
+	return false
+}
+
 func (me *irATypeRefFunc) toSig(forceretarg bool) (rf *irATypeRefFunc) {
 	rf = &irATypeRefFunc{}
 	for _, arg := range me.Args {
@@ -211,10 +243,6 @@ func (me *irATypeRefFunc) toSig(forceretarg bool) (rf *irATypeRefFunc) {
 		}
 	}
 	return
-}
-
-func (me *irATypeRefFunc) eq(cmp *irATypeRefFunc) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.eq(cmp.Args) && me.Rets.eq(cmp.Rets))
 }
 
 type irATypeRefStruct struct {
