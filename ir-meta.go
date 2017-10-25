@@ -345,11 +345,9 @@ func (me *irMeta) populateEnvTypeDataDecls() {
 
 func (me *irMeta) populateEnvTypeSyns() {
 	for tsname, tsdef := range me.mod.coreimp.DeclEnv.TypeSyns {
-		if _, istc := me.mod.coreimp.DeclEnv.Classes[tsname]; !istc {
-			ts := &irMNamedTypeRef{Name: tsname}
-			ts.Ref = me.newTypeRefFromEnvTag(tsdef.Type)
-			me.EnvTypeSyns = append(me.EnvTypeSyns, ts)
-		}
+		ts := &irMNamedTypeRef{Name: tsname}
+		ts.Ref = me.newTypeRefFromEnvTag(tsdef.Type)
+		me.EnvTypeSyns = append(me.EnvTypeSyns, ts)
 	}
 }
 

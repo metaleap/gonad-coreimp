@@ -420,7 +420,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 				}
 			}
 			var buf bytes.Buffer
-			for _, ifmethod := range gtd.RefInterface.allMethods() {
+			for _, ifmethod := range gtd.RefInterface.Methods {
 				fmt.Fprint(&buf, ifmethod.NameGo)
 				if ifmethod.RefFunc == nil {
 					panic(notImplErr("interface-method (not a func)", ifmethod.NamePs, gtd.NamePs))

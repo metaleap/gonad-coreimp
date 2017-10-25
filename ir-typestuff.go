@@ -167,30 +167,6 @@ func (me *irATypeRefInterface) eq(cmp *irATypeRefInterface) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.eq(cmp.Methods))
 }
 
-func (me *irATypeRefInterface) allMethods() (allmethods irANamedTypeRefs) {
-	allmethods = me.Methods
-	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces && (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
-		// if len(me.inheritedMethods) == 0 {
-		// 	m := map[string]*irANamedTypeRef{}
-		// 	for _, embed := range me.Embeds {
-		// 		if gtd := findGoTypeByPsQName(embed); gtd == nil || gtd.RefInterface == nil {
-		// 			panic(notImplErr("reference to interface-type-class", embed, me.xtc.Name))
-		// 		} else {
-		// 			for _, method := range gtd.RefInterface.allMethods() {
-		// 				if dupl := m[method.NameGo]; dupl == nil {
-		// 					m[method.NameGo], me.inheritedMethods = method, append(me.inheritedMethods, method)
-		// 				} else if !dupl.eq(method) {
-		// 					panic("Interface (generated from type-class " + me.xtc.Name + ") would inherit multiple (but different-signature) methods named " + method.NameGo)
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-		// }
-		// allmethods = append(me.inheritedMethods, allmethods...)
-	}
-	return
-}
-
 type irATypeRefFunc struct {
 	Args irANamedTypeRefs `json:",omitempty"`
 	Rets irANamedTypeRefs `json:",omitempty"`
@@ -279,66 +255,34 @@ func (me *irMeta) populateGoTypeDefs() {
 		tdict := map[string][]string{}
 		gtd := &irANamedTypeRef{Export: me.hasExport(ts.Name)}
 		gtd.setBothNamesFromPsName(ts.Name)
+		if tc := me.tc(ts.Name); tc != nil {
+			gtd.NameGo += "ˇ"
+		}
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
-	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
-		// for _, tc := range me.EnvTypeClasses {
-		// 	tdict := map[string][]string{}
-		// 	gif := &irATypeRefInterface{xtc: tc}
-		// 	for _, tcc := range tc.Constraints {
-		// 		for _, tcca := range tcc.Args {
-		// 			ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
-		// 		}
-		// 		if legacyIfaceEmbeds && !uslice.StrHas(gif.Embeds, tcc.Class) {
-		// 			gif.Embeds = append(gif.Embeds, tcc.Class)
-		// 		}
-		// 	}
-		// 	for _, tcm := range tc.Members {
-		// 		ifm := &irANamedTypeRef{NamePs: tcm.Name, NameGo: sanitizeSymbolForGo(tcm.Name, true)}
-		// 		ifm.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
-		// 		if ifm.RefFunc == nil {
-		// 			if ifm.RefInterface != nil {
-		// 				ifm.RefFunc = &irATypeRefFunc{
-		// 					Rets: irANamedTypeRefs{&irANamedTypeRef{}},
-		// 				}
-		// 				ifm.RefFunc.Rets[0].setRefFrom(ifm.RefInterface)
-		// 				ifm.RefInterface = nil
-		// 			} else if len(ifm.RefAlias) > 0 {
-		// 				ifm.RefFunc = &irATypeRefFunc{
-		// 					Rets: irANamedTypeRefs{&irANamedTypeRef{RefAlias: ifm.RefAlias}},
-		// 				}
-		// 				ifm.RefAlias = ""
-		// 			} else if ifm.RefArray != nil || ifm.RefPtr != nil || ifm.RefStruct != nil || ifm.RefUnknown > 0 {
-		// 				panic(notImplErr("RefType", "ifm", me.mod.srcFilePath))
-		// 			} else {
-		// 				ifm.RefFunc = &irATypeRefFunc{
-		// 					Rets: irANamedTypeRefs{&irANamedTypeRef{}},
-		// 				}
-		// 			}
-		// 		} else {
-		// 			ifm.RefFunc.Args[0].setBothNamesFromPsName("v")
-		// 		}
-		// 		gif.Methods = append(gif.Methods, ifm)
-		// 	}
-		// 	tgif := &irANamedTypeRef{Export: me.hasExport(tc.Name)}
-		// 	tgif.setBothNamesFromPsName(tc.Name)
-		// 	tgif.setRefFrom(gif)
-		// 	me.GoTypeDefs = append(me.GoTypeDefs, tgif)
-		// }
-	} else {
-		for _, tc := range me.EnvTypeClasses {
-			tdict, gtd := map[string][]string{}, &irANamedTypeRef{Export: me.hasExport(tc.Name)}
-			gtd.setBothNamesFromPsName(tc.Name)
-			gtd.NameGo += "ˇ"
-			gtd.RefStruct = &irATypeRefStruct{PassByPtr: true}
-			for _, tcm := range tc.Members {
-				tcmfield := &irANamedTypeRef{Export: true}
-				tcmfield.setBothNamesFromPsName(tcm.Name)
-				tcmfield.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
-				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, tcmfield)
+	for _, tc := range me.EnvTypeClasses {
+		tsynfound := false
+		for _, ts := range me.EnvTypeSyns {
+			if tsynfound = (ts.Name == tc.Name); tsynfound {
+				gtd := me.goTypeDefByPsName(ts.Name)
+				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, gtd.RefStruct.Fields[0])[1:]
+				break
 			}
-			me.GoTypeDefs = append(me.GoTypeDefs, gtd)
+		}
+		if !tsynfound {
+			panic(notImplErr("lack of pre-formed type-synonym for type-class", tc.Name, me.mod.srcFilePath))
+			// tdict, gtd := map[string][]string{}, &irANamedTypeRef{Export: me.hasExport(tc.Name)}
+			// gtd.setBothNamesFromPsName(tc.Name)
+			// gtd.NameGo += "ˇ"
+			// gtd.RefStruct = &irATypeRefStruct{PassByPtr: true}
+			// for _, tcm := range tc.Members {
+			// 	tcmfield := &irANamedTypeRef{Export: true}
+			// 	tcmfield.setBothNamesFromPsName(tcm.Name)
+			// 	tcmfield.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
+			// 	gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, tcmfield)
+			// }
+			// me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 		}
 	}
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toIrADataTypeDefs(me.EnvTypeDataDecls)...)
@@ -465,23 +409,17 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		}
 		return &irATypeRefInterface{Embeds: embeds}
 	} else if tr.ConstrainedType != nil {
-		if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
-			// if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
-			// 	ensureIfaceForTvar(tdict, "", tr.ConstrainedType.Class) // TODO deal with this properly
-			// } else {
-			// 	ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
-			// }
-		}
 		return me.toIrATypeRef(tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {
 		return me.toIrATypeRef(tdict, tr.ForAll.Ref)
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &irATypeRefStruct{PassByPtr: true, Fields: irANamedTypeRefs{&irANamedTypeRef{Export: true}}}
-		rectype.Fields[0].setBothNamesFromPsName(tr.RCons.Label)
-		rectype.Fields[0].setRefFrom(me.toIrATypeRef(tdict, tr.RCons.Left))
-
+		rectype := &irATypeRefStruct{PassByPtr: true}
+		myfield := &irANamedTypeRef{Export: true}
+		myfield.setBothNamesFromPsName(tr.RCons.Label)
+		myfield.setRefFrom(me.toIrATypeRef(tdict, tr.RCons.Left))
+		rectype.Fields = append(rectype.Fields, myfield)
 		if nextrow := me.toIrATypeRef(tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*irATypeRefStruct).Fields...)
 		}
@@ -493,7 +431,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			array := &irATypeRefArray{Of: &irANamedTypeRef{}}
 			array.Of.setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Right))
 			return array
-		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" {
+		} else if tr.TypeApp.Left.TypeApp != nil && (tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" || /*insanely hacky*/ tr.TypeApp.Right.TypeVar != "") {
 			funtype := &irATypeRefFunc{}
 			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
 			funtype.Args[0].setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Left.TypeApp.Right))
@@ -502,8 +440,8 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			return funtype
 		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
 			return me.toIrATypeRef(tdict, tr.TypeApp.Left)
-			// } else {
-			//	Nested stuff ie. (Either foo) bar
+		} else {
+			return &irATypeRefInterface{}
 		}
 	}
 	return nil
