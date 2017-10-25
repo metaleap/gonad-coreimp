@@ -90,7 +90,8 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irASym:
 		fmt.Fprint(w, a.NameGo)
 	case *irALet:
-		fmt.Fprintf(w, "%svar %s", tabs, a.NameGo)
+		fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
+		me.codeGenTypeRef(w, &a.irANamedTypeRef, -1)
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.LetVal)
 		fmt.Fprint(w, "\n")

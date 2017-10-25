@@ -89,6 +89,12 @@ func (me *irANamedTypeRef) copyFrom(from *irANamedTypeRef, names bool, trefs boo
 	}
 }
 
+func (me *irANamedTypeRef) nameless() (copy *irANamedTypeRef) {
+	copy = &irANamedTypeRef{}
+	copy.copyFrom(me, false, true, false)
+	return
+}
+
 func (me *irANamedTypeRef) eq(cmp *irANamedTypeRef) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.eq(cmp.RefInterface) && me.RefFunc.eq(cmp.RefFunc) && me.RefStruct.eq(cmp.RefStruct) && me.RefArray.eq(cmp.RefArray) && me.RefPtr.eq(cmp.RefPtr))
 }
@@ -190,6 +196,21 @@ type irATypeRefFunc struct {
 	Rets irANamedTypeRefs `json:",omitempty"`
 
 	impl *irABlock
+}
+
+func (me *irATypeRefFunc) toSig(forceretarg bool) (rf *irATypeRefFunc) {
+	rf = &irATypeRefFunc{}
+	for _, arg := range me.Args {
+		rf.Args = append(rf.Args, arg.nameless())
+	}
+	if len(me.Rets) == 0 && forceretarg {
+		rf.Rets = append(rf.Rets, &irANamedTypeRef{})
+	} else {
+		for _, ret := range me.Rets {
+			rf.Rets = append(rf.Rets, ret.nameless())
+		}
+	}
+	return
 }
 
 func (me *irATypeRefFunc) eq(cmp *irATypeRefFunc) bool {

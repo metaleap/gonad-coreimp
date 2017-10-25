@@ -286,6 +286,15 @@ func (me *irAst) postLinkUpTcInstDecls() {
 			if ab := a.Base(); a != nil {
 				if tci := me.irM.tcInst(ab.NamePs); tci != nil {
 					switch ax := a.(type) {
+					case *irALet:
+						switch axlv := ax.LetVal.(type) {
+						case *irALitObj:
+							ax.RefAlias = axlv.RefAlias
+						case *irAPkgSym:
+							ax.RefAlias = tci.ClassName
+						default:
+							panicWithType(me.mod.srcFilePath, axlv, ab.NamePs+".LetVal")
+						}
 					case *irAFunc:
 						if len(ax.RefFunc.Args) != 1 {
 							panic(notImplErr(tci.ClassName+" type-class instance func args for", tci.Name, me.mod.srcFilePath))
@@ -315,9 +324,14 @@ func (me *irAst) postLinkUpTcInstDecls() {
 									}
 								}
 							case *irAFunc:
+								fnretarg := irANamedTypeRef{RefFunc: axr.RefFunc.toSig(true)}
+								ax.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
 							case *irASym:
+								if axr.NamePs != fndictarg.NamePs {
+									panic(notImplErr("return argument name '"+axr.NamePs+"', expected", fndictarg.NamePs, me.mod.srcFilePath))
+								}
+								retmod, retgtd = tcmod, gtd
 							case *irACall:
-								// assumption for now
 								retmod, retgtd = tcmod, gtd
 							default:
 								panicWithType(me.mod.srcFilePath, axr, tci.Name)
@@ -333,7 +347,6 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								ax.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
 							}
 						}
-					case *irALet:
 					default:
 						panicWithType(me.mod.srcFilePath, ax, tci.Name)
 					}
