@@ -269,7 +269,7 @@ func (me *irAst) postLinkupTcMemberFuncs() {
 				} else if fndictarg := afn.RefFunc.Args[0]; fndictarg.NamePs != "dict" {
 					panic(notImplErr(tcm.tc.Name+" type-class member '"+tcm.Name+"' func arg", fndictarg.NamePs, me.mod.srcFilePath))
 				} else if gtd := me.irM.goTypeDefByPsName(tcm.tc.Name); gtd == nil {
-					panic(notImplErr("type-class '"+tcm.tc.Name+"' for member", tcm.Name, me.mod.srcFilePath))
+					panic(notImplErr("type-class '"+tcm.tc.Name+"' (its struct type-def wasn't found) for member", tcm.Name, me.mod.srcFilePath))
 				} else {
 					fndictarg.RefAlias = gtd.NamePs
 					fnretarg := irANamedTypeRef{}
@@ -278,7 +278,6 @@ func (me *irAst) postLinkupTcMemberFuncs() {
 				}
 			}
 		}
-
 		return false
 	})
 }

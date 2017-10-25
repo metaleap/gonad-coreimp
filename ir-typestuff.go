@@ -277,7 +277,7 @@ func (me *irMeta) populateGoTypeDefs() {
 			tdict, gtd := map[string][]string{}, &irANamedTypeRef{Export: me.hasExport(tc.Name)}
 			gtd.setBothNamesFromPsName(tc.Name)
 			gtd.NameGo += "ˇ"
-			gtd.RefStruct = &irATypeRefStruct{}
+			gtd.RefStruct = &irATypeRefStruct{PassByPtr: true}
 			for _, tcm := range tc.Members {
 				tcmfield := &irANamedTypeRef{Export: true}
 				tcmfield.setBothNamesFromPsName(tcm.Name)
