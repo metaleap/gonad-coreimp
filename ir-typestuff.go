@@ -72,6 +72,11 @@ type irANamedTypeRef struct {
 	sortIndex int
 }
 
+func (me *irANamedTypeRef) turnRefAliasIntoRefPtr() {
+	me.RefPtr = &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: me.RefAlias}}
+	me.RefAlias = ""
+}
+
 func (me *irANamedTypeRef) copyFrom(from *irANamedTypeRef, names bool, trefs bool, export bool) {
 	if names {
 		me.NameGo, me.NamePs = from.NameGo, from.NamePs

@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 
 	"github.com/metaleap/go-util/fs"
 	"github.com/metaleap/go-util/slice"
+	"github.com/metaleap/go-util/str"
 )
 
 /*
@@ -102,7 +102,7 @@ type irMPkgRef struct {
 }
 
 func (me *modPkg) newModImp() *irMPkgRef {
-	return &irMPkgRef{GoName: me.pName, PsModQName: me.qName, ImpPath: path.Join(me.proj.GoOut.PkgDirPath, me.goOutDirPath)}
+	return &irMPkgRef{GoName: me.pName, PsModQName: me.qName, ImpPath: me.impPath()}
 }
 
 type irMNamedTypeRef struct {
@@ -222,6 +222,17 @@ func (me *irMTypeRefSkolem) eq(cmp *irMTypeRefSkolem) bool {
 }
 
 func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
+	if len(imppath) == 0 && (ustr.BeginsUpper(lname) || ustr.BeginsUpper(qname)) {
+		var mod *modPkg
+		if len(qname) > 0 {
+			mod = findModuleByQName(qname)
+		} else if len(lname) > 0 {
+			mod = findModuleByPName(lname)
+		}
+		if mod != nil {
+			lname, qname, imppath = mod.pName, mod.qName, mod.impPath()
+		}
+	}
 	imp, save := me.Imports.addIfMissing(lname, imppath, qname)
 	if save {
 		me.save = true

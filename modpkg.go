@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"path"
 
 	"github.com/metaleap/go-util/fs"
 )
@@ -56,6 +57,10 @@ func findModuleByPName(pname string) (modinfo *modPkg) {
 		}
 	}
 	return
+}
+
+func (me *modPkg) impPath() string {
+	return path.Join(me.proj.GoOut.PkgDirPath, me.goOutDirPath)
 }
 
 func (me *modPkg) loadPkgIrMeta() (err error) {

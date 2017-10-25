@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -82,7 +81,7 @@ func main() {
 func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
 	for _, dep := range Deps {
 		for _, mod := range dep.Modules {
-			if allpkgimppaths[path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)] = mod.reGenIr; mod.reGenIr {
+			if allpkgimppaths[mod.impPath()] = mod.reGenIr; mod.reGenIr {
 				numregen++
 			}
 		}
@@ -100,7 +99,7 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 		thisok := []string{}
 		for _, dep := range Deps {
 			for _, mod := range dep.Modules {
-				if modimppath := path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath); !uslice.StrHas(okpkgs, modimppath) {
+				if modimppath := mod.impPath(); !uslice.StrHas(okpkgs, modimppath) {
 					isthisok := true
 					for _, imp := range mod.irMeta.Imports {
 						if !uslice.StrHas(okpkgs, imp.ImpPath) {

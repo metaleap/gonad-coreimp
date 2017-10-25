@@ -273,8 +273,7 @@ func (me *irAst) postLinkUpTcMemberFuncs() {
 					panic(notImplErr("type-class '"+tcm.tc.Name+"' (its struct type-def wasn't found) for member", tcm.Name, me.mod.srcFilePath))
 				} else {
 					if fndictarg.RefAlias = gtd.NamePs; gtd.RefStruct.PassByPtr {
-						fndictarg.RefPtr = &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: fndictarg.RefAlias}}
-						fndictarg.RefAlias = ""
+						fndictarg.turnRefAliasIntoRefPtr()
 					}
 					fnretarg := irANamedTypeRef{}
 					fnretarg.copyFrom(gtd.RefStruct.Fields.byPsName(tcm.Name), false, true, false)
@@ -302,25 +301,29 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
 						} else if len(ax.RefFunc.impl.Body) != 1 {
 							panic(notImplErr(tci.ClassName+" type-class instance func body for", tci.Name, me.mod.srcFilePath))
-						} else if afnret, _ := ax.RefFunc.impl.Body[0].(*irARet); afnret == nil {
+						} else if afnreturn, _ := ax.RefFunc.impl.Body[0].(*irARet); afnreturn == nil {
 							panic(notImplErr(tci.ClassName+" type-class instance func body for", tci.Name, me.mod.srcFilePath))
 						} else {
-							if fndictarg.RefAlias = gtd.NamePs; gtd.RefStruct.PassByPtr {
-								fndictarg.RefPtr = &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: fndictarg.RefAlias}}
-								fndictarg.RefAlias = ""
+							if fndictarg.RefAlias = tci.ClassName; gtd.RefStruct.PassByPtr {
+								fndictarg.turnRefAliasIntoRefPtr()
 							}
 							fnretarg := irANamedTypeRef{}
-							switch axr := afnret.RetArg.(type) {
+							switch axr := afnreturn.RetArg.(type) {
 							case *irALitObj:
 								if ctorgtd := findGoTypeByGoQName(me.mod, axr.RefAlias); ctorgtd != gtd {
 									panic(notImplErr("obj-lit type-ref", axr.RefAlias, me.mod.srcFilePath))
 								} else {
-									fnretarg.copyFrom(&axr.irANamedTypeRef, false, true, false)
+									if gtd.RefStruct.PassByPtr {
+										afnreturn.RetArg = ªO1("&", axr)
+									}
+									if fnretarg.copyFrom(&axr.irANamedTypeRef, false, true, false); gtd.RefStruct.PassByPtr {
+										fnretarg.turnRefAliasIntoRefPtr()
+									}
 								}
 							case *irAFunc:
 							case *irASym:
-								println(me.mod.srcFilePath)
 							case *irACall:
+								println(me.mod.srcFilePath + "\t" + tci.Name)
 							default:
 								panicWithType(me.mod.srcFilePath, axr, tci.Name)
 							}
