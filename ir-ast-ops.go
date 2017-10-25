@@ -337,7 +337,9 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								if _, objgtd := findGoTypeByGoQName(me.mod, axlv.RefAlias); objgtd != gtd {
 									panic(notImplErr("obj-lit type-ref", axlv.RefAlias, me.mod.srcFilePath))
 								} else {
-									if len(axlv.ObjFields) != len(gtd.RefStruct.Fields) {
+									if len(axlv.ObjFields) > len(gtd.RefStruct.Fields) {
+										println(len(axlv.ObjFields))
+										println(len(gtd.RefStruct.Fields))
 										panic(me.mod.srcFilePath + "\t\t\t" + tci.Name + "›››››››" + tci.ClassName)
 									}
 									ax.RefAlias = axlv.RefAlias
