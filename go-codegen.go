@@ -177,7 +177,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, ")")
 	case *irAPkgSym:
 		if len(a.PkgName) > 0 {
-			if pkgimp := me.irM.Imports.byImpName(a.PkgName); pkgimp != nil {
+			if pkgimp := me.irM.ensureImp(a.PkgName, "", ""); pkgimp != nil {
 				pkgimp.emitted = true
 			}
 			fmt.Fprintf(w, "%s.", a.PkgName)

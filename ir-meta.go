@@ -64,9 +64,12 @@ func (me irMPkgRefs) Len() int           { return len(me) }
 func (me irMPkgRefs) Less(i, j int) bool { return me[i].ImpPath < me[j].ImpPath }
 func (me irMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
 
-func (me *irMPkgRefs) addIfHasnt(lname, imppath, qname string) (pkgref *irMPkgRef) {
+func (me *irMPkgRefs) addIfMissing(lname, imppath, qname string) (pkgref *irMPkgRef, added bool) {
+	if imppath == "" {
+		imppath = lname
+	}
 	if pkgref = me.byImpPath(imppath); pkgref == nil {
-		pkgref = &irMPkgRef{GoName: lname, ImpPath: imppath, PsModQName: qname}
+		added, pkgref = true, &irMPkgRef{GoName: lname, ImpPath: imppath, PsModQName: qname}
 		*me = append(*me, pkgref)
 	}
 	return
@@ -216,6 +219,14 @@ type irMTypeRefSkolem struct {
 
 func (me *irMTypeRefSkolem) eq(cmp *irMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
+}
+
+func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
+	imp, save := me.Imports.addIfMissing(lname, imppath, qname)
+	if save {
+		me.save = true
+	}
+	return imp
 }
 
 func (me *irMeta) hasExport(name string) bool {

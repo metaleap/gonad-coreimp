@@ -158,8 +158,7 @@ func (me *irAst) prepFixupNameCasings() {
 func (me *irAst) prepForeigns() {
 	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
 		qn := nsPrefixDefaultFfiPkg + me.mod.qName
-		me.irM.ForeignImp = me.irM.Imports.addIfHasnt(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
-		me.irM.save = true
+		me.irM.ForeignImp = me.irM.ensureImp(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
 	}
 }
 
@@ -247,14 +246,11 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 					}
 				}
 				if len(oc.CallArgs) > 1 {
-					me.irM.Imports.addIfHasnt("reflect", "reflect", "")
-					me.irM.save = true
+					me.irM.ensureImp("reflect", "", "")
 					oc.CallArgs[0].(*irALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
 				}
 			}
 		}
-		me.irM.Imports.addIfHasnt("fmt", "fmt", "")
-		me.irM.save = true
 		call := ªCall(ªPkgSym("fmt", "Errorf"), oc.CallArgs...)
 		return call
 	} else if ocv != nil {
@@ -323,6 +319,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								}
 							case *irAFunc:
 							case *irASym:
+								println(me.mod.srcFilePath)
 							case *irACall:
 							default:
 								panicWithType(me.mod.srcFilePath, axr, tci.Name)

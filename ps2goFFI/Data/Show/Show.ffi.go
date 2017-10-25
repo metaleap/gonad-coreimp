@@ -1,17 +1,17 @@
 package ps2goFFI_Data_Show
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
-	"strings"
 )
 
-type show func(interface{}) string
+type Shows func(interface{}) string
 
 var (
-	ShowIntImpl    show = ShowImpl
-	ShowNumberImpl show = ShowImpl
-	ShowCharImpl   show = ShowStringImpl
+	ShowIntImpl    Shows = ShowImpl
+	ShowNumberImpl Shows = ShowImpl
+	ShowCharImpl   Shows = ShowStringImpl
 )
 
 func ShowImpl(v interface{}) string {
@@ -22,18 +22,25 @@ func ShowStringImpl(v interface{}) string {
 	return fmt.Sprintf("%q", v)
 }
 
-func ShowArrayImpl(showItemImpl show) show {
+func ShowArrayImpl(showItemImpl Shows) Shows {
 	return func(v interface{}) string {
 		switch reflect.TypeOf(v).Kind() {
 		case reflect.Slice, reflect.Array:
+			var buf bytes.Buffer
+			buf.WriteRune('[')
 			rsl := reflect.ValueOf(v)
-			rsllen := rsl.Len()
-			sl := make([]string, rsllen, rsllen)
+			isfirst, rsllen := true, rsl.Len()
 			for i := 0; i < rsllen; i++ {
-				sl[i] = showItemImpl(rsl.Index(i).Interface())
+				if isfirst {
+					isfirst = false
+				} else {
+					buf.WriteRune(',')
+				}
+				buf.WriteString(showItemImpl(rsl.Index(i).Interface()))
 			}
-			return "[" + strings.Join(sl, ",") + "]"
+			buf.WriteRune(']')
+			return buf.String()
 		}
-		panic(fmt.Errorf("ShowArrayImpl called with %v --- a %v.", v, reflect.TypeOf(v)))
+		panic(fmt.Errorf("called ShowArrayImpl with %v --- a %v", v, reflect.TypeOf(v)))
 	}
 }
