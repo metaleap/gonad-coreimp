@@ -225,7 +225,7 @@ func (me *irAst) postEnsureArgTypes() {
 								if !arg.hasTypeInfo() {
 									if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
 										if tsym := sym.ExprType(); tsym != nil {
-											// arg.copyFrom(tsym, false, true, false)
+											arg.copyFrom(tsym, false, true, false)
 										}
 									}
 								}
@@ -380,7 +380,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							}
 							if retgtd != nil {
 								fnretarg := irANamedTypeRef{RefAlias: retgtd.NameGo}
-								if retmod != nil {
+								if retmod != nil && retmod != me.mod {
 									fnretarg.RefAlias = retmod.pName + "." + fnretarg.RefAlias
 								}
 								if retgtd.RefStruct.PassByPtr {

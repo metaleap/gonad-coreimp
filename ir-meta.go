@@ -221,7 +221,10 @@ func (me *irMTypeRefSkolem) eq(cmp *irMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
 }
 
-func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
+func (me *irMeta) ensureImp(lname, imppath, qname string) (imp *irMPkgRef) {
+	if imp = me.Imports.byImpName(lname); imp != nil {
+		return imp
+	}
 	if len(imppath) == 0 && (ustr.BeginsUpper(lname) || ustr.BeginsUpper(qname)) {
 		var mod *modPkg
 		if len(qname) > 0 {
@@ -233,7 +236,8 @@ func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
 			lname, qname, imppath = mod.pName, mod.qName, mod.impPath()
 		}
 	}
-	imp, save := me.Imports.addIfMissing(lname, imppath, qname)
+	var save bool
+	imp, save = me.Imports.addIfMissing(lname, imppath, qname)
 	if save {
 		me.save = true
 	}
