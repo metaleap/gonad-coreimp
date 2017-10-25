@@ -158,7 +158,7 @@ func (me *irATypeRefInterface) eq(cmp *irATypeRefInterface) bool {
 
 func (me *irATypeRefInterface) allMethods() (allmethods irANamedTypeRefs) {
 	allmethods = me.Methods
-	if (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
+	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces && (!areOverlappingInterfacesSupportedByGo) && len(me.Embeds) > 0 {
 		if len(me.inheritedMethods) == 0 {
 			m := map[string]*irANamedTypeRef{}
 			for _, embed := range me.Embeds {
@@ -196,8 +196,6 @@ type irATypeRefStruct struct {
 	Fields    irANamedTypeRefs `json:",omitempty"`
 	PassByPtr bool             `json:",omitempty"`
 	Methods   irANamedTypeRefs `json:",omitempty"`
-
-	instOf string
 }
 
 func (me *irATypeRefStruct) eq(cmp *irATypeRefStruct) bool {
@@ -230,51 +228,65 @@ func (me *irMeta) populateGoTypeDefs() {
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
-
-	for _, tc := range me.EnvTypeClasses {
-		tdict := map[string][]string{}
-		gif := &irATypeRefInterface{xtc: tc}
-		for _, tcc := range tc.Constraints {
-			for _, tcca := range tcc.Args {
-				ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
-			}
-			if legacyIfaceEmbeds && !uslice.StrHas(gif.Embeds, tcc.Class) {
-				gif.Embeds = append(gif.Embeds, tcc.Class)
-			}
-		}
-		for _, tcm := range tc.Members {
-			ifm := &irANamedTypeRef{NamePs: tcm.Name, NameGo: sanitizeSymbolForGo(tcm.Name, true)}
-			ifm.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
-			if ifm.RefFunc == nil {
-				if ifm.RefInterface != nil {
-					ifm.RefFunc = &irATypeRefFunc{
-						Rets: irANamedTypeRefs{&irANamedTypeRef{}},
-					}
-					ifm.RefFunc.Rets[0].setRefFrom(ifm.RefInterface)
-					ifm.RefInterface = nil
-				} else if len(ifm.RefAlias) > 0 {
-					ifm.RefFunc = &irATypeRefFunc{
-						Rets: irANamedTypeRefs{&irANamedTypeRef{RefAlias: ifm.RefAlias}},
-					}
-					ifm.RefAlias = ""
-				} else if ifm.RefArray != nil || ifm.RefPtr != nil || ifm.RefStruct != nil || ifm.RefUnknown > 0 {
-					panic(notImplErr("RefType", "ifm", me.mod.srcFilePath))
-				} else {
-					ifm.RefFunc = &irATypeRefFunc{
-						Rets: irANamedTypeRefs{&irANamedTypeRef{}},
-					}
+	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
+		for _, tc := range me.EnvTypeClasses {
+			tdict := map[string][]string{}
+			gif := &irATypeRefInterface{xtc: tc}
+			for _, tcc := range tc.Constraints {
+				for _, tcca := range tcc.Args {
+					ensureIfaceForTvar(tdict, tcca.TypeVar, tcc.Class)
 				}
-			} else {
-				ifm.RefFunc.Args[0].setBothNamesFromPsName("v")
+				if legacyIfaceEmbeds && !uslice.StrHas(gif.Embeds, tcc.Class) {
+					gif.Embeds = append(gif.Embeds, tcc.Class)
+				}
 			}
-			gif.Methods = append(gif.Methods, ifm)
+			for _, tcm := range tc.Members {
+				ifm := &irANamedTypeRef{NamePs: tcm.Name, NameGo: sanitizeSymbolForGo(tcm.Name, true)}
+				ifm.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
+				if ifm.RefFunc == nil {
+					if ifm.RefInterface != nil {
+						ifm.RefFunc = &irATypeRefFunc{
+							Rets: irANamedTypeRefs{&irANamedTypeRef{}},
+						}
+						ifm.RefFunc.Rets[0].setRefFrom(ifm.RefInterface)
+						ifm.RefInterface = nil
+					} else if len(ifm.RefAlias) > 0 {
+						ifm.RefFunc = &irATypeRefFunc{
+							Rets: irANamedTypeRefs{&irANamedTypeRef{RefAlias: ifm.RefAlias}},
+						}
+						ifm.RefAlias = ""
+					} else if ifm.RefArray != nil || ifm.RefPtr != nil || ifm.RefStruct != nil || ifm.RefUnknown > 0 {
+						panic(notImplErr("RefType", "ifm", me.mod.srcFilePath))
+					} else {
+						ifm.RefFunc = &irATypeRefFunc{
+							Rets: irANamedTypeRefs{&irANamedTypeRef{}},
+						}
+					}
+				} else {
+					ifm.RefFunc.Args[0].setBothNamesFromPsName("v")
+				}
+				gif.Methods = append(gif.Methods, ifm)
+			}
+			tgif := &irANamedTypeRef{Export: me.hasExport(tc.Name)}
+			tgif.setBothNamesFromPsName(tc.Name)
+			tgif.setRefFrom(gif)
+			me.GoTypeDefs = append(me.GoTypeDefs, tgif)
 		}
-		tgif := &irANamedTypeRef{Export: me.hasExport(tc.Name)}
-		tgif.setBothNamesFromPsName(tc.Name)
-		tgif.setRefFrom(gif)
-		me.GoTypeDefs = append(me.GoTypeDefs, tgif)
+	} else {
+		for _, tc := range me.EnvTypeClasses {
+			tdict, gtd := map[string][]string{}, &irANamedTypeRef{Export: me.hasExport(tc.Name)}
+			gtd.setBothNamesFromPsName(tc.Name)
+			gtd.NameGo += "ˇ"
+			gtd.RefStruct = &irATypeRefStruct{}
+			for _, tcm := range tc.Members {
+				tcmfield := &irANamedTypeRef{Export: true}
+				tcmfield.setBothNamesFromPsName(tcm.Name)
+				tcmfield.setRefFrom(me.toIrATypeRef(tdict, tcm.Ref))
+				gtd.RefStruct.Fields = append(gtd.RefStruct.Fields, tcmfield)
+			}
+			me.GoTypeDefs = append(me.GoTypeDefs, gtd)
+		}
 	}
-
 	me.GoTypeDefs = append(me.GoTypeDefs, me.toIrADataTypeDefs(me.EnvTypeDataDecls)...)
 }
 
@@ -397,10 +409,12 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		}
 		return &irATypeRefInterface{Embeds: embeds}
 	} else if tr.ConstrainedType != nil {
-		if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
-			ensureIfaceForTvar(tdict, "", tr.ConstrainedType.Class) // TODO deal with this properly
-		} else {
-			ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
+		if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
+			if len(tr.ConstrainedType.Args) == 0 || len(tr.ConstrainedType.Args[0].TypeVar) == 0 {
+				ensureIfaceForTvar(tdict, "", tr.ConstrainedType.Class) // TODO deal with this properly
+			} else {
+				ensureIfaceForTvar(tdict, tr.ConstrainedType.Args[0].TypeVar, tr.ConstrainedType.Class)
+			}
 		}
 		return me.toIrATypeRef(tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {

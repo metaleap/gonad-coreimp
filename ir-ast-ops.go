@@ -18,7 +18,7 @@ func (me *irAst) prepAddOrCull(a irA) {
 		if ctor, _ := a.(*irACtor); ctor != nil {
 			// PureScript CoreImp contains constructor functions for each ADT "sub-type", we drop those
 			culled, me.culled.typeCtorFuncs = true, append(me.culled.typeCtorFuncs, ctor)
-		} else if ab := a.Base(); ab != nil {
+		} else if cfgTc2Ifaces, ab := Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces, a.Base(); cfgTc2Ifaces && ab != nil {
 			// check if helper function related to type-classes / type-class instances:
 			tci := me.irM.tcInst(ab.NamePs)
 			if culled = (tci != nil); culled {
@@ -81,7 +81,7 @@ func (me *irAst) prepAddOrCull(a irA) {
 					}
 				}
 				me.culled.tcInstImpls = append(me.culled.tcInstImpls, &tcinst)
-			} else if culled = me.irM.tcMember(ab.NamePs) != nil; culled {
+			} else if culled = (me.irM.tcMember(ab.NamePs) != nil); culled {
 				me.culled.tcDictDecls = append(me.culled.tcDictDecls, a)
 			}
 		}
@@ -110,7 +110,7 @@ func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 	return
 }
 
-func (me *irAst) prepAddNewExtraTypes() {
+func (me *irAst) prepAddNewExtraTypesˇTypeClassInstances() {
 	var newextratypes irANamedTypeRefs
 	//	turn type-class instances into unexported 0-byte structs providing the corresponding interface-implementing method(s)
 	for _, tci := range me.irM.EnvTypeClassInsts {
@@ -119,7 +119,7 @@ func (me *irAst) prepAddNewExtraTypes() {
 		} else {
 			gtd := newextratypes.byPsName(tci.Name)
 			if gtd == nil {
-				gtd = &irANamedTypeRef{Export: false, RefStruct: &irATypeRefStruct{instOf: tci.ClassName}}
+				gtd = &irANamedTypeRef{Export: false, RefStruct: &irATypeRefStruct{}}
 				gtd.setBothNamesFromPsName(tci.Name)
 				gtd.NameGo = "ıˇ" + gtd.NameGo
 				newextratypes = append(newextratypes, gtd)
@@ -142,7 +142,7 @@ func (me *irAst) prepAddNewExtraTypes() {
 func (me *irAst) prepFixupExportedNames() {
 	ensure := func(isfunc bool, gntr *irANamedTypeRef) *irANamedTypeRef {
 		if gvd := me.irM.goValDeclByPsName(gntr.NamePs); gvd != nil {
-			gntr.copyFrom(gvd, true, !isfunc, true)
+			gntr.copyFrom(gvd, true, false, true)
 			return gvd
 		}
 		return nil
@@ -152,20 +152,20 @@ func (me *irAst) prepFixupExportedNames() {
 			ensure(false, &av.irANamedTypeRef)
 		} else if af, _ := a.(*irAFunc); af != nil {
 			if gvd := ensure(true, &af.irANamedTypeRef); gvd != nil {
-				if gvd.RefFunc == nil {
-					panic(notImplErr("NIL RefFunc for", gvd.NamePs, me.mod.srcFilePath))
-				} else {
-					for i, gvdfuncarg := range gvd.RefFunc.Args {
-						af.RefFunc.Args[i].copyFrom(gvdfuncarg, false, true, false)
-					}
-					if len(af.RefFunc.Rets) > 0 {
-						panic(notImplErr("RET values for", gvd.NamePs, me.mod.srcFilePath))
-					}
-					for i, gvdfuncret := range gvd.RefFunc.Rets {
-						af.RefFunc.Rets = append(af.RefFunc.Rets, &irANamedTypeRef{})
-						af.RefFunc.Rets[i].copyFrom(gvdfuncret, true, true, false)
-					}
-				}
+				// if gvd.RefFunc == nil {
+				// 	// panic(notImplErr("NIL RefFunc for", gvd.NamePs, me.mod.srcFilePath))
+				// } else {
+				// 	for i, gvdfuncarg := range gvd.RefFunc.Args {
+				// 		af.RefFunc.Args[i].copyFrom(gvdfuncarg, false, true, false)
+				// 	}
+				// 	if len(af.RefFunc.Rets) > 0 {
+				// 		panic(notImplErr("RET values for", gvd.NamePs, me.mod.srcFilePath))
+				// 	}
+				// 	for i, gvdfuncret := range gvd.RefFunc.Rets {
+				// 		af.RefFunc.Rets = append(af.RefFunc.Rets, &irANamedTypeRef{})
+				// 		af.RefFunc.Rets[i].copyFrom(gvdfuncret, true, true, false)
+				// 	}
+				// }
 			}
 
 		}
@@ -272,7 +272,7 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 		call := ªCall(ªPkgSym("fmt", "Errorf"), oc.CallArgs...)
 		return call
 	} else if ocv != nil {
-		println("TODO:\t" + me.mod.srcFilePath + "\t" + ocv.NamePs)
+		// println("TODO:\t" + me.mod.srcFilePath + "\t" + ocv.NamePs)
 	}
 	return a
 }
@@ -289,7 +289,7 @@ func (me *irAst) postLinkTcInstFuncsToImplStructs() {
 			nuctor := ªO(&irANamedTypeRef{RefAlias: gtdinst.NameGo})
 			nuctor.parent = instvar
 			instvar.LetVal = nuctor
-			instvar.RefAlias = gtdinst.RefStruct.instOf
+			instvar.RefAlias = impl.tci.ClassName
 			me.Prepend(instvar)
 
 			if len(impl.tciAlias) > 0 {

@@ -103,9 +103,11 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 				if modimppath := path.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath); !uslice.StrHas(okpkgs, modimppath) {
 					isthisok := true
 					for _, imp := range mod.irMeta.Imports {
-						if (!uslice.StrHas(okpkgs, imp.ImpPath)) && !strings.Contains(imp.PsModQName, nsPrefixDefaultFfiPkg) {
-							isthisok = false
-							break
+						if !uslice.StrHas(okpkgs, imp.ImpPath) {
+							if !(imp.PsModQName == "" || strings.Contains(imp.PsModQName, nsPrefixDefaultFfiPkg)) {
+								isthisok = false
+								break
+							}
 						}
 					}
 					if isthisok {

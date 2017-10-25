@@ -217,12 +217,10 @@ func (me *irMeta) hasExport(name string) bool {
 	return uslice.StrHas(me.Exports, name)
 }
 
-func (me *irMeta) tcMember(name string) *irMNamedTypeRef {
+func (me *irMeta) tc(name string) *irMTypeClass {
 	for _, tc := range me.EnvTypeClasses {
-		for _, tcm := range tc.Members {
-			if tcm.Name == name {
-				return tcm
-			}
+		if tc.Name == name {
+			return tc
 		}
 	}
 	return nil
@@ -232,6 +230,17 @@ func (me *irMeta) tcInst(name string) *irMTypeClassInst {
 	for _, tci := range me.EnvTypeClassInsts {
 		if tci.Name == name {
 			return tci
+		}
+	}
+	return nil
+}
+
+func (me *irMeta) tcMember(name string) *irMNamedTypeRef {
+	for _, tc := range me.EnvTypeClasses {
+		for _, tcm := range tc.Members {
+			if tcm.Name == name {
+				return tcm
+			}
 		}
 	}
 	return nil

@@ -25,11 +25,15 @@ type psBowerFile struct {
 			CoreImpDumpsDirPath string // dir path containing Some.Module.QName/coreimp.json files
 		}
 		Out struct {
-			ForceAll     bool
+			ForceAll     bool   // if false, only regenerate packages that are out of date with respect to coreimp.json or externs.json
 			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
 			MainDepLevel int    // temporary option
 			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
 			GoNamespace  string // defaults to github.com/gonadz (or github.com\gonadz under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
+		}
+		CodeGen struct {
+			TypeClasses2Interfaces bool
+			SaturateFuncArities    bool
 		}
 
 		loadedFromJson bool
