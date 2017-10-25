@@ -343,7 +343,9 @@ func (me *irAst) finalizePostPrep() {
 	})
 
 	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
-		me.postLinkTcInstFuncsToImplStructs()
+		me.postLinkUpTcInstFuncs()
+	} else {
+		me.postLinkupTcMemberFuncs()
 	}
 	me.postMiscFixups()
 	me.resolveAllArgTypes()
@@ -365,9 +367,9 @@ func (me *irAst) prepFromCoreImp() {
 		}
 	}
 	me.prepForeigns()
-	me.prepFixupExportedNames()
+	me.prepFixupNameCasings()
 	if Proj.BowerJsonFile.Gonad.CodeGen.TypeClasses2Interfaces {
-		me.prepAddNewExtraTypesˇTypeClassInstances()
+		// me.prepAddNewExtraTypesˇTypeClassInstances()
 	}
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)

@@ -108,16 +108,21 @@ type irMNamedTypeRef struct {
 }
 
 type irMTypeClass struct {
-	Name        string              `json:"tcn,omitempty"`
-	Args        []string            `json:"tca,omitempty"`
-	Constraints []*irMTypeRefConstr `json:"tcc,omitempty"`
-	Members     []*irMNamedTypeRef  `json:"tcm,omitempty"`
+	Name        string                `json:"tcn,omitempty"`
+	Args        []string              `json:"tca,omitempty"`
+	Constraints []*irMTypeRefConstr   `json:"tcc,omitempty"`
+	Members     []*irMTypeClassMember `json:"tcm,omitempty"`
 }
 
 type irMTypeClassInst struct {
 	Name      string      `json:"tcin,omitempty"`
 	ClassName string      `json:"tcicn,omitempty"`
 	InstTypes irMTypeRefs `json:"tcit,omitempty"`
+}
+
+type irMTypeClassMember struct {
+	irMNamedTypeRef
+	tc *irMTypeClass
 }
 
 type irMTypeDataDecl struct {
@@ -235,7 +240,7 @@ func (me *irMeta) tcInst(name string) *irMTypeClassInst {
 	return nil
 }
 
-func (me *irMeta) tcMember(name string) *irMNamedTypeRef {
+func (me *irMeta) tcMember(name string) *irMTypeClassMember {
 	for _, tc := range me.EnvTypeClasses {
 		for _, tcm := range tc.Members {
 			if tcm.Name == name {
@@ -330,7 +335,7 @@ func (me *irMeta) populateEnvTypeClasses() {
 		}
 		for _, tcmdef := range tcdef.Members {
 			tref := me.newTypeRefFromEnvTag(tcmdef.Type)
-			tc.Members = append(tc.Members, &irMNamedTypeRef{Name: tcmdef.Ident, Ref: tref})
+			tc.Members = append(tc.Members, &irMTypeClassMember{tc: tc, irMNamedTypeRef: irMNamedTypeRef{Name: tcmdef.Ident, Ref: tref}})
 		}
 		for _, tcsc := range tcdef.Superclasses {
 			c := &irMTypeRefConstr{Class: tcsc.Class}
