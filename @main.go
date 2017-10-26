@@ -59,17 +59,17 @@ func main() {
 			do.forAllDeps(do.populateIrMetas)
 			do.forAllDeps(do.prepIrAsts)
 			do.forAllDeps(do.reGenIrAsts)
-			allpkgimppaths := map[string]bool{}
-			numregen := countNumOfReGendModules(allpkgimppaths) // do this even when ForceAll to have the map filled for writeTestMainGo
-			if Proj.BowerJsonFile.Gonad.Out.ForceAll {
-				numregen = len(allpkgimppaths)
-			}
 			dur := time.Since(starttime)
+			allpkgimppaths := map[string]bool{}
+			numregen, numtotal := countNumOfReGendModules(allpkgimppaths) // do this even when ForceAll to have the map filled for writeTestMainGo
+			if Proj.BowerJsonFile.Gonad.Out.ForceAll {
+				numregen = numtotal
+			}
 			if Proj.BowerJsonFile.Gonad.Out.MainDepLevel > 0 {
 				err = writeTestMainGo(allpkgimppaths)
 			}
 			if err == nil {
-				fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", len(allpkgimppaths), numregen, dur)
+				fmt.Printf("Processing %d modules (re-generating %d) took me %v\n", numtotal, numregen, dur)
 			}
 		}
 	}
@@ -78,10 +78,10 @@ func main() {
 	}
 }
 
-func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int) {
+func countNumOfReGendModules(allpkgimppaths map[string]bool) (numregen int, numtotal int) {
 	for _, dep := range Deps {
 		for _, mod := range dep.Modules {
-			if allpkgimppaths[mod.impPath()] = mod.reGenIr; mod.reGenIr {
+			if allpkgimppaths[mod.impPath()], numtotal = mod.reGenIr, numtotal+1; mod.reGenIr {
 				numregen++
 			}
 		}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"sort"
+
+	"github.com/metaleap/go-util/str"
 )
 
 /*
@@ -53,6 +55,7 @@ type irTcInstImpl struct {
 type irA interface {
 	Ast() *irAst
 	Base() *irABase
+	Eq(irA) bool // mostly not implemented except where we needed it
 	ExprType() *irANamedTypeRef
 	Parent() irA
 }
@@ -74,6 +77,10 @@ func (me *irABase) Ast() *irAst {
 
 func (me *irABase) Base() *irABase {
 	return me
+}
+
+func (_ *irABase) Eq(_ irA) bool {
+	return false
 }
 
 func (me *irABase) ExprType() *irANamedTypeRef {
@@ -124,24 +131,33 @@ func (me *irALet) isConstable() bool {
 	return false
 }
 
+func (me *irALet) ExprType() *irANamedTypeRef {
+	if me.exprType == nil {
+		if me.LetVal != nil {
+			me.exprType = me.LetVal.ExprType()
+		}
+		if (me.exprType == nil || !me.exprType.hasTypeInfo()) && me.hasTypeInfo() {
+			me.exprType = &me.irANamedTypeRef
+		}
+	}
+	return me.exprType
+}
+
 type irASym struct {
 	irABase
 	refto irA
 	Sym__ interface{} // useless except we want to see it in the gonadast.json
 }
 
-func (me *irASym) ExprType() *irANamedTypeRef {
-	if me.exprType == nil {
-		switch px := me.parent.(type) {
-		case *irAIf:
-			me.exprType = exprTypeBool
-		case *irAOp1:
-			if px.Op1 == "!" {
-				me.exprType = exprTypeBool
-			}
+func (me *irASym) Eq(sym irA) bool {
+	if s, _ := sym.(*irASym); s != nil {
+		if me.NameGo != "" && s.NameGo != "" {
+			return me.NameGo == s.NameGo
+		} else {
+			return me.NamePs == s.NamePs
 		}
 	}
-	return me.exprType
+	return false
 }
 
 func (me *irASym) isConstable() bool {
@@ -243,11 +259,34 @@ func (me irAOp1) isConstable() bool {
 	return false
 }
 
+func (me *irAOp1) ExprType() *irANamedTypeRef {
+	if me.Op1 == "!" {
+		return exprTypeBool
+	} else if me.Of != nil {
+		return me.Of.ExprType()
+	}
+	return me.irABase.ExprType()
+}
+
 type irAOp2 struct {
 	irABase
 	Left  irA
 	Op2   string
 	Right irA
+}
+
+func (me *irAOp2) ExprType() *irANamedTypeRef {
+	switch me.Op2 {
+	case "==", "!=", "<", "<=", ">", ">=", "&&", "||", "&", "|":
+		return exprTypeBool
+	default:
+		if tl, tr := me.Left.ExprType(), me.Right.ExprType(); tl != nil && tl.hasTypeInfo() {
+			return tl
+		} else if tr != nil && tr.hasTypeInfo() {
+			return tr
+		}
+	}
+	return me.irABase.ExprType()
 }
 
 func (me irAOp2) isConstable() bool {
@@ -284,6 +323,23 @@ type irAIf struct {
 }
 
 func (_ *irAIf) ExprType() *irANamedTypeRef { return exprTypeBool }
+
+func (me *irAIf) doesCondNegate(other *irAIf) bool {
+	mop, _ := me.If.(*irAOp1)
+	oop, _ := other.If.(*irAOp1)
+	if mop != nil && mop.Op1 != "!" {
+		mop = nil
+	}
+	if oop != nil && oop.Op1 != "!" {
+		oop = nil
+	}
+	if mop == nil && oop != nil {
+		return me.If.Eq(oop.Of) // always true so far, but coreimp output formats can always change, so we test correctly
+	} else if mop != nil && oop == nil {
+		return mop.Of.Eq(other.If) // dito
+	}
+	return false
+}
 
 type irACall struct {
 	irABase
@@ -346,6 +402,8 @@ type irAIsType struct {
 	TypeToTest string
 }
 
+func (_ *irAIsType) ExprType() *irANamedTypeRef { return exprTypeBool }
+
 type irAToType struct {
 	irABase
 	ExprToCast irA
@@ -353,10 +411,32 @@ type irAToType struct {
 	TypeName   string
 }
 
+func (me *irAToType) ExprType() *irANamedTypeRef {
+	if me.exprType == nil {
+		me.exprType = &irANamedTypeRef{RefAlias: ustr.PrefixWithSep(me.TypePkg, ".", me.TypeName)}
+	}
+	return me.exprType
+}
+
 type irAPkgSym struct {
 	irABase
 	PkgName string
 	Symbol  string
+}
+
+func (me *irAPkgSym) ExprType() *irANamedTypeRef {
+	if me.exprType == nil {
+		if mod := findModuleByPName(me.PkgName); mod != nil {
+			if ref := mod.irMeta.goValDeclByGoName(me.Symbol); ref != nil {
+				me.exprType = &irANamedTypeRef{}
+				me.exprType.copyFrom(ref, false, true, false)
+			}
+		}
+		if me.exprType == nil {
+			me.exprType = &irANamedTypeRef{RefAlias: ustr.PrefixWithSep(me.PkgName, ".", me.Symbol)}
+		}
+	}
+	return me.exprType
 }
 
 func (me *irAst) typeCtorFunc(nameps string) *irACtor {

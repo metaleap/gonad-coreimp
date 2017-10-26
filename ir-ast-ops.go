@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -141,6 +142,27 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 						}
 					}
 				}
+			case *irABlock:
+				if a != nil { // any 2 consecutive mutually-negating ifs-without-elses, we flatten into a single if-else. usually bool pattern-matches
+					var lastif *irAIf
+					for i := 0; i < len(a.Body); i++ {
+						switch thisif := a.Body[i].(type) {
+						case *irAIf:
+							if lastif == nil {
+								lastif = thisif
+							} else { // two ifs in a row
+								if lastif.doesCondNegate(thisif) && lastif.Else == nil {
+									lastif.Else = thisif.Then
+									thisif.Then, lastif.Else.parent = nil, lastif
+									a.Body = append(a.Body[:i], a.Body[i+1:]...)
+								}
+								lastif = nil
+							}
+						default:
+							lastif = nil
+						}
+					}
+				}
 			}
 		}
 		return ast
@@ -190,13 +212,22 @@ func (me *irAst) postEnsureArgTypes() {
 }
 
 func (me *irAst) postEnsureIfaceCasts() {
-	me.walk(func(a irA) irA {
-		switch ax := a.(type) {
-		case *irAFunc:
-			if ax != nil {
+	me.perFunc(func(afn *irAFunc) {
+		for i, a := range afn.FuncImpl.Body {
+			switch ax := a.(type) {
+			case *irAIf:
+				axt := ax.If.ExprType()
+				if axt == nil || axt.RefAlias != exprTypeBool.RefAlias {
+					symname := fmt.Sprintf("µˇ%v", i)
+					pb := ax.parent.(*irABlock)
+					av := ªLet(symname, "", ªTo(ax.If, "Prim", "Boolean"))
+					pb.prepend(av)
+					ax.If = ªSymGo(symname)
+					ax.If.Base().parent = ax.If
+				}
+			default:
 			}
 		}
-		return a
 	})
 }
 

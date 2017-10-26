@@ -23,6 +23,17 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
+func (me *irABlock) perFunc(on func(*irAFunc)) {
+	walk(me, false, func(a irA) irA {
+		switch ax := a.(type) {
+		case *irAFunc:
+			on(ax)
+			ax.FuncImpl.perFunc(on)
+		}
+		return a
+	})
+}
+
 func (me *irAst) topLevelDefs(okay funcIra2Bool) (defs []irA) {
 	for _, ast := range me.Body {
 		if okay(ast) {
@@ -102,7 +113,7 @@ func walk(ast irA, intofuncvals bool, on funcIra2Ira) irA {
 			}
 		case *irAFunc:
 			walkinto := intofuncvals
-			if walkinto {
+			if !walkinto {
 				if pb, _ := a.parent.(*irABlock); pb != nil && pb.parent == nil {
 					walkinto = true
 				}

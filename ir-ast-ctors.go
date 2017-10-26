@@ -105,9 +105,7 @@ func ªDotNamed(left string, right string) *irADot {
 }
 
 func ªEq(left irA, right irA) *irAOp2 {
-	a := &irAOp2{Op2: "==", Left: left, Right: right}
-	a.Left.Base().parent, a.Right.Base().parent = a, a
-	return a
+	return ªO2(left, "==", right)
 }
 
 func ªFor() *irAFor {

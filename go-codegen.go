@@ -90,11 +90,17 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irASym:
 		fmt.Fprint(w, a.NameGo)
 	case *irALet:
-		fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
-		me.codeGenTypeRef(w, &a.irANamedTypeRef, -1)
-		fmt.Fprint(w, " = ")
-		me.codeGenAst(w, indent, a.LetVal)
-		fmt.Fprint(w, "\n")
+		switch ato := a.LetVal.(type) {
+		case *irAToType:
+			fmt.Fprintf(w, "%s%s, _ := ", tabs, a.NameGo)
+			me.codeGenAst(w, indent, ato)
+		default:
+			fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
+			me.codeGenTypeRef(w, a.ExprType(), -1)
+			fmt.Fprint(w, " = ")
+			me.codeGenAst(w, indent, a.LetVal)
+		}
+		fmt.Fprint(w, "\n\n")
 	case *irABlock:
 		if dbgEmitEmptyFuncs && a != nil && a.parent != nil {
 			me.codeGenAst(w, indent, ªRet(nil))
@@ -135,6 +141,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, ")")
 	case *irAFunc:
 		me.codeGenTypeRef(w, &a.irANamedTypeRef, indent)
+		fmt.Fprint(w, " ")
 		me.codeGenAst(w, indent, a.FuncImpl)
 	case *irAComments:
 		me.codeGenComments(w, tabs, a.Comments...)
@@ -169,13 +176,8 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		// me.codeGenAst(w, indent, a.TypeToTest)
 		fmt.Fprint(w, "); øĸ")
 	case *irAToType:
-		if len(a.TypePkg) == 0 {
-			fmt.Fprintf(w, "%s(", a.TypeName)
-		} else {
-			fmt.Fprintf(w, "%s.%s(", a.TypePkg, a.TypeName)
-		}
 		me.codeGenAst(w, indent, a.ExprToCast)
-		fmt.Fprint(w, ")")
+		fmt.Fprintf(w, ".(%s)", typeNameWithPkgName(me.resolveGoTypeRefFromQName(ustr.PrefixWithSep(a.TypePkg, ".", a.TypeName))))
 	case *irAPkgSym:
 		if len(a.PkgName) > 0 {
 			if pkgimp := me.irM.ensureImp(a.PkgName, "", ""); pkgimp != nil {
@@ -323,7 +325,9 @@ func (me *irAst) codeGenFuncArgs(w io.Writer, indent int, methodargs irANamedTyp
 	if parens {
 		fmt.Fprint(w, ")")
 	}
-	fmt.Fprint(w, " ")
+	if !isretargs {
+		fmt.Fprint(w, " ")
+	}
 }
 
 func (me *irAst) codeGenModImps(w io.Writer) (err error) {
