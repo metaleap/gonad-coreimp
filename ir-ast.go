@@ -55,7 +55,7 @@ type irTcInstImpl struct {
 type irA interface {
 	Ast() *irAst
 	Base() *irABase
-	Equiv(irA) bool // not struct equality but semantic equivalency as we need it where we do
+	Equiv(irA) bool // not struct equality but semantic equivalency comparison (ignoring comments, parent etc) as we need it where we do
 	ExprType() *irANamedTypeRef
 	Parent() irA
 }
