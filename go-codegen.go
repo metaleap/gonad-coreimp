@@ -33,9 +33,9 @@ func (_ *irAst) codeGenCommaIf(w io.Writer, i int) {
 
 func (_ *irAst) codeGenComments(w io.Writer, singlelineprefix string, comments ...*coreImpComment) {
 	for _, c := range comments {
-		if len(c.BlockComment) > 0 {
+		if c.BlockComment != "" {
 			fmt.Fprintf(w, "/*%s*/", c.BlockComment)
-		} else {
+		} else if c.LineComment != "" {
 			fmt.Fprintf(w, "%s//%s\n", singlelineprefix, c.LineComment)
 		}
 	}
@@ -75,7 +75,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, "{")
 		for i, namevaluepair := range a.ObjFields {
 			me.codeGenCommaIf(w, i)
-			if len(namevaluepair.NameGo) > 0 {
+			if namevaluepair.NameGo != "" {
 				fmt.Fprintf(w, "%s: ", namevaluepair.NameGo)
 			}
 			me.codeGenAst(w, indent, namevaluepair.FieldVal)
@@ -92,15 +92,16 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irALet:
 		switch ato := a.LetVal.(type) {
 		case *irAToType:
-			fmt.Fprintf(w, "%s%s, _ := ", tabs, a.NameGo)
+			fmt.Fprintf(w, "%s%s := ", tabs, a.NameGo)
 			me.codeGenAst(w, indent, ato)
+			fmt.Fprint(w, "\n")
 		default:
 			fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
 			me.codeGenTypeRef(w, a.ExprType(), -1)
 			fmt.Fprint(w, " = ")
 			me.codeGenAst(w, indent, a.LetVal)
+			fmt.Fprint(w, "\n\n")
 		}
-		fmt.Fprint(w, "\n\n")
 	case *irABlock:
 		if dbgEmitEmptyFuncs && a != nil && a.parent != nil {
 			me.codeGenAst(w, indent, ªRet(nil))
@@ -179,7 +180,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		me.codeGenAst(w, indent, a.ExprToConv)
 		fmt.Fprintf(w, ".(%s)", typeNameWithPkgName(me.resolveGoTypeRefFromQName(ustr.PrefixWithSep(a.TypePkg, ".", a.TypeName))))
 	case *irAPkgSym:
-		if len(a.PkgName) > 0 {
+		if a.PkgName != "" {
 			if pkgimp := me.irM.ensureImp(a.PkgName, "", ""); pkgimp != nil {
 				pkgimp.emitted = true
 			}
@@ -316,7 +317,7 @@ func (me *irAst) codeGenFuncArgs(w io.Writer, indent int, methodargs irANamedTyp
 	if len(methodargs) > 0 {
 		for i, arg := range methodargs {
 			me.codeGenCommaIf(w, i)
-			if withnames && len(arg.NameGo) > 0 {
+			if withnames && arg.NameGo != "" {
 				fmt.Fprintf(w, "%s ", arg.NameGo)
 			}
 			me.codeGenTypeRef(w, arg, indent+1)
@@ -397,7 +398,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 	}
 	fmtembeds := "\t%s\n"
 	isfuncwithbodynotjustsig := gtd.RefFunc != nil && gtd.RefFunc.impl != nil
-	if len(gtd.RefAlias) > 0 {
+	if gtd.RefAlias != "" {
 		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromQName(gtd.RefAlias)))
 	} else if gtd.RefUnknown != 0 {
 		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
@@ -468,7 +469,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 		}
 	} else if gtd.RefFunc != nil {
 		fmt.Fprint(w, "func")
-		if isfuncwithbodynotjustsig && len(gtd.NameGo) > 0 {
+		if isfuncwithbodynotjustsig && gtd.NameGo != "" {
 			fmt.Fprintf(w, " %s", gtd.NameGo)
 		}
 		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Args, false, isfuncwithbodynotjustsig)

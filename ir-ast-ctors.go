@@ -145,7 +145,7 @@ func ªLet(namego string, nameps string, val irA) *irALet {
 		vb.parent = a
 		a.irANamedTypeRef = vb.irANamedTypeRef
 	}
-	if len(namego) == 0 && len(nameps) > 0 {
+	if namego == "" && nameps != "" {
 		a.setBothNamesFromPsName(nameps)
 	} else {
 		a.NameGo, a.NamePs = namego, nameps

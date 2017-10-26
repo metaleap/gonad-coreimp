@@ -106,7 +106,7 @@ func (me *irAst) prepFixupNameCasings() {
 }
 
 func (me *irAst) prepForeigns() {
-	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; len(reqforeign) > 0 {
+	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; reqforeign != "" {
 		qn := nsPrefixDefaultFfiPkg + me.mod.qName
 		me.irM.ForeignImp = me.irM.ensureImp(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
 	}
@@ -229,16 +229,18 @@ func (me *irAst) postEnsureArgTypes() {
 
 func (me *irAst) postPerFuncFixups() {
 	var namescache map[string]string
-	convertIfCondToBool := func(i int, afn *irAFunc, ifcondsym *irASym) (int, *irASym) {
-		varname := ªSymGo(fmt.Sprintf("ˇb%vˇ", i))
-		varname.exprType = exprTypeBool
-		if existing, _ := namescache[ifcondsym.NameGo]; len(existing) > 0 {
+	convertToTypeOf := func(i int, afn *irAFunc, from irA, totype *irANamedTypeRef) (int, *irASym) {
+		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
+		varname.exprType = totype
+		if existing, _ := namescache[symname]; symname != "" && existing != "" {
 			varname.NameGo = existing
 		} else {
-			namescache[ifcondsym.NameGo] = varname.NameGo
-			// vardecl := ªLet(varname.NameGo, "", ªTo(ifcondsym, "Prim", "Boolean"))
-			vardecl := ªLet(varname.NameGo, "", ªEq(ªB(true), ifcondsym))
-			vardecl.exprType = exprTypeBool
+			if symname != "" {
+				namescache[symname] = varname.NameGo
+			}
+			pname, tname := me.resolveGoTypeRefFromQName(totype.RefAlias)
+			vardecl := ªLet(varname.NameGo, "", ªTo(from, pname, tname))
+			vardecl.exprType = totype
 			afn.FuncImpl.insert(i, vardecl)
 			i++
 		}
@@ -255,20 +257,50 @@ func (me *irAst) postPerFuncFixups() {
 			namescache = map[string]string{}
 		}
 		for i := 0; i < len(afn.FuncImpl.Body); i++ {
+			var varname *irASym
 			switch ax := afn.FuncImpl.Body[i].(type) {
 			case *irAIf: // if condition isn't bool (eg testing an interface{}), convert it first to a temp bool var
 				axt := ax.If.ExprType()
 				if axt == nil || axt.RefAlias != exprTypeBool.RefAlias {
-					var varname *irASym
 					switch axcond := ax.If.(type) {
 					case *irAOp1:
-						i, varname = convertIfCondToBool(i, afn, axcond.Of.(*irASym))
+						i, varname = convertToTypeOf(i, afn, axcond.Of.(*irASym), exprTypeBool)
 						axcond.Of, varname.parent = varname, axcond
 					case *irASym:
-						i, varname = convertIfCondToBool(i, afn, axcond)
+						i, varname = convertToTypeOf(i, afn, axcond, exprTypeBool)
 						ax.If, varname.parent = varname, ax
 					}
 				}
+			default:
+				walk(ax, false, func(ast irA) irA {
+					switch a := ast.(type) {
+					case *irARet:
+						if afn.RefFunc.Rets[0].wellTyped() && a.RetArg != nil {
+							if asym, _ := a.RetArg.(*irASym); asym != nil && (asym.ExprType() == nil || !asym.wellTyped()) {
+								i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
+								a.RetArg, varname.parent = varname, a
+							}
+						}
+					case *irAOp1:
+						if !a.Of.Base().wellTyped() {
+							if a.Op1 == "!" {
+								i, varname = convertToTypeOf(i, afn, a.Of, exprTypeBool)
+								a.Of, varname.parent = varname, a
+							}
+						}
+					case *irAOp2:
+						tl, tr := a.Left.ExprType(), a.Right.ExprType()
+						ul, ur := !tl.wellTyped(), !tr.wellTyped()
+						if ul && !ur {
+							i, varname = convertToTypeOf(i, afn, a.Left, a.Right.ExprType())
+							a.Left, varname.parent = varname, a
+						} else if (!ul) && ur {
+							i, varname = convertToTypeOf(i, afn, a.Right, a.Left.ExprType())
+							a.Right, varname.parent = varname, a
+						}
+					}
+					return ast
+				})
 			}
 		}
 	})
@@ -449,7 +481,10 @@ func (me *irAst) postMiscFixups() {
 		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts
-				return ªConst(&a.irANamedTypeRef, a.LetVal)
+				c := ªConst(&a.irANamedTypeRef, a.LetVal)
+				c.exprType = a.ExprType()
+				c.parent = a.parent
+				return c
 			}
 		case *irAFunc:
 			if a.irANamedTypeRef.RefFunc != nil {

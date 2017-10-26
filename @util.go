@@ -104,7 +104,7 @@ func findGoTypeByPsQName(qname string) (*modPkg, *irANamedTypeRef) {
 }
 
 func sanitizeSymbolForGo(name string, upper bool) string {
-	if len(name) == 0 {
+	if name == "" {
 		return name
 	}
 	if upper {
@@ -129,7 +129,7 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 }
 
 func typeNameWithPkgName(pkgname string, typename string) (fullname string) {
-	if fullname = typename; len(pkgname) > 0 {
+	if fullname = typename; pkgname != "" {
 		fullname = pkgname + "." + fullname
 	}
 	return

@@ -238,7 +238,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 			a = v
 		}
 	case "Function":
-		wastypefunc := istopleveldecl && len(me.Function) > 0 && ustr.BeginsUpper(me.Function)
+		wastypefunc := istopleveldecl && me.Function != "" && ustr.BeginsUpper(me.Function)
 		f := ªFunc()
 		f.RefFunc = &irATypeRefFunc{}
 		f.setBothNamesFromPsName(me.Function)
@@ -365,7 +365,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 			}
 		}
 	case "InstanceOf":
-		if len(me.AstRight.Var) > 0 {
+		if me.AstRight.Var != "" {
 			a = ªIs(me.InstanceOf.ciAstToIrAst(), me.AstRight.Var)
 		} else /*if me.AstRight.Indexer != nil*/ {
 			apkgsym := me.AstRight.ciAstToIrAst().(*irAPkgSym)
@@ -431,7 +431,7 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 	for _, a := range asts {
 		if a != nil {
 			for _, sym := range []*string{&a.For, &a.ForIn, &a.Function, &a.Var, &a.VariableIntroduction} {
-				if len(*sym) > 0 {
+				if *sym != "" {
 					*sym = strReplUnsanitize.Replace(*sym)
 				}
 			}

@@ -225,11 +225,11 @@ func (me *irMeta) ensureImp(lname, imppath, qname string) (imp *irMPkgRef) {
 	if imp = me.Imports.byImpName(lname); imp != nil {
 		return imp
 	}
-	if len(imppath) == 0 && (ustr.BeginsUpper(lname) || ustr.BeginsUpper(qname)) {
+	if imppath == "" && (ustr.BeginsUpper(lname) || ustr.BeginsUpper(qname)) {
 		var mod *modPkg
-		if len(qname) > 0 {
+		if qname != "" {
 			mod = findModuleByQName(qname)
-		} else if len(lname) > 0 {
+		} else if lname != "" {
 			mod = findModuleByPName(lname)
 		}
 		if mod != nil {
@@ -393,7 +393,7 @@ func (me *irMeta) populateFromCoreImp() {
 			if len(exp.TypeRef) > 2 {
 				if ctornames, _ := exp.TypeRef[2].([]interface{}); len(ctornames) > 0 {
 					for _, ctorname := range ctornames {
-						if cn, _ := ctorname.(string); len(cn) > 0 && !me.hasExport(cn) {
+						if cn, _ := ctorname.(string); cn != "" && !me.hasExport(cn) {
 							me.Exports = append(me.Exports, tname+"ĸ"+cn)
 						}
 					}
@@ -439,7 +439,7 @@ func (me *irMeta) populateFromLoaded() {
 		if !strings.HasPrefix(imp.PsModQName, nsPrefixDefaultFfiPkg) {
 			if impmod := findModuleByQName(imp.PsModQName); impmod != nil {
 				me.imports = append(me.imports, impmod)
-			} else if len(imp.PsModQName) > 0 {
+			} else if imp.PsModQName != "" {
 				panic(fmt.Errorf("%s: bad import %s", me.mod.srcFilePath, imp.PsModQName))
 			}
 		}

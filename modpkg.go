@@ -38,7 +38,7 @@ type modPkg struct {
 }
 
 func findModuleByQName(qname string) (modinfo *modPkg) {
-	if len(qname) > 0 {
+	if qname != "" {
 		if modinfo = Proj.moduleByQName(qname); modinfo == nil {
 			for _, dep := range Deps {
 				if modinfo = dep.moduleByQName(qname); modinfo != nil {
@@ -51,7 +51,7 @@ func findModuleByQName(qname string) (modinfo *modPkg) {
 }
 
 func findModuleByPName(pname string) (modinfo *modPkg) {
-	if len(pname) > 0 {
+	if pname != "" {
 		if modinfo = Proj.moduleByPName(pname); modinfo == nil {
 			for _, dep := range Deps {
 				if modinfo = dep.moduleByPName(pname); modinfo != nil {

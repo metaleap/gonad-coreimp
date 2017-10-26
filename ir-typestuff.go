@@ -100,7 +100,11 @@ func (me *irANamedTypeRef) equiv(cmp *irANamedTypeRef) bool {
 }
 
 func (me *irANamedTypeRef) hasTypeInfo() bool {
-	return len(me.RefAlias) > 0 || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
+	return me.RefAlias != "" || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
+}
+
+func (me *irANamedTypeRef) wellTyped() bool {
+	return me != nil && me.hasTypeInfo() && (me.RefInterface == nil || len(me.RefInterface.Embeds) > 0 || len(me.RefInterface.Methods) > 0)
 }
 
 func (me *irANamedTypeRef) setBothNamesFromPsName(psname string) {
@@ -426,11 +430,11 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		return funtype
 	}
 
-	if len(tr.TypeConstructor) > 0 {
+	if tr.TypeConstructor != "" {
 		return tr.TypeConstructor
 	} else if tr.REmpty {
 		return nil
-	} else if len(tr.TypeVar) > 0 {
+	} else if tr.TypeVar != "" {
 		embeds := tdict[tr.TypeVar]
 		if len(embeds) == 1 {
 			return embeds[0]
@@ -463,7 +467,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			return funcyhackery(tr.TypeApp.Right.TypeApp.Left)
 		} else if tr.TypeApp.Left.TypeApp != nil && (tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" || /*insanely hacky*/ tr.TypeApp.Right.TypeVar != "") {
 			return funcyhackery(tr.TypeApp.Right)
-		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
+		} else if tr.TypeApp.Left.TypeConstructor != "" {
 			return me.toIrATypeRef(tdict, tr.TypeApp.Left)
 		} else {
 			return &irATypeRefInterface{}

@@ -23,6 +23,15 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
+func (me *irABase) outerFunc() *irAFunc {
+	for nextup := me.parent; nextup != nil; nextup = nextup.Parent() {
+		if nextfn, _ := nextup.(*irAFunc); nextfn != nil {
+			return nextfn
+		}
+	}
+	return nil
+}
+
 func (me *irABlock) perFuncDown(istoplevel bool, on func(bool, *irAFunc)) {
 	walk(me, false, func(a irA) irA { // false == don't recurse into inner func-vals
 		switch ax := a.(type) {

@@ -112,7 +112,7 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 		if err == nil {
 			// proceed
 			me.GoOut.PkgDirPath = cfg.Out.GoNamespace
-			if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && len(repourl.Path) > 0 {
+			if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && repourl.Path != "" {
 				if i := strings.LastIndex(repourl.Path, "."); i > 0 {
 					me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path[:i])
 				} else {
@@ -122,7 +122,7 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 			if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.BowerJsonFile.Name) {
 				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Name)
 			}
-			if len(me.BowerJsonFile.Version) > 0 {
+			if me.BowerJsonFile.Version != "" {
 				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Version)
 			}
 			gopkgdir := filepath.Join(cfg.Out.GoDirSrcPath, me.GoOut.PkgDirPath)
