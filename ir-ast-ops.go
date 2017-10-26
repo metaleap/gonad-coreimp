@@ -143,7 +143,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 					}
 				}
 			case *irABlock:
-				if a != nil { // any 2 consecutive ifs-without-elses offer opportunities
+				if a != nil && Proj.BowerJsonFile.Gonad.CodeGen.FlattenIfs { // any 2 consecutive ifs-without-elses offer opportunities
 					var lastif *irAIf
 					for i := 0; i < len(a.Body); i++ {
 						switch thisif := a.Body[i].(type) {
@@ -176,45 +176,55 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 }
 
 func (me *irAst) postEnsureArgTypes() {
-	for again := true; again; again = false {
-		me.walk(func(a irA) irA {
-			switch ax := a.(type) {
-			case *irAFunc:
-				if !ax.RefFunc.haveAllArgsTypeInfo() {
-					if len(ax.RefFunc.Rets) > 1 {
-						panic(notImplErr("multiple ret-args in func", ax.NamePs, me.mod.srcFilePath))
+	me.perFuncDown(true, func(istoplevel bool, fn *irAFunc) {
+		if !fn.RefFunc.haveAllArgsTypeInfo() {
+			if len(fn.RefFunc.Rets) > 1 {
+				panic(notImplErr("multiple ret-args in func", fn.NamePs, me.mod.srcFilePath))
+			}
+			if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
+				walk(fn.FuncImpl, false, func(stmt irA) irA {
+					if !fn.RefFunc.Rets[0].hasTypeInfo() {
+						if ret, _ := stmt.(*irARet); ret != nil {
+							if tret := ret.ExprType(); tret != nil {
+								fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
+							}
+						}
 					}
-					if len(ax.RefFunc.Rets) > 0 && !ax.RefFunc.Rets[0].hasTypeInfo() {
-						walk(ax.FuncImpl, false, func(stmt irA) irA {
-							if !ax.RefFunc.Rets[0].hasTypeInfo() {
-								if ret, _ := stmt.(*irARet); ret != nil {
-									if tret := ret.ExprType(); tret != nil {
-										ax.RefFunc.Rets[0].copyFrom(tret, false, true, false)
-									}
+					return stmt
+				})
+			}
+			for _, arg := range fn.RefFunc.Args {
+				if !arg.hasTypeInfo() {
+					walk(fn.FuncImpl, false, func(stmt irA) irA {
+						if !arg.hasTypeInfo() {
+							if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
+								if tsym := sym.ExprType(); tsym != nil {
+									arg.copyFrom(tsym, false, true, false)
 								}
 							}
-							return stmt
-						})
-					}
-					for _, arg := range ax.RefFunc.Args {
-						if !arg.hasTypeInfo() {
-							walk(ax.FuncImpl, false, func(stmt irA) irA {
-								if !arg.hasTypeInfo() {
-									if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
-										if tsym := sym.ExprType(); tsym != nil {
-											arg.copyFrom(tsym, false, true, false)
-										}
-									}
-								}
-								return stmt
-							})
+						}
+						return stmt
+					})
+				}
+			}
+		}
+		if !fn.RefFunc.haveAllArgsTypeInfo() {
+			if fnretouter, _ := fn.parent.(*irARet); fnretouter != nil {
+				if fnouter, _ := fnretouter.parent.Parent().(*irAFunc); fnouter != nil {
+					if fnretsig := fnouter.RefFunc.Rets[0].RefFunc; fnretsig != nil {
+						if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
+							panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
+						} else {
+							for i, a := range fnretsig.Args {
+								fn.RefFunc.Args[i].copyFrom(a, false, true, false)
+							}
+							fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
 						}
 					}
 				}
 			}
-			return a
-		})
-	}
+		}
+	})
 }
 
 func (me *irAst) postPerFuncFixups() {
@@ -226,14 +236,15 @@ func (me *irAst) postPerFuncFixups() {
 			varname.NameGo = existing
 		} else {
 			namescache[ifcondsym.NameGo] = varname.NameGo
-			vardecl := ªLet(varname.NameGo, "", ªTo(ifcondsym, "Prim", "Boolean"))
+			// vardecl := ªLet(varname.NameGo, "", ªTo(ifcondsym, "Prim", "Boolean"))
+			vardecl := ªLet(varname.NameGo, "", ªEq(ªB(true), ifcondsym))
 			vardecl.exprType = exprTypeBool
 			afn.FuncImpl.insert(i, vardecl)
 			i++
 		}
 		return i, varname
 	}
-	me.perFunc(true, func(istoplevel bool, afn *irAFunc) {
+	me.perFuncDown(true, func(istoplevel bool, afn *irAFunc) {
 		fargsused := me.countSymRefs(afn.RefFunc.Args)
 		for _, farg := range afn.RefFunc.Args {
 			if farg.NameGo != "" && fargsused[farg.NameGo] == 0 {

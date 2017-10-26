@@ -23,15 +23,23 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
-func (me *irABlock) perFunc(istoplevel bool, on func(bool, *irAFunc)) {
+func (me *irABlock) perFuncDown(istoplevel bool, on func(bool, *irAFunc)) {
 	walk(me, false, func(a irA) irA { // false == don't recurse into inner func-vals
 		switch ax := a.(type) {
 		case *irAFunc: // we hit a func-val in the current block
-			on(istoplevel, ax)             // invoke handler for it
-			ax.FuncImpl.perFunc(false, on) // only now recurse into itself
+			on(istoplevel, ax)                 // invoke handler for it
+			ax.FuncImpl.perFuncDown(false, on) // only now recurse into itself
 		}
 		return a
 	})
+}
+
+func (me *irABase) perFuncUp(on func(*irAFunc)) {
+	for nextup := me.parent; nextup != nil; nextup = nextup.Parent() {
+		if nextfn, _ := nextup.(*irAFunc); nextfn != nil {
+			on(nextfn)
+		}
+	}
 }
 
 func (me *irAst) topLevelDefs(okay funcIra2Bool) (defs []irA) {

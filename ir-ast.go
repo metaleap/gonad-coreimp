@@ -147,8 +147,9 @@ func (me *irALet) ExprType() *irANamedTypeRef {
 
 type irASym struct {
 	irABase
-	refto irA
-	Sym__ interface{} // useless except we want to see it in the gonadast.json
+	refto    irA
+	reftoarg *irANamedTypeRef
+	Sym__    interface{} // useless except we want to see it in the gonadast.json
 }
 
 func (me *irASym) Equiv(sym irA) bool {
@@ -161,6 +162,17 @@ func (me *irASym) Equiv(sym irA) bool {
 		}
 	}
 	return s == nil && me == nil
+}
+
+func (me *irASym) ExprType() *irANamedTypeRef {
+	if me.exprType == nil {
+		if ref := me.refTo(); ref != nil {
+			me.exprType = ref.ExprType()
+		} else if refarg := me.refToArg(); refarg != nil && refarg.hasTypeInfo() {
+			me.exprType = refarg
+		}
+	}
+	return me.exprType
 }
 
 func (me *irASym) isConstable() bool {
@@ -181,6 +193,23 @@ func (me *irASym) refTo() irA {
 		})
 	}
 	return me.refto
+}
+
+func (me *irASym) refToArg() (argref *irANamedTypeRef) {
+	if argref = me.reftoarg; argref == nil {
+		me.perFuncUp(func(outerfunc *irAFunc) {
+			if argref == nil {
+				for _, fnarg := range outerfunc.RefFunc.Args {
+					if fnarg.NameGo == me.NameGo || fnarg.NamePs == me.NamePs {
+						argref = fnarg
+						break
+					}
+				}
+			}
+		})
+		me.reftoarg = argref
+	}
+	return
 }
 
 type irAFunc struct {

@@ -34,6 +34,7 @@ type psBowerFile struct {
 		CodeGen struct {
 			TypeClasses2Interfaces bool
 			SaturateFuncArities    bool
+			FlattenIfs             bool
 		}
 
 		loadedFromJson bool
