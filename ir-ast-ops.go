@@ -277,6 +277,9 @@ func (me *irAst) postPerFuncFixups() {
 					case *irARet:
 						if afn.RefFunc.Rets[0].wellTyped() && a.RetArg != nil {
 							if asym, _ := a.RetArg.(*irASym); asym != nil && (asym.ExprType() == nil || !asym.wellTyped()) {
+								if asym.NameGo == "defaultEmptyish" {
+									panic("defaultEmptyish")
+								}
 								i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
 								a.RetArg, varname.parent = varname, a
 							}
