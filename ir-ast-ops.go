@@ -276,12 +276,14 @@ func (me *irAst) postPerFuncFixups() {
 					switch a := ast.(type) {
 					case *irARet:
 						if afn.RefFunc.Rets[0].wellTyped() && a.RetArg != nil {
-							if asym, _ := a.RetArg.(*irASym); asym != nil && (asym.ExprType() == nil || !asym.wellTyped()) {
-								if asym.NameGo == "defaultEmptyish" {
-									panic("defaultEmptyish")
+							if asym, _ := a.RetArg.(*irASym); asym != nil {
+								if tsym := asym.ExprType(); tsym == nil || !tsym.hasTypeInfo() || !tsym.wellTyped() {
+									if asym.NameGo == "defaultEmptyish" {
+										println(asym.ExprType().RefAlias)
+									}
+									i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
+									a.RetArg, varname.parent = varname, a
 								}
-								i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
-								a.RetArg, varname.parent = varname, a
 							}
 						}
 					case *irAOp1:

@@ -277,13 +277,19 @@ func (me *irMeta) goTypeDefByPsName(psname string) *irANamedTypeRef {
 
 func (me *irMeta) populateGoTypeDefs() {
 	for _, ts := range me.EnvTypeSyns {
-		tdict := map[string][]string{}
-		gtd := &irANamedTypeRef{Export: me.hasExport(ts.Name)}
+		tc, gtd, tdict := me.tc(ts.Name), &irANamedTypeRef{Export: me.hasExport(ts.Name)}, map[string][]string{}
 		gtd.setBothNamesFromPsName(ts.Name)
-		if tc := me.tc(ts.Name); tc != nil {
-			gtd.NameGo += "ˇ"
-		}
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
+		if tc != nil {
+			if gtd.NameGo += "ˇ"; gtd.RefStruct != nil {
+				for _, gtdf := range gtd.RefStruct.Fields {
+					if gtdf.Export != gtd.Export {
+						gtdf.Export = gtd.Export
+						gtdf.setBothNamesFromPsName(gtdf.NamePs)
+					}
+				}
+			}
+		}
 		me.GoTypeDefs = append(me.GoTypeDefs, gtd)
 	}
 	for _, tc := range me.EnvTypeClasses {
