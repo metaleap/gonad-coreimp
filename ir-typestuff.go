@@ -417,6 +417,15 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 }
 
 func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interface{} {
+	funcyhackery := func(ret *irMTypeRef) interface{} {
+		funtype := &irATypeRefFunc{}
+		funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
+		funtype.Args[0].setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Left.TypeApp.Right))
+		funtype.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
+		funtype.Rets[0].setRefFrom(me.toIrATypeRef(tdict, ret))
+		return funtype
+	}
+
 	if len(tr.TypeConstructor) > 0 {
 		return tr.TypeConstructor
 	} else if tr.REmpty {
@@ -450,13 +459,10 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			array := &irATypeRefArray{Of: &irANamedTypeRef{}}
 			array.Of.setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Right))
 			return array
+		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" && tr.TypeApp.Left.TypeApp.Right.TypeApp != nil && tr.TypeApp.Left.TypeApp.Right.TypeApp.Left.TypeConstructor == "Prim.Record" && tr.TypeApp.Right.TypeApp != nil && tr.TypeApp.Right.TypeApp.Left != nil {
+			return funcyhackery(tr.TypeApp.Right.TypeApp.Left)
 		} else if tr.TypeApp.Left.TypeApp != nil && (tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" || /*insanely hacky*/ tr.TypeApp.Right.TypeVar != "") {
-			funtype := &irATypeRefFunc{}
-			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
-			funtype.Args[0].setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Left.TypeApp.Right))
-			funtype.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
-			funtype.Rets[0].setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Right))
-			return funtype
+			return funcyhackery(tr.TypeApp.Right)
 		} else if len(tr.TypeApp.Left.TypeConstructor) > 0 {
 			return me.toIrATypeRef(tdict, tr.TypeApp.Left)
 		} else {
