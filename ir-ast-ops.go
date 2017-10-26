@@ -217,19 +217,47 @@ func (me *irAst) postEnsureArgTypes() {
 	}
 }
 
-func (me *irAst) postEnsureIfaceCasts() {
-	me.perFunc(func(afn *irAFunc) {
-		for i, a := range afn.FuncImpl.Body {
-			switch ax := a.(type) {
-			case *irAIf:
+func (me *irAst) postPerFuncFixups() {
+	var namescache map[string]string
+	convertIfCondToBool := func(i int, afn *irAFunc, ifcondsym *irASym) (int, *irASym) {
+		varname := ªSymGo(fmt.Sprintf("ˇb%vˇ", i))
+		varname.exprType = exprTypeBool
+		if existing, _ := namescache[ifcondsym.NameGo]; len(existing) > 0 {
+			varname.NameGo = existing
+		} else {
+			namescache[ifcondsym.NameGo] = varname.NameGo
+			vardecl := ªLet(varname.NameGo, "", ªTo(ifcondsym, "Prim", "Boolean"))
+			vardecl.exprType = exprTypeBool
+			afn.FuncImpl.insert(i, vardecl)
+			i++
+		}
+		return i, varname
+	}
+	me.perFunc(true, func(istoplevel bool, afn *irAFunc) {
+		fargsused := me.countSymRefs(afn.RefFunc.Args)
+		for _, farg := range afn.RefFunc.Args {
+			if farg.NameGo != "" && fargsused[farg.NameGo] == 0 {
+				farg.NameGo = "_"
+			}
+		}
+		if istoplevel { // each top-level func keeps its own fresh names-cache
+			namescache = map[string]string{}
+		}
+		for i := 0; i < len(afn.FuncImpl.Body); i++ {
+			switch ax := afn.FuncImpl.Body[i].(type) {
+			case *irAIf: // if condition isn't bool (eg testing an interface{}), convert it first to a temp bool var
 				axt := ax.If.ExprType()
 				if axt == nil || axt.RefAlias != exprTypeBool.RefAlias {
-					symname, pb := fmt.Sprintf("µˇ%v", i), ax.parent.(*irABlock)
-					sym, av := ªSymGo(symname), ªLet(symname, "", ªTo(ax.If, "Prim", "Boolean"))
-					pb.prepend(av)
-					sym.parent, ax.If = ax, sym
+					var varname *irASym
+					switch axcond := ax.If.(type) {
+					case *irAOp1:
+						i, varname = convertIfCondToBool(i, afn, axcond.Of.(*irASym))
+						axcond.Of, varname.parent = varname, axcond
+					case *irASym:
+						i, varname = convertIfCondToBool(i, afn, axcond)
+						ax.If, varname.parent = varname, ax
+					}
 				}
-			default:
 			}
 		}
 	})

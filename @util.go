@@ -22,6 +22,7 @@ var (
 	strReplSlash2Dot      = strings.NewReplacer("\\", ".", "/", ".")
 	strReplSanitizer      = strings.NewReplacer("'", "ˇ", "$", "Ø")
 	strReplUnsanitize     = strings.NewReplacer("$prime", "'", "$$", "")
+	_symcounter           = 0
 )
 
 func notImplErr(cat string, name string, in interface{}) error {

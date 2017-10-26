@@ -272,11 +272,44 @@ func (me *irABlock) add(asts ...irA) {
 	me.Body = append(me.Body, asts...)
 }
 
+func (me *irABlock) countSymRefs(gonames irANamedTypeRefs) (m map[string]int) {
+	m = make(map[string]int, len(gonames))
+	for _, goname := range gonames {
+		m[goname.NameGo] = 0
+	}
+	walk(me, true, func(a irA) irA {
+		if asym, _ := a.(*irASym); asym != nil {
+			if count, exists := m[asym.NameGo]; exists {
+				m[asym.NameGo] = count + 1
+			}
+		}
+		return a
+	})
+	return
+}
+
+func (me *irABlock) refersToSym(namego string) (itdoes bool) {
+	walk(me, true, func(a irA) irA {
+		if !itdoes {
+			if asym, _ := a.(*irASym); asym != nil && asym.NameGo == namego {
+				itdoes = true
+			}
+		}
+		return a
+	})
+	return
+}
+
 func (me *irABlock) prepend(asts ...irA) {
 	for _, a := range asts {
 		a.Base().parent = me
 	}
 	me.Body = append(asts, me.Body...)
+}
+
+func (me *irABlock) insert(i int, a irA) {
+	a.Base().parent = me
+	me.Body = append(me.Body[:i], append([]irA{a}, me.Body[i:]...)...)
 }
 
 func (me *irABlock) removeAt(i int) {
@@ -314,9 +347,7 @@ func (me irAOp1) isConstable() bool {
 }
 
 func (me *irAOp1) ExprType() *irANamedTypeRef {
-	if me.Op1 == "!" {
-		return exprTypeBool
-	} else if me.Of != nil {
+	if me.Of != nil {
 		return me.Of.ExprType()
 	}
 	return me.irABase.ExprType()
@@ -637,7 +668,7 @@ func (me *irAst) finalizePostPrep() {
 	me.postLinkUpTcInstDecls()
 	me.postMiscFixups()
 	me.postEnsureArgTypes()
-	me.postEnsureIfaceCasts()
+	me.postPerFuncFixups()
 }
 
 func (me *irAst) prepFromCoreImp() {

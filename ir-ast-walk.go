@@ -23,12 +23,12 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
-func (me *irABlock) perFunc(on func(*irAFunc)) {
-	walk(me, false, func(a irA) irA {
+func (me *irABlock) perFunc(istoplevel bool, on func(bool, *irAFunc)) {
+	walk(me, false, func(a irA) irA { // false == don't recurse into inner func-vals
 		switch ax := a.(type) {
-		case *irAFunc:
-			on(ax)
-			ax.FuncImpl.perFunc(on)
+		case *irAFunc: // we hit a func-val in the current block
+			on(istoplevel, ax)             // invoke handler for it
+			ax.FuncImpl.perFunc(false, on) // only now recurse into itself
 		}
 		return a
 	})
