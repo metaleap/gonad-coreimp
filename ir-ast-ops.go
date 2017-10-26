@@ -218,12 +218,10 @@ func (me *irAst) postEnsureIfaceCasts() {
 			case *irAIf:
 				axt := ax.If.ExprType()
 				if axt == nil || axt.RefAlias != exprTypeBool.RefAlias {
-					symname := fmt.Sprintf("µˇ%v", i)
-					pb := ax.parent.(*irABlock)
-					av := ªLet(symname, "", ªTo(ax.If, "Prim", "Boolean"))
+					symname, pb := fmt.Sprintf("µˇ%v", i), ax.parent.(*irABlock)
+					sym, av := ªSymGo(symname), ªLet(symname, "", ªTo(ax.If, "Prim", "Boolean"))
 					pb.prepend(av)
-					ax.If = ªSymGo(symname)
-					ax.If.Base().parent = ax.If
+					sym.parent, ax.If = ax, sym
 				}
 			default:
 			}
