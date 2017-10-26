@@ -30,7 +30,7 @@ func ªB(literal bool) *irALitBool {
 }
 
 func ªN(literal float64) *irALitNum {
-	a := &irALitNum{LitDouble: literal}
+	a := &irALitNum{LitNum: literal}
 	a.RefAlias = "Prim.Number"
 	return a
 }
@@ -226,7 +226,7 @@ func ªSymPs(nameps string, exported bool) *irASym {
 }
 
 func ªTo(expr irA, pname string, tname string) *irAToType {
-	a := &irAToType{ExprToCast: expr, TypePkg: pname, TypeName: tname}
-	a.ExprToCast.Base().parent = a
+	a := &irAToType{ExprToConv: expr, TypePkg: pname, TypeName: tname}
+	a.ExprToConv.Base().parent = a
 	return a
 }

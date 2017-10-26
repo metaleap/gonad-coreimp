@@ -42,12 +42,12 @@ func (me irANamedTypeRefs) byPsName(psname string) *irANamedTypeRef {
 	return nil
 }
 
-func (me irANamedTypeRefs) eq(cmp irANamedTypeRefs) bool {
+func (me irANamedTypeRefs) equiv(cmp irANamedTypeRefs) bool {
 	if l := len(me); l != len(cmp) {
 		return false
 	} else {
 		for i := 0; i < l; i++ {
-			if !me[i].eq(cmp[i]) {
+			if !me[i].equiv(cmp[i]) {
 				return false
 			}
 		}
@@ -95,8 +95,8 @@ func (me *irANamedTypeRef) nameless() (copy *irANamedTypeRef) {
 	return
 }
 
-func (me *irANamedTypeRef) eq(cmp *irANamedTypeRef) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.eq(cmp.RefInterface) && me.RefFunc.eq(cmp.RefFunc) && me.RefStruct.eq(cmp.RefStruct) && me.RefArray.eq(cmp.RefArray) && me.RefPtr.eq(cmp.RefPtr))
+func (me *irANamedTypeRef) equiv(cmp *irANamedTypeRef) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.equiv(cmp.RefInterface) && me.RefFunc.equiv(cmp.RefFunc) && me.RefStruct.equiv(cmp.RefStruct) && me.RefArray.equiv(cmp.RefArray) && me.RefPtr.equiv(cmp.RefPtr))
 }
 
 func (me *irANamedTypeRef) hasTypeInfo() bool {
@@ -142,16 +142,16 @@ type irATypeRefArray struct {
 	Of *irANamedTypeRef
 }
 
-func (me *irATypeRefArray) eq(cmp *irATypeRefArray) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.eq(cmp.Of))
+func (me *irATypeRefArray) equiv(cmp *irATypeRefArray) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.equiv(cmp.Of))
 }
 
 type irATypeRefPtr struct {
 	Of *irANamedTypeRef
 }
 
-func (me *irATypeRefPtr) eq(cmp *irATypeRefPtr) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.eq(cmp.Of))
+func (me *irATypeRefPtr) equiv(cmp *irATypeRefPtr) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Of.equiv(cmp.Of))
 }
 
 type irATypeRefInterface struct {
@@ -163,8 +163,8 @@ type irATypeRefInterface struct {
 	inheritedMethods irANamedTypeRefs
 }
 
-func (me *irATypeRefInterface) eq(cmp *irATypeRefInterface) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.eq(cmp.Methods))
+func (me *irATypeRefInterface) equiv(cmp *irATypeRefInterface) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.equiv(cmp.Methods))
 }
 
 type irATypeRefFunc struct {
@@ -195,8 +195,8 @@ func (me *irATypeRefFunc) copyArgTypesOnlyFrom(namesIfMeNil bool, from *irATypeR
 	me.Rets = copyargs(me.Rets, from.Rets)
 }
 
-func (me *irATypeRefFunc) eq(cmp *irATypeRefFunc) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.eq(cmp.Args) && me.Rets.eq(cmp.Rets))
+func (me *irATypeRefFunc) equiv(cmp *irATypeRefFunc) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.equiv(cmp.Args) && me.Rets.equiv(cmp.Rets))
 }
 
 func (me *irATypeRefFunc) haveAllArgsTypeInfo() bool {
@@ -249,8 +249,8 @@ type irATypeRefStruct struct {
 	Methods   irANamedTypeRefs `json:",omitempty"`
 }
 
-func (me *irATypeRefStruct) eq(cmp *irATypeRefStruct) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.eq(cmp.Fields))
+func (me *irATypeRefStruct) equiv(cmp *irATypeRefStruct) bool {
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.equiv(cmp.Fields))
 }
 
 func (me *irMeta) goTypeDefByGoName(goname string) *irANamedTypeRef {

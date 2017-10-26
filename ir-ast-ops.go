@@ -143,7 +143,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 					}
 				}
 			case *irABlock:
-				if a != nil { // any 2 consecutive mutually-negating ifs-without-elses, we flatten into a single if-else. usually bool pattern-matches
+				if a != nil { // any 2 consecutive ifs-without-elses offer opportunities
 					var lastif *irAIf
 					for i := 0; i < len(a.Body); i++ {
 						switch thisif := a.Body[i].(type) {
@@ -151,10 +151,16 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 							if lastif == nil {
 								lastif = thisif
 							} else { // two ifs in a row
-								if lastif.doesCondNegate(thisif) && lastif.Else == nil {
-									lastif.Else = thisif.Then
-									thisif.Then, lastif.Else.parent = nil, lastif
-									a.Body = append(a.Body[:i], a.Body[i+1:]...)
+								if lastif.Else == nil && thisif.Else == nil {
+									if lastif.doesCondNegate(thisif) { // mutually-negating: turn the 2nd then into the else of the 1st
+										lastif.Else = thisif.Then
+										thisif.Then, lastif.Else.parent = nil, lastif
+										a.removeAt(i)
+									} else if lastif.Then.Equiv(thisif.Then) { // both have same then branch: unify into a single if with both conditions OR'd
+										opor := ªO2(lastif.If, "||", thisif.If)
+										lastif.If, opor.parent = opor, lastif
+										a.removeAt(i)
+									}
 								}
 								lastif = nil
 							}

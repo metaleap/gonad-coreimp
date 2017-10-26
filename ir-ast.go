@@ -55,7 +55,7 @@ type irTcInstImpl struct {
 type irA interface {
 	Ast() *irAst
 	Base() *irABase
-	Eq(irA) bool // mostly not implemented except where we needed it
+	Equiv(irA) bool // not struct equality but semantic equivalency as we need it where we do
 	ExprType() *irANamedTypeRef
 	Parent() irA
 }
@@ -75,16 +75,12 @@ func (me *irABase) Ast() *irAst {
 	return me.root
 }
 
-func (me *irABase) Base() *irABase {
-	return me
-}
-
-func (_ *irABase) Eq(_ irA) bool {
-	return false
-}
-
-func (me *irABase) ExprType() *irANamedTypeRef {
-	return me.exprType
+func (me *irABase) Base() *irABase             { return me }
+func (me *irABase) ExprType() *irANamedTypeRef { return me.exprType }
+func (me *irABase) Parent() irA                { return me.parent }
+func (me *irABase) Equiv(cmp irA) bool {
+	ab := cmp.Base()
+	return (me == nil && ab == nil) || (me != nil && ab != nil && me.irANamedTypeRef.equiv(&ab.irANamedTypeRef) && me.NameGo == ab.NameGo && me.NamePs == ab.NamePs)
 }
 
 func (me *irABase) isParentOp() (isparentop bool) {
@@ -95,10 +91,6 @@ func (me *irABase) isParentOp() (isparentop bool) {
 		}
 	}
 	return
-}
-
-func (me *irABase) Parent() irA {
-	return me.parent
 }
 
 func (me *irABase) srcFilePath() (srcfilepath string) {
@@ -117,11 +109,21 @@ type irAConst struct {
 	ConstVal irA
 }
 
+func (me *irAConst) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAConst)
+	return me.Base().Equiv(c) && (c == nil || me.ConstVal.Equiv(c.ConstVal))
+}
+
 func (me *irAConst) isConstable() bool { return true }
 
 type irALet struct {
 	irABase
 	LetVal irA
+}
+
+func (me *irALet) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALet)
+	return me.Base().Equiv(c) && (c == nil || me.LetVal.Equiv(c.LetVal))
 }
 
 func (me *irALet) isConstable() bool {
@@ -149,15 +151,16 @@ type irASym struct {
 	Sym__ interface{} // useless except we want to see it in the gonadast.json
 }
 
-func (me *irASym) Eq(sym irA) bool {
-	if s, _ := sym.(*irASym); s != nil {
+func (me *irASym) Equiv(sym irA) bool {
+	s, _ := sym.(*irASym)
+	if s != nil && me != nil {
 		if me.NameGo != "" && s.NameGo != "" {
 			return me.NameGo == s.NameGo
 		} else {
 			return me.NamePs == s.NamePs
 		}
 	}
-	return false
+	return s == nil && me == nil
 }
 
 func (me *irASym) isConstable() bool {
@@ -185,6 +188,11 @@ type irAFunc struct {
 	FuncImpl *irABlock
 }
 
+func (me *irAFunc) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAFunc)
+	return me.Base().Equiv(c) && (c == nil || me.FuncImpl.Equiv(c.FuncImpl))
+}
+
 type irALitStr struct {
 	irABase
 	LitStr string
@@ -192,6 +200,11 @@ type irALitStr struct {
 
 func (_ *irALitStr) ExprType() *irANamedTypeRef { return exprTypeStr }
 func (me *irALitStr) isConstable() bool         { return true }
+
+func (me *irALitStr) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitStr)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.LitStr == c.LitStr)
+}
 
 type irALitBool struct {
 	irABase
@@ -201,17 +214,32 @@ type irALitBool struct {
 func (_ *irALitBool) ExprType() *irANamedTypeRef { return exprTypeBool }
 func (_ irALitBool) isConstable() bool           { return true }
 
+func (me *irALitBool) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitBool)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.LitBool == c.LitBool)
+}
+
 type irALitNum struct {
 	irABase
-	LitDouble float64
+	LitNum float64
 }
 
 func (_ *irALitNum) ExprType() *irANamedTypeRef { return exprTypeNum }
 func (_ irALitNum) isConstable() bool           { return true }
 
+func (me *irALitNum) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitNum)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.LitNum == c.LitNum)
+}
+
 type irALitInt struct {
 	irABase
 	LitInt int
+}
+
+func (me *irALitInt) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitInt)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.LitInt == c.LitInt)
 }
 
 func (_ *irALitInt) ExprType() *irANamedTypeRef { return exprTypeInt }
@@ -221,6 +249,20 @@ type irABlock struct {
 	irABase
 
 	Body []irA
+}
+
+func (me *irABlock) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irABlock)
+	if me != nil && c != nil && len(me.Body) == len(c.Body) {
+		for i, a := range me.Body {
+			if !a.Equiv(c.Body[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return c == nil && me == nil
+
 }
 
 func (me *irABlock) add(asts ...irA) {
@@ -237,6 +279,10 @@ func (me *irABlock) prepend(asts ...irA) {
 	me.Body = append(asts, me.Body...)
 }
 
+func (me *irABlock) removeAt(i int) {
+	me.Body = append(me.Body[:i], me.Body[i+1:]...)
+}
+
 type irAComments struct {
 	irABase
 }
@@ -250,6 +296,14 @@ type irAOp1 struct {
 	irABase
 	Op1 string
 	Of  irA
+}
+
+func (me *irAOp1) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAOp1)
+	if c != nil && me != nil && c.Op1 == me.Op1 {
+		return me.Of.Equiv(c.Of)
+	}
+	return c == nil && me == nil
 }
 
 func (me irAOp1) isConstable() bool {
@@ -273,6 +327,14 @@ type irAOp2 struct {
 	Left  irA
 	Op2   string
 	Right irA
+}
+
+func (me *irAOp2) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAOp2)
+	if c != nil && me != nil && c.Op2 == me.Op2 {
+		return me.Left.Equiv(c.Left) && me.Right.Equiv(c.Right)
+	}
+	return c == nil && me == nil
 }
 
 func (me *irAOp2) ExprType() *irANamedTypeRef {
@@ -306,6 +368,11 @@ type irASet struct {
 	isInVarGroup bool
 }
 
+func (me *irASet) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irASet)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.SetLeft.Equiv(c.SetLeft) && me.ToRight.Equiv(c.ToRight))
+}
+
 type irAFor struct {
 	irABase
 	ForDo    *irABlock
@@ -313,6 +380,24 @@ type irAFor struct {
 	ForInit  []*irALet
 	ForStep  []*irASet
 	ForRange *irALet
+}
+
+func (me *irAFor) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAFor)
+	if me != nil && c != nil && me.ForDo.Equiv(c.ForDo) && me.ForRange.Equiv(c.ForRange) && me.ForCond.Equiv(c.ForCond) && len(me.ForInit) == len(c.ForInit) && len(me.ForStep) == len(c.ForStep) {
+		for i, l := range me.ForInit {
+			if !l.Equiv(c.ForInit[i]) {
+				return false
+			}
+		}
+		for i, s := range me.ForStep {
+			if !s.Equiv(c.ForStep[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return me == nil && c == nil
 }
 
 type irAIf struct {
@@ -334,11 +419,16 @@ func (me *irAIf) doesCondNegate(other *irAIf) bool {
 		oop = nil
 	}
 	if mop == nil && oop != nil {
-		return me.If.Eq(oop.Of) // always true so far, but coreimp output formats can always change, so we test correctly
+		return me.If.Equiv(oop.Of) // always true so far, but coreimp output formats can always change, so we test correctly
 	} else if mop != nil && oop == nil {
-		return mop.Of.Eq(other.If) // dito
+		return mop.Of.Equiv(other.If) // dito
 	}
 	return false
+}
+
+func (me *irAIf) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAIf)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.If.Equiv(c.If) && me.Then.Equiv(c.Then) && me.Else.Equiv(c.Else))
 }
 
 type irACall struct {
@@ -347,14 +437,45 @@ type irACall struct {
 	CallArgs []irA
 }
 
+func (me *irACall) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irACall)
+	if me != nil && c != nil && me.Callee.Equiv(c.Callee) && len(me.CallArgs) == len(c.CallArgs) {
+		for i, a := range me.CallArgs {
+			if !a.Equiv(c.CallArgs[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return me == nil && c == nil
+}
+
 type irALitObj struct {
 	irABase
 	ObjFields []*irALitObjField
 }
 
+func (me *irALitObj) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitObj)
+	if me.Base().Equiv(c) && c != nil && len(me.ObjFields) == len(c.ObjFields) {
+		for i, f := range me.ObjFields {
+			if !f.Equiv(c.ObjFields[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return me == nil && c == nil
+}
+
 type irALitObjField struct {
 	irABase
 	FieldVal irA
+}
+
+func (me *irALitObjField) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitObjField)
+	return me.Base().Equiv(c) && (c == nil || me.FieldVal.Equiv(c.FieldVal))
 }
 
 type irANil struct {
@@ -365,6 +486,11 @@ type irANil struct {
 type irARet struct {
 	irABase
 	RetArg irA
+}
+
+func (me *irARet) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irARet)
+	return me.Base().Equiv(c) && (c == nil || me.RetArg.Equiv(c.RetArg))
 }
 
 func (me *irARet) ExprType() *irANamedTypeRef {
@@ -379,9 +505,27 @@ type irAPanic struct {
 	PanicArg irA
 }
 
+func (me *irAPanic) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAPanic)
+	return me.Base().Equiv(c) && (c == nil || me.PanicArg.Equiv(c.PanicArg))
+}
+
 type irALitArr struct {
 	irABase
 	ArrVals []irA
+}
+
+func (me *irALitArr) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irALitArr)
+	if me != nil && c != nil && len(me.ArrVals) == len(c.ArrVals) {
+		for i, v := range me.ArrVals {
+			if !v.Equiv(c.ArrVals[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return me == nil && c == nil
 }
 
 type irAIndex struct {
@@ -390,10 +534,20 @@ type irAIndex struct {
 	IdxRight irA
 }
 
+func (me *irAIndex) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAIndex)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.IdxLeft.Equiv(c.IdxLeft) && me.IdxRight.Equiv(c.IdxRight))
+}
+
 type irADot struct {
 	irABase
 	DotLeft  irA
 	DotRight irA
+}
+
+func (me *irADot) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irADot)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.DotLeft.Equiv(c.DotLeft) && me.DotRight.Equiv(c.DotRight))
 }
 
 type irAIsType struct {
@@ -402,11 +556,16 @@ type irAIsType struct {
 	TypeToTest string
 }
 
+func (me *irAIsType) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAIsType)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.TypeToTest == c.TypeToTest && me.ExprToTest.Equiv(c.ExprToTest))
+}
+
 func (_ *irAIsType) ExprType() *irANamedTypeRef { return exprTypeBool }
 
 type irAToType struct {
 	irABase
-	ExprToCast irA
+	ExprToConv irA
 	TypePkg    string
 	TypeName   string
 }
@@ -418,10 +577,20 @@ func (me *irAToType) ExprType() *irANamedTypeRef {
 	return me.exprType
 }
 
+func (me *irAToType) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAToType)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.TypePkg == c.TypePkg && me.TypeName == c.TypeName && me.ExprToConv.Equiv(c.ExprToConv))
+}
+
 type irAPkgSym struct {
 	irABase
 	PkgName string
 	Symbol  string
+}
+
+func (me *irAPkgSym) Equiv(cmp irA) bool {
+	c, _ := cmp.(*irAPkgSym)
+	return (me == nil && c == nil) || (me != nil && c != nil && me.PkgName == c.PkgName && me.Symbol == c.Symbol)
 }
 
 func (me *irAPkgSym) ExprType() *irANamedTypeRef {

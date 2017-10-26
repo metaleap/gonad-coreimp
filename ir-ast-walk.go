@@ -150,7 +150,7 @@ func walk(ast irA, intofuncvals bool, on funcIra2Ira) irA {
 		case *irAIsType:
 			a.ExprToTest = walk(a.ExprToTest, intofuncvals, on)
 		case *irAToType:
-			a.ExprToCast = walk(a.ExprToCast, intofuncvals, on)
+			a.ExprToConv = walk(a.ExprToConv, intofuncvals, on)
 		case *irALitArr:
 			for i, av := range a.ArrVals {
 				a.ArrVals[i] = walk(av, intofuncvals, on)

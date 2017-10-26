@@ -55,7 +55,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irALitBool:
 		fmt.Fprintf(w, "%t", a.LitBool)
 	case *irALitNum:
-		s := fmt.Sprintf("%f", a.LitDouble)
+		s := fmt.Sprintf("%f", a.LitNum)
 		for strings.HasSuffix(s, "0") {
 			s = s[:len(s)-1]
 		}
@@ -176,7 +176,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		// me.codeGenAst(w, indent, a.TypeToTest)
 		fmt.Fprint(w, "); øĸ")
 	case *irAToType:
-		me.codeGenAst(w, indent, a.ExprToCast)
+		me.codeGenAst(w, indent, a.ExprToConv)
 		fmt.Fprintf(w, ".(%s)", typeNameWithPkgName(me.resolveGoTypeRefFromQName(ustr.PrefixWithSep(a.TypePkg, ".", a.TypeName))))
 	case *irAPkgSym:
 		if len(a.PkgName) > 0 {
