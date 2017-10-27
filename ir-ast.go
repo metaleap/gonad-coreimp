@@ -104,6 +104,10 @@ type irAConstable interface {
 	isConstable() bool
 }
 
+type irASymStr interface {
+	symStr() string
+}
+
 type irAConst struct {
 	irABase
 	ConstVal irA
@@ -210,6 +214,10 @@ func (me *irASym) refToArg() (argref *irANamedTypeRef) {
 		me.reftoarg = argref
 	}
 	return
+}
+
+func (me *irASym) symStr() string {
+	return me.NameGo
 }
 
 type irAFunc struct {
@@ -469,7 +477,7 @@ type irAIf struct {
 
 func (_ *irAIf) ExprType() *irANamedTypeRef { return exprTypeBool }
 
-func (me *irAIf) doesCondNegate(other *irAIf) bool {
+func (me *irAIf) condNegates(other *irAIf) bool {
 	mop, _ := me.If.(*irAOp1)
 	oop, _ := other.If.(*irAOp1)
 	if mop != nil && mop.Op1 != "!" {
@@ -489,6 +497,13 @@ func (me *irAIf) doesCondNegate(other *irAIf) bool {
 func (me *irAIf) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irAIf)
 	return (me == nil && c == nil) || (me != nil && c != nil && me.If.Equiv(c.If) && me.Then.Equiv(c.Then) && me.Else.Equiv(c.Else))
+}
+
+func (me *irAIf) typeAssertions() []irA {
+	return irALookupBelow(me, func(a irA) (ok bool) {
+		_, ok = a.(*irAIsType)
+		return
+	})
 }
 
 type irACall struct {
@@ -610,15 +625,20 @@ func (me *irADot) Equiv(cmp irA) bool {
 	return (me == nil && c == nil) || (me != nil && c != nil && me.DotLeft.Equiv(c.DotLeft) && me.DotRight.Equiv(c.DotRight))
 }
 
+func (me *irADot) symStr() string {
+	return me.DotLeft.(irASymStr).symStr() + "º" + me.DotRight.(irASymStr).symStr()
+}
+
 type irAIsType struct {
 	irABase
+	VarName    string
 	ExprToTest irA
 	TypeToTest string
 }
 
 func (me *irAIsType) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irAIsType)
-	return (me == nil && c == nil) || (me != nil && c != nil && me.TypeToTest == c.TypeToTest && me.ExprToTest.Equiv(c.ExprToTest))
+	return (me == nil && c == nil) || (me != nil && c != nil && me.TypeToTest == c.TypeToTest && me.VarName == c.VarName && me.ExprToTest.Equiv(c.ExprToTest))
 }
 
 func (_ *irAIsType) ExprType() *irANamedTypeRef { return exprTypeBool }

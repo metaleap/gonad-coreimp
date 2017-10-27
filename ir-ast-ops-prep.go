@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 /*
 Golang intermediate-representation AST:
 various transforms and operations on the AST,
@@ -10,19 +14,28 @@ and "post" ops are called from finalizePostPrep.
 func (me *irAst) prepFromCoreImp() {
 	me.irABlock.root = me
 	//	transform coreimp.json AST into our own leaner Go-focused AST format
-	//	mostly focus on discovering new type-defs, final transforms once all
-	//	type-defs in all modules are known happen in FinalizePostPrep
-	for _, cia := range me.mod.coreimp.Body {
-		me.prepAddOrCull(cia.ciAstToIrAst())
+	//	in this "prep" stage, it is allowed to dynamically generate new types
+	//	into irMeta. Anything that relies on *complete* type infos from *other*
+	//	modules then needs to happen in the "post" stage
+	for _, cia := range me.mod.coreimp.Body { // traverse the original CoreImp AST
+		me.prepAddOrCull(cia.ciAstToIrAst()) // convert every top-level node into our Golang IR
 	}
-	for i, tcf := range me.culled.typeCtorFuncs {
+	//	at this point, the Golang IR highly resembles CoreImp ie JS. No types, lots of closures etc.
+	//	here begins to long arduous road to transform into more idiomatic well-typed Golang.
+
+	for i, tcf := range me.culled.typeCtorFuncs { // this reorders types to appear in the order they were defined in PS
 		if tcfb := tcf.Base(); tcfb != nil {
 			if gtd := me.irM.goTypeDefByPsName(tcfb.NamePs); gtd != nil {
 				gtd.sortIndex = i
 			}
 		}
 	}
-	me.prepForeigns()
+
+	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; reqforeign != "" {
+		qn := nsPrefixDefaultFfiPkg + me.mod.qName
+		me.irM.ForeignImp = me.irM.ensureImp(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
+	}
+
 	me.prepFixupNameCasings()
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)
@@ -105,30 +118,39 @@ func (me *irAst) prepAddNewExtraTypesˇTypeClassInstances() {
 }
 
 func (me *irAst) prepFixupNameCasings() {
-	ensure := func(gntr *irANamedTypeRef) *irANamedTypeRef {
-		if gvd := me.irM.goValDeclByPsName(gntr.NamePs); gvd != nil {
-			gntr.copyFrom(gvd, true, false, true)
-			return gvd
-		}
-		return nil
-	}
+	// upper-lower-cases are already correct for exported/unexported type-defs, here we do it for the top-level func/var defs
 	me.walkTopLevelDefs(func(a irA) {
-		if av, _ := a.(*irALet); av != nil {
-			ensure(&av.irANamedTypeRef)
-		} else if af, _ := a.(*irAFunc); af != nil {
-			ensure(&af.irANamedTypeRef)
+		ab := a.Base()
+		if gvd := me.irM.goValDeclByPsName(ab.NamePs); gvd != nil {
+			ab.copyFrom(gvd, true, false, true)
 		}
 	})
 }
 
-func (me *irAst) prepForeigns() {
-	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; reqforeign != "" {
-		qn := nsPrefixDefaultFfiPkg + me.mod.qName
-		me.irM.ForeignImp = me.irM.ensureImp(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
-	}
-}
-
 func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
+	var done map[string]bool
+	me.perFuncDown(true, func(istoplevel bool, afn *irAFunc) {
+		if istoplevel {
+			done = map[string]bool{}
+		}
+		for i, a := range afn.FuncImpl.Body {
+			if aif, _ := a.(*irAIf); aif != nil {
+				if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
+					for _, atc := range typechecks {
+						tcheck := atc.(*irAIsType)
+						tchkey := tcheck.VarName + "ª" + tcheck.TypeToTest
+						if !done[tchkey] {
+							nulet := ªLet(fmt.Sprintf("%sˇisˇ%s", tcheck.VarName, tcheck.TypeToTest), "", tcheck.ExprToTest)
+							nulet.parent = afn.FuncImpl
+							afn.FuncImpl.insert(i, nulet)
+							i++
+							done[tchkey] = true
+						}
+					}
+				}
+			}
+		}
+	})
 	me.walk(func(ast irA) irA {
 		if ast != nil {
 			switch a := ast.(type) {
@@ -147,7 +169,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 								return sym4nuvar
 							}
 						} else {
-							//	if the dot's LHS refers to a package, ensure the import is marked as in-use and switch out dot for pkgsym
+							//	if the dot's LHS refers to a package, ensure the import is there and switch out irADot for irAPkgSym
 							for _, imp := range me.irM.Imports {
 								if imp.GoName == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.irM.ForeignImp) {
 									dr.Export = true
@@ -168,11 +190,11 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 								lastif = thisif
 							} else { // two ifs in a row
 								if lastif.Else == nil && thisif.Else == nil {
-									if lastif.doesCondNegate(thisif) { // mutually-negating: turn the 2nd then into the else of the 1st
+									if lastif.condNegates(thisif) { // mutually-negating: turn the 2nd `then` into the `else` of the 1st
 										lastif.Else = thisif.Then
 										thisif.Then, lastif.Else.parent = nil, lastif
 										a.removeAt(i)
-									} else if lastif.Then.Equiv(thisif.Then) { // both have same then branch: unify into a single if with both conditions OR'd
+									} else if lastif.Then.Equiv(thisif.Then) { // both have same `then` branch: unify into a single if with both conditions OR'd
 										opor := ªO2(lastif.If, "||", thisif.If)
 										lastif.If, opor.parent = opor, lastif
 										a.removeAt(i)

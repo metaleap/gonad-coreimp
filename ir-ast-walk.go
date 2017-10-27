@@ -23,6 +23,16 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
+func irALookupBelow(me irA, check func(irA) bool) (all []irA) {
+	walk(me, true, func(a irA) irA {
+		if check(a) {
+			all = append(all, a)
+		}
+		return a
+	})
+	return
+}
+
 func (me *irABase) outerFunc() *irAFunc {
 	for nextup := me.parent; nextup != nil; nextup = nextup.Parent() {
 		if nextfn, _ := nextup.(*irAFunc); nextfn != nil {
