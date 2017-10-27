@@ -83,12 +83,12 @@ func (me *irABase) Equiv(cmp irA) bool {
 	return (me == nil && ab == nil) || (me != nil && ab != nil && me.irANamedTypeRef.equiv(&ab.irANamedTypeRef) && me.NameGo == ab.NameGo && me.NamePs == ab.NamePs)
 }
 
-func (me *irABase) isParentOp() (isparentop bool) {
-	if me.parent != nil {
-		switch me.parent.(type) {
-		case *irAOp1, *irAOp2:
-			isparentop = true
-		}
+func (me *irABase) parentOp() (po1 *irAOp1, po2 *irAOp2) {
+	switch op := me.parent.(type) {
+	case *irAOp1:
+		po1 = op
+	case *irAOp2:
+		po2 = op
 	}
 	return
 }

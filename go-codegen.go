@@ -198,24 +198,26 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		me.codeGenAst(w, indent, a.ToRight)
 		fmt.Fprint(w, "\n")
 	case *irAOp1:
-		isinop := a.isParentOp()
-		if isinop {
+		po1, po2 := a.parentOp()
+		parens := po2 != nil || po1 != nil
+		if parens {
 			fmt.Fprint(w, "(")
 		}
 		fmt.Fprint(w, a.Op1)
 		me.codeGenAst(w, indent, a.Of)
-		if isinop {
+		if parens {
 			fmt.Fprint(w, ")")
 		}
 	case *irAOp2:
-		isinop := a.isParentOp()
-		if isinop {
+		po1, po2 := a.parentOp()
+		parens := po1 != nil || (po2 != nil && po2.Op2 != a.Op2)
+		if parens {
 			fmt.Fprint(w, "(")
 		}
 		me.codeGenAst(w, indent, a.Left)
 		fmt.Fprintf(w, " %s ", a.Op2)
 		me.codeGenAst(w, indent, a.Right)
-		if isinop {
+		if parens {
 			fmt.Fprint(w, ")")
 		}
 	case *irANil:
