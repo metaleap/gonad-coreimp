@@ -257,6 +257,13 @@ func (me *irATypeRefStruct) equiv(cmp *irATypeRefStruct) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Fields.equiv(cmp.Fields))
 }
 
+func (me *irATypeRefStruct) memberByPsName(nameps string) (mem *irANamedTypeRef) {
+	if mem = me.Fields.byPsName(nameps); mem == nil {
+		mem = me.Methods.byPsName(nameps)
+	}
+	return
+}
+
 func (me *irMeta) goTypeDefByGoName(goname string) *irANamedTypeRef {
 	for _, gtd := range me.GoTypeDefs {
 		if gtd.NameGo == goname {
@@ -267,12 +274,17 @@ func (me *irMeta) goTypeDefByGoName(goname string) *irANamedTypeRef {
 }
 
 func (me *irMeta) goTypeDefByPsName(psname string) *irANamedTypeRef {
+	var gtdi *irANamedTypeRef
 	for _, gtd := range me.GoTypeDefs {
 		if gtd.NamePs == psname {
-			return gtd
+			if gtd.RefInterface != nil {
+				gtdi = gtd
+			} else {
+				return gtd
+			}
 		}
 	}
-	return nil
+	return gtdi
 }
 
 func (me *irMeta) populateGoTypeDefs() {

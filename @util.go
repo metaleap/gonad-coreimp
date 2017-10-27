@@ -88,19 +88,19 @@ func findGoTypeByGoQName(me *modPkg, qname string) (mod *modPkg, tref *irANamedT
 	return
 }
 
-func findGoTypeByPsQName(qname string) (*modPkg, *irANamedTypeRef) {
+func findGoTypeByPsQName(me *modPkg, qname string) (*modPkg, *irANamedTypeRef) {
 	var pname, tname string
-	i := strings.LastIndex(qname, ".")
+	mod, i := me, strings.LastIndex(qname, ".")
 	if tname = qname[i+1:]; i > 0 {
 		pname = qname[:i]
-		if mod := findModuleByQName(pname); mod == nil {
-			panic(notImplErr("module qname", pname, qname))
-		} else {
-			return mod, mod.irMeta.goTypeDefByPsName(tname)
+		if mod = findModuleByQName(pname); mod == nil {
+			mod = findModuleByPName(pname)
 		}
-	} else {
-		panic(notImplErr("non-qualified type-name", qname, "a *.purs file of yours"))
+		if mod == nil {
+			panic(notImplErr("module qname", pname, qname))
+		}
 	}
+	return mod, mod.irMeta.goTypeDefByPsName(tname)
 }
 
 func sanitizeSymbolForGo(name string, upper bool) string {

@@ -36,16 +36,20 @@ func (me *irAst) finalizePostPrep() {
 }
 
 func (me *irAst) postEnsureArgTypes() {
+	//	first the top-level funcs: no guesswork here, we have the full signature from coreimp.json:declEnv
 	for _, a := range me.topLevelDefs(nil) {
 		switch atld := a.(type) {
 		case *irAFunc:
 			if tldname := atld.NamePs; tldname == "" {
 				panic(fmt.Sprintf("%T", atld.parent))
 			} else if gvd := me.irM.goValDeclByPsName(tldname); gvd != nil && gvd.RefFunc != nil {
-				atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+				if tlcmem := me.irM.tcMember(tldname); tlcmem == nil {
+					atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+				}
 			}
 		}
 	}
+	//	now we're better equipped for further "guesswork" down the line:
 	me.perFuncDown(func(fn *irAFunc) {
 		if !fn.RefFunc.haveAllArgsTypeInfo() {
 			if len(fn.RefFunc.Rets) > 1 {
@@ -273,7 +277,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 	me.walkTopLevelDefs(func(a irA) {
 		if ab := a.Base(); a != nil {
 			if tci := me.irM.tcInst(ab.NamePs); tci != nil {
-				if tcmod, gtd := findGoTypeByPsQName(tci.ClassName); gtd == nil || gtd.RefStruct == nil {
+				if tcmod, gtd := findGoTypeByPsQName(me.mod, tci.ClassName); gtd == nil || gtd.RefStruct == nil {
 					panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
 				} else {
 					switch ax := a.(type) {
@@ -356,11 +360,17 @@ func (me *irAst) postLinkUpTcInstDecls() {
 func (me *irAst) postMiscFixups() {
 	me.walk(func(ast irA) irA {
 		switch a := ast.(type) {
-		// case *irADot:
-		// 	if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
-		// 		if gtd:=findGoTypeByGoQName(me, qname)
-		// 		println(me.mod.srcFilePath + "\t\t" + atl.RefAlias + "\t\t" + a.symStr())
-		// 	}
+		case *irADot:
+			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
+				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
+					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
+				} else {
+					println(gtd.RefStruct == nil)
+					// if gtdm := gtd.RefStruct.memberByPsName(a.DotRight.(*irASym).NamePs); gtdm != nil {
+					// 	println(gtd.NamePs + "." + gtdm.NamePs)
+					// }
+				}
+			}
 		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts

@@ -136,12 +136,13 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 								tcheck := atc.(*irAIsType)
 								tchkey := tcheck.names.v + "ª" + tcheck.names.t
 								tconv, _ := tconvs[tchkey]
+								tconvt := &irANamedTypeRef{RefAlias: tcheck.TypeToTest}
 								if tconv == nil {
 									pname, tname := me.resolveGoTypeRefFromQName(tcheck.TypeToTest)
 									tconvto := ªTo(tcheck.ExprToTest, pname, tname)
 									tconv = ªLet(tchkey, "", tconvto)
 									tconv.typeConv.okname, tconv.parent = "isˇ"+tchkey, afn.FuncImpl
-									tconv.exprType, tconvto.exprType = &irANamedTypeRef{RefAlias: tcheck.TypeToTest}, &irANamedTypeRef{RefAlias: tcheck.TypeToTest}
+									tconv.exprType, tconvto.exprType = tconvt, tconvt
 									afn.FuncImpl.insert(i, tconv)
 									i, tconvs[tchkey] = i+1, tconv
 								}
@@ -150,7 +151,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 										if symstr := ss.symStr(); symstr == tcheck.names.v {
 											tconv.typeConv.vused = true
 											symreftolet := ªSymGo(tchkey)
-											symreftolet.exprType = exprTypeBool
+											symreftolet.exprType = tconvt
 											return symreftolet
 										}
 									}
