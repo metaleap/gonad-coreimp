@@ -677,50 +677,6 @@ func (me *irAst) typeCtorFunc(nameps string) *irACtor {
 	return nil
 }
 
-func (me *irAst) finalizePostPrep() {
-	//	various fix-ups
-	me.walk(func(ast irA) irA {
-		if ast != nil {
-			switch a := ast.(type) {
-			case *irAOp1:
-				if a != nil && a.Op1 == "&" {
-					if oc, _ := a.Of.(*irACall); oc != nil {
-						return me.postFixupAmpCtor(a, oc)
-					}
-				}
-			}
-		}
-		return ast
-	})
-
-	me.postLinkUpTcMemberFuncs()
-	me.postLinkUpTcInstDecls()
-	me.postMiscFixups()
-	me.postEnsureArgTypes()
-	me.postPerFuncFixups()
-}
-
-func (me *irAst) prepFromCoreImp() {
-	me.irABlock.root = me
-	//	transform coreimp.json AST into our own leaner Go-focused AST format
-	//	mostly focus on discovering new type-defs, final transforms once all
-	//	type-defs in all modules are known happen in FinalizePostPrep
-	for _, cia := range me.mod.coreimp.Body {
-		me.prepAddOrCull(cia.ciAstToIrAst())
-	}
-	for i, tcf := range me.culled.typeCtorFuncs {
-		if tcfb := tcf.Base(); tcfb != nil {
-			if gtd := me.irM.goTypeDefByPsName(tcfb.NamePs); gtd != nil {
-				gtd.sortIndex = i
-			}
-		}
-	}
-	me.prepForeigns()
-	me.prepFixupNameCasings()
-	nuglobals := me.prepAddEnumishAdtGlobals()
-	me.prepMiscFixups(nuglobals)
-}
-
 func (me *irAst) writeAsJsonTo(w io.Writer) error {
 	jsonenc := json.NewEncoder(w)
 	jsonenc.SetIndent("", "\t")
