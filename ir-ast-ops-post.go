@@ -41,44 +41,52 @@ func (me *irAst) postEnsureArgTypes() {
 			if len(fn.RefFunc.Rets) > 1 {
 				panic(notImplErr("multiple ret-args in func", fn.NamePs, me.mod.srcFilePath))
 			}
-			if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
-				walk(fn.FuncImpl, false, func(stmt irA) irA {
-					if !fn.RefFunc.Rets[0].hasTypeInfo() {
-						if ret, _ := stmt.(*irARet); ret != nil {
-							if tret := ret.ExprType(); tret != nil {
-								fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
-							}
-						}
-					}
-					return stmt
-				})
-			}
-			for _, arg := range fn.RefFunc.Args {
-				if !arg.hasTypeInfo() {
+			if istoplevel {
+				tldname := fn.NamePs
+				if tldname == "" {
+					println(me.mod.srcFilePath)
+					panic(fmt.Sprintf("%T", fn.parent))
+				}
+			} else {
+				if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
 					walk(fn.FuncImpl, false, func(stmt irA) irA {
-						if !arg.hasTypeInfo() {
-							if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
-								if tsym := sym.ExprType(); tsym != nil {
-									arg.copyFrom(tsym, false, true, false)
+						if !fn.RefFunc.Rets[0].hasTypeInfo() {
+							if ret, _ := stmt.(*irARet); ret != nil {
+								if tret := ret.ExprType(); tret != nil {
+									fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
 								}
 							}
 						}
 						return stmt
 					})
 				}
-			}
-		}
-		if !fn.RefFunc.haveAllArgsTypeInfo() {
-			if fnretouter, _ := fn.parent.(*irARet); fnretouter != nil {
-				if fnouter, _ := fnretouter.parent.Parent().(*irAFunc); fnouter != nil {
-					if fnretsig := fnouter.RefFunc.Rets[0].RefFunc; fnretsig != nil {
-						if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
-							panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
-						} else {
-							for i, a := range fnretsig.Args {
-								fn.RefFunc.Args[i].copyFrom(a, false, true, false)
+				for _, arg := range fn.RefFunc.Args {
+					if !arg.hasTypeInfo() {
+						walk(fn.FuncImpl, false, func(stmt irA) irA {
+							if !arg.hasTypeInfo() {
+								if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
+									if tsym := sym.ExprType(); tsym != nil {
+										arg.copyFrom(tsym, false, true, false)
+									}
+								}
 							}
-							fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
+							return stmt
+						})
+					}
+				}
+			}
+			if !fn.RefFunc.haveAllArgsTypeInfo() {
+				if fnretouter, _ := fn.parent.(*irARet); fnretouter != nil {
+					if fnouter, _ := fnretouter.parent.Parent().(*irAFunc); fnouter != nil {
+						if fnretsig := fnouter.RefFunc.Rets[0].RefFunc; fnretsig != nil {
+							if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
+								panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
+							} else {
+								for i, a := range fnretsig.Args {
+									fn.RefFunc.Args[i].copyFrom(a, false, true, false)
+								}
+								fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
+							}
 						}
 					}
 				}
@@ -348,10 +356,11 @@ func (me *irAst) postLinkUpTcInstDecls() {
 func (me *irAst) postMiscFixups() {
 	me.walk(func(ast irA) irA {
 		switch a := ast.(type) {
-		case *irADot:
-			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
-				println(atl.RefAlias)
-			}
+		// case *irADot:
+		// 	if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
+		// 		if gtd:=findGoTypeByGoQName(me, qname)
+		// 		println(me.mod.srcFilePath + "\t\t" + atl.RefAlias + "\t\t" + a.symStr())
+		// 	}
 		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts

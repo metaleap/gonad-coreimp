@@ -46,8 +46,8 @@ func (me *irABlock) perFuncDown(istoplevel bool, on func(bool, *irAFunc)) {
 	walk(me, false, func(a irA) irA { // false == don't recurse into inner func-vals
 		switch ax := a.(type) {
 		case *irAFunc: // we hit a func-val in the current block
-			on(istoplevel, ax)                 // invoke handler for it
-			ax.FuncImpl.perFuncDown(false, on) // only now recurse into itself
+			on(istoplevel, ax) // invoke handler for it
+			// ax.FuncImpl.perFuncDown(false, on) // only now recurse into itself
 		}
 		return a
 	})
