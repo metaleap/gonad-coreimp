@@ -32,9 +32,10 @@ type psBowerFile struct {
 			GoNamespace  string // defaults to github.com/gonadz (or github.com\gonadz under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
 		}
 		CodeGen struct {
-			TypeClasses2Interfaces bool
-			SaturateFuncArities    bool
+			// TypeClasses2Interfaces bool
+			// SaturateFuncArities    bool
 			FlattenIfs             bool
+			PtrStructMinFieldCount int
 		}
 
 		loadedFromJson bool
@@ -105,6 +106,9 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 						break
 					}
 				}
+			}
+			if cfg.CodeGen.PtrStructMinFieldCount == 0 {
+				cfg.CodeGen.PtrStructMinFieldCount = 2
 			}
 			err = ufs.EnsureDirExists(cfg.Out.GoDirSrcPath)
 			cfg.loadedFromJson = true

@@ -296,11 +296,11 @@ func (me *irAst) postPerFuncFixups() {
 					case *irAOp2:
 						tl, tr := a.Left.ExprType(), a.Right.ExprType()
 						ul, ur := !tl.wellTyped(), !tr.wellTyped()
-						if ul && !ur {
-							i, varname = convertToTypeOf(i, afn, a.Left, a.Right.ExprType())
+						if sl, _ := a.Left.(*irASym); ul && (!ur) && sl != nil {
+							i, varname = convertToTypeOf(i, afn, sl, a.Right.ExprType())
 							a.Left, varname.parent = varname, a
-						} else if (!ul) && ur {
-							i, varname = convertToTypeOf(i, afn, a.Right, a.Left.ExprType())
+						} else if sr, _ := a.Right.(*irASym); (!ul) && ur && sr != nil {
+							i, varname = convertToTypeOf(i, afn, sr, a.Left.ExprType())
 							a.Right, varname.parent = varname, a
 						}
 					}
@@ -405,7 +405,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 	me.walkTopLevelDefs(func(a irA) {
 		if ab := a.Base(); a != nil {
 			if tci := me.irM.tcInst(ab.NamePs); tci != nil {
-				if tcmod, gtd := findGoTypeByPsQName(tci.ClassName); gtd == nil {
+				if tcmod, gtd := findGoTypeByPsQName(tci.ClassName); gtd == nil || gtd.RefStruct == nil {
 					panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
 				} else {
 					switch ax := a.(type) {
@@ -419,7 +419,13 @@ func (me *irAst) postLinkUpTcInstDecls() {
 									fvx.RefFunc.copyArgTypesOnlyFrom(true, gtd.RefStruct.Fields[i].RefFunc)
 								}
 							}
-							ax.RefAlias = axlv.RefAlias
+							if gtd.RefStruct.PassByPtr {
+								axctor := ªO1("&", axlv)
+								axlv.parent, axctor.parent = axctor, ax
+								ax.LetVal, ax.RefPtr = axctor, &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: axlv.RefAlias}}
+							} else {
+								ax.RefAlias = axlv.RefAlias
+							}
 						case *irAPkgSym:
 							ax.RefAlias = tci.ClassName
 						default:

@@ -282,10 +282,26 @@ func (me *irMeta) populateGoTypeDefs() {
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
 		if tc != nil {
 			if gtd.NameGo += "ˇ"; gtd.RefStruct != nil {
+				gtd.RefStruct.PassByPtr = true
 				for _, gtdf := range gtd.RefStruct.Fields {
 					if gtdf.Export != gtd.Export {
 						gtdf.Export = gtd.Export
 						gtdf.setBothNamesFromPsName(gtdf.NamePs)
+					}
+					if tcm := tc.memberBy(gtdf.NamePs); tcm == nil {
+						if rfn := gtdf.RefFunc; rfn == nil {
+							panic(notImplErr("non-func super-class-referencing-struct-field type for", gtdf.NamePs, me.mod.srcFilePath))
+						} else {
+							for retfunc := rfn.Rets[0].RefFunc; retfunc != nil; retfunc = rfn.Rets[0].RefFunc {
+								rfn = retfunc
+							}
+							if rfn.Rets[0].RefAlias == "" {
+								panic(notImplErr("ultimate-return type in super-class-referencing-struct-field for", gtdf.NamePs, me.mod.srcFilePath))
+							} else {
+								refptr := &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: rfn.Rets[0].RefAlias}}
+								rfn.Rets[0].RefAlias, rfn.Rets[0].RefPtr = "", refptr
+							}
+						}
 					}
 				}
 			}
@@ -407,7 +423,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 			} else {
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &irANamedTypeRef{Export: me.hasExport(gid.NamePs + "ĸ" + ctor.Name),
-						RefStruct: &irATypeRefStruct{PassByPtr: hasselfref || (len(ctor.Args) > 1 && hasctorargs)}}
+						RefStruct: &irATypeRefStruct{PassByPtr: hasselfref || (hasctorargs && len(ctor.Args) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
@@ -453,7 +469,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 	} else if tr.Skolem != nil {
 		return fmt.Sprintf("Skolem_%s_scope%d_value%d", tr.Skolem.Name, tr.Skolem.Scope, tr.Skolem.Value)
 	} else if tr.RCons != nil {
-		rectype := &irATypeRefStruct{PassByPtr: true}
+		rectype := &irATypeRefStruct{}
 		myfield := &irANamedTypeRef{Export: true}
 		myfield.setBothNamesFromPsName(tr.RCons.Label)
 		myfield.setRefFrom(me.toIrATypeRef(tdict, tr.RCons.Left))
@@ -461,6 +477,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		if nextrow := me.toIrATypeRef(tdict, tr.RCons.Right); nextrow != nil {
 			rectype.Fields = append(rectype.Fields, nextrow.(*irATypeRefStruct).Fields...)
 		}
+		rectype.PassByPtr = len(rectype.Fields) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount
 		return rectype
 	} else if tr.TypeApp != nil {
 		if tr.TypeApp.Left.TypeConstructor == "Prim.Record" {

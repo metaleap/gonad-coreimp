@@ -210,7 +210,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		}
 	case *irAOp2:
 		po1, po2 := a.parentOp()
-		parens := po1 != nil || (po2 != nil && po2.Op2 != a.Op2)
+		parens := po1 != nil || (po2 != nil && (po2.Op2 != a.Op2 || (a.Op2 != "+" && a.Op2 != "*" && a.Op2 != "&&" && a.Op2 != "&" && a.Op2 != "||" && a.Op2 != "|")))
 		if parens {
 			fmt.Fprint(w, "(")
 		}

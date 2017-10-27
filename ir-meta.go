@@ -117,6 +117,15 @@ type irMTypeClass struct {
 	Members     []*irMTypeClassMember `json:"tcm,omitempty"`
 }
 
+func (me *irMTypeClass) memberBy(name string) *irMTypeClassMember {
+	for _, m := range me.Members {
+		if m.Name == name {
+			return m
+		}
+	}
+	return nil
+}
+
 type irMTypeClassInst struct {
 	Name      string      `json:"tcin,omitempty"`
 	ClassName string      `json:"tcicn,omitempty"`
