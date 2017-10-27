@@ -106,7 +106,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 			fmt.Fprint(w, " := ")
 			me.codeGenAst(w, indent, ato)
 		default:
-			if at := a.ExprType(); at == nil || at.RefFunc != nil {
+			if at := a.ExprType(); at.RefFunc != nil {
 				fmt.Fprintf(w, "%s%s := ", tabs, a.NameGo)
 				me.codeGenAst(w, indent, a.LetVal)
 			} else {

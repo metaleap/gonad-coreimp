@@ -142,7 +142,8 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 									tconvto := ªTo(tcheck.ExprToTest, pname, tname)
 									tconv = ªLet(tchkey, "", tconvto)
 									tconv.typeConv.okname, tconv.parent = "isˇ"+tchkey, afn.FuncImpl
-									tconv.exprType, tconvto.exprType = tconvt, tconvt
+									tconv.copyTypeInfoFrom(tconvt)
+									tconvto.copyTypeInfoFrom(tconvt)
 									afn.FuncImpl.insert(i, tconv)
 									i, tconvs[tchkey] = i+1, tconv
 								}
@@ -151,7 +152,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 										if symstr := ss.symStr(); symstr == tcheck.names.v {
 											tconv.typeConv.vused = true
 											symreftolet := ªSymGo(tchkey)
-											symreftolet.exprType = tconvt
+											symreftolet.copyTypeInfoFrom(tconvt)
 											return symreftolet
 										}
 									}

@@ -72,9 +72,14 @@ type irANamedTypeRef struct {
 	sortIndex int
 }
 
-func (me *irANamedTypeRef) turnRefAliasIntoRefPtr() {
-	me.RefPtr = &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: me.RefAlias}}
-	me.RefAlias = ""
+func (me *irANamedTypeRef) turnRefIntoRefPtr() {
+	refptr := &irATypeRefPtr{Of: &irANamedTypeRef{}}
+	refptr.Of.copyTypeInfoFrom(me)
+	me.RefAlias, me.RefArray, me.RefFunc, me.RefInterface, me.RefPtr, me.RefStruct, me.RefUnknown = "", nil, nil, nil, refptr, nil, 0
+}
+
+func (me *irANamedTypeRef) clearTypeInfo() {
+	me.RefAlias, me.RefUnknown, me.RefInterface, me.RefFunc, me.RefStruct, me.RefArray, me.RefPtr = "", 0, nil, nil, nil, nil, nil
 }
 
 func (me *irANamedTypeRef) copyFrom(from *irANamedTypeRef, names bool, trefs bool, export bool) {
@@ -89,9 +94,13 @@ func (me *irANamedTypeRef) copyFrom(from *irANamedTypeRef, names bool, trefs boo
 	}
 }
 
+func (me *irANamedTypeRef) copyTypeInfoFrom(from *irANamedTypeRef) {
+	me.copyFrom(from, false, true, false)
+}
+
 func (me *irANamedTypeRef) nameless() (copy *irANamedTypeRef) {
 	copy = &irANamedTypeRef{}
-	copy.copyFrom(me, false, true, false)
+	copy.copyTypeInfoFrom(me)
 	return
 }
 
@@ -99,12 +108,15 @@ func (me *irANamedTypeRef) equiv(cmp *irANamedTypeRef) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.equiv(cmp.RefInterface) && me.RefFunc.equiv(cmp.RefFunc) && me.RefStruct.equiv(cmp.RefStruct) && me.RefArray.equiv(cmp.RefArray) && me.RefPtr.equiv(cmp.RefPtr))
 }
 
-func (me *irANamedTypeRef) hasTypeInfo() bool {
-	return me.RefAlias != "" || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
+func (me *irANamedTypeRef) hasTypeInfoBeyondEmptyIface() (welltyped bool) {
+	if welltyped = me.hasTypeInfo(); welltyped && me.RefInterface != nil {
+		welltyped = len(me.RefInterface.Embeds) > 0 || len(me.RefInterface.Methods) > 0
+	}
+	return
 }
 
-func (me *irANamedTypeRef) wellTyped() bool {
-	return me != nil && me.hasTypeInfo() && (me.RefInterface == nil || len(me.RefInterface.Embeds) > 0 || len(me.RefInterface.Methods) > 0)
+func (me *irANamedTypeRef) hasTypeInfo() bool {
+	return me != nil && me.RefAlias != "" || me.RefArray != nil || me.RefFunc != nil || me.RefInterface != nil || me.RefPtr != nil || me.RefStruct != nil || me.RefUnknown != 0
 }
 
 func (me *irANamedTypeRef) setBothNamesFromPsName(psname string) {
@@ -190,7 +202,7 @@ func (me *irATypeRefFunc) copyArgTypesOnlyFrom(namesIfMeNil bool, from *irATypeR
 			panic(notImplErr("args-num mismatch", fmt.Sprintf("%v vs %v", numargsme, numargsfrom), "copyArgTypesFrom"))
 		} else {
 			for i := 0; i < numargsme; i++ {
-				meargs[i].copyFrom(fromargs[i], false, true, false)
+				meargs[i].copyTypeInfoFrom(fromargs[i])
 			}
 		}
 		return meargs
@@ -505,8 +517,6 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			return funcyhackery(tr.TypeApp.Right)
 		} else if tr.TypeApp.Left.TypeConstructor != "" {
 			return me.toIrATypeRef(tdict, tr.TypeApp.Left)
-		} else {
-			return &irATypeRefInterface{}
 		}
 	}
 	return nil

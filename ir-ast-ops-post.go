@@ -51,6 +51,9 @@ func (me *irAst) postEnsureArgTypes() {
 	}
 	//	now we're better equipped for further "guesswork" down the line:
 	me.perFuncDown(func(fn *irAFunc) {
+		if fn.isTopLevel() { // we just did those, we just want to patch up all the scattered anonymous inner-funcs
+			return
+		}
 		if !fn.RefFunc.haveAllArgsTypeInfo() {
 			if len(fn.RefFunc.Rets) > 1 {
 				panic(notImplErr("multiple ret-args in func", fn.NamePs, me.mod.srcFilePath))
@@ -60,7 +63,7 @@ func (me *irAst) postEnsureArgTypes() {
 					if !fn.RefFunc.Rets[0].hasTypeInfo() {
 						if ret, _ := stmt.(*irARet); ret != nil {
 							if tret := ret.ExprType(); tret != nil {
-								fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
+								fn.RefFunc.Rets[0].copyTypeInfoFrom(tret)
 							}
 						}
 					}
@@ -73,7 +76,7 @@ func (me *irAst) postEnsureArgTypes() {
 						if !arg.hasTypeInfo() {
 							if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
 								if tsym := sym.ExprType(); tsym != nil {
-									arg.copyFrom(tsym, false, true, false)
+									arg.copyTypeInfoFrom(tsym)
 								}
 							}
 						}
@@ -90,9 +93,9 @@ func (me *irAst) postEnsureArgTypes() {
 							panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
 						} else {
 							for i, a := range fnretsig.Args {
-								fn.RefFunc.Args[i].copyFrom(a, false, true, false)
+								fn.RefFunc.Args[i].copyTypeInfoFrom(a)
 							}
-							fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
+							fn.RefFunc.Rets[0].copyTypeInfoFrom(fnretsig.Rets[0])
 						}
 					}
 				}
@@ -105,7 +108,7 @@ func (me *irAst) postPerFuncFixups() {
 	var namescache map[string]string
 	convertToTypeOf := func(i int, afn *irAFunc, from irA, totype *irANamedTypeRef) (int, *irASym) {
 		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
-		varname.exprType = totype
+		varname.copyTypeInfoFrom(totype)
 		if existing, _ := namescache[symname]; symname != "" && existing != "" {
 			varname.NameGo = existing
 		} else {
@@ -114,7 +117,7 @@ func (me *irAst) postPerFuncFixups() {
 			}
 			pname, tname := me.resolveGoTypeRefFromQName(totype.RefAlias)
 			vardecl := ªLet(varname.NameGo, "", ªTo(from, pname, tname))
-			vardecl.exprType = totype
+			vardecl.copyTypeInfoFrom(totype)
 			afn.FuncImpl.insert(i, vardecl)
 			i++
 		}
@@ -132,34 +135,33 @@ func (me *irAst) postPerFuncFixups() {
 			var varname *irASym
 			switch ax := afn.FuncImpl.Body[i].(type) {
 			case *irAIf: // if condition isn't bool (eg testing an interface{}), convert it first to a temp bool var
-				axt := ax.If.ExprType()
-				if axt == nil || axt.RefAlias != exprTypeBool.RefAlias {
-					switch axcond := ax.If.(type) {
-					case *irAOp1:
-						i, varname = convertToTypeOf(i, afn, axcond.Of.(*irASym), exprTypeBool)
-						axcond.Of, varname.parent = varname, axcond
-					case *irASym:
-						i, varname = convertToTypeOf(i, afn, axcond, exprTypeBool)
+				axift := ax.If.ExprType()
+				switch axif := ax.If.(type) {
+				case *irASym:
+					if (!axift.hasTypeInfo()) || axift.RefAlias != exprTypeBool.RefAlias {
+						i, varname = convertToTypeOf(i, afn, axif, exprTypeBool)
 						ax.If, varname.parent = varname, ax
+					}
+				case *irAOp1:
+					if axift = axif.Of.ExprType(); (!axift.hasTypeInfo()) || axift.RefAlias != exprTypeBool.RefAlias {
+						i, varname = convertToTypeOf(i, afn, axif.Of.(*irASym), exprTypeBool)
+						axif.Of, varname.parent = varname, axif
 					}
 				}
 			default:
 				walk(ax, false, func(ast irA) irA {
 					switch a := ast.(type) {
 					case *irARet:
-						if afn.RefFunc.Rets[0].wellTyped() && a.RetArg != nil {
+						if afn.RefFunc.Rets[0].hasTypeInfo() && a.RetArg != nil {
 							if asym, _ := a.RetArg.(*irASym); asym != nil {
-								if tsym := asym.ExprType(); tsym == nil || !tsym.hasTypeInfo() || !tsym.wellTyped() {
-									if asym.NameGo == "defaultEmptyish" {
-										println(asym.ExprType().RefAlias)
-									}
+								if tsym := asym.ExprType(); !tsym.hasTypeInfoBeyondEmptyIface() {
 									i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
 									a.RetArg, varname.parent = varname, a
 								}
 							}
 						}
 					case *irAOp1:
-						if !a.Of.Base().wellTyped() {
+						if !a.Of.Base().hasTypeInfo() {
 							if a.Op1 == "!" {
 								i, varname = convertToTypeOf(i, afn, a.Of, exprTypeBool)
 								a.Of, varname.parent = varname, a
@@ -167,12 +169,12 @@ func (me *irAst) postPerFuncFixups() {
 						}
 					case *irAOp2:
 						tl, tr := a.Left.ExprType(), a.Right.ExprType()
-						ul, ur := !tl.wellTyped(), !tr.wellTyped()
+						ul, ur := !tl.hasTypeInfoBeyondEmptyIface(), !tr.hasTypeInfoBeyondEmptyIface()
 						if sl, _ := a.Left.(*irASym); ul && (!ur) && sl != nil {
-							i, varname = convertToTypeOf(i, afn, sl, a.Right.ExprType())
+							i, varname = convertToTypeOf(i, afn, sl, tr)
 							a.Left, varname.parent = varname, a
 						} else if sr, _ := a.Right.(*irASym); (!ul) && ur && sr != nil {
-							i, varname = convertToTypeOf(i, afn, sr, a.Left.ExprType())
+							i, varname = convertToTypeOf(i, afn, sr, tl)
 							a.Right, varname.parent = varname, a
 						}
 					}
@@ -254,10 +256,10 @@ func (me *irAst) postLinkUpTcMemberFuncs() {
 					panic(notImplErr("type-class '"+tcm.tc.Name+"' (its struct type-def wasn't found) for member", tcm.Name, me.mod.srcFilePath))
 				} else {
 					if fndictarg.RefAlias = gtd.NamePs; gtd.RefStruct.PassByPtr {
-						fndictarg.turnRefAliasIntoRefPtr()
+						fndictarg.turnRefIntoRefPtr()
 					}
 					fnretarg := irANamedTypeRef{}
-					fnretarg.copyFrom(gtd.RefStruct.Fields.byPsName(tcm.Name), false, true, false)
+					fnretarg.copyTypeInfoFrom(gtd.RefStruct.Fields.byPsName(tcm.Name))
 					afn.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
 				}
 			}
@@ -292,7 +294,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								}
 							}
 							if ax.RefAlias = axlv.RefAlias; gtd.RefStruct.PassByPtr {
-								ax.turnRefAliasIntoRefPtr()
+								ax.turnRefIntoRefPtr()
 								axctor := ªO1("&", axlv)
 								axlv.parent, axctor.parent = axctor, ax
 								ax.LetVal = axctor
@@ -315,7 +317,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							panic(notImplErr(tci.ClassName+" type-class instance func body for", tci.Name, me.mod.srcFilePath))
 						} else {
 							if fndictarg.RefAlias = tci.ClassName; gtd.RefStruct.PassByPtr {
-								fndictarg.turnRefAliasIntoRefPtr()
+								fndictarg.turnRefIntoRefPtr()
 							}
 							var retgtd *irANamedTypeRef
 							var retmod *modPkg
@@ -343,7 +345,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 									fnretarg.RefAlias = retmod.pName + "." + fnretarg.RefAlias
 								}
 								if retgtd.RefStruct.PassByPtr {
-									fnretarg.turnRefAliasIntoRefPtr()
+									fnretarg.turnRefIntoRefPtr()
 								}
 								ax.RefFunc.Rets = irANamedTypeRefs{&fnretarg}
 							}
@@ -369,8 +371,6 @@ func (me *irAst) postMiscFixups() {
 					fname := asym.NamePs
 					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
 						asym.NameGo = gtdm.NameGo
-					} else {
-						println("MOOO")
 					}
 				}
 			}
@@ -378,7 +378,7 @@ func (me *irAst) postMiscFixups() {
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts
 				c := ªConst(&a.irANamedTypeRef, a.LetVal)
-				c.exprType = a.ExprType()
+				c.copyTypeInfoFrom(a.ExprType())
 				c.parent = a.parent
 				return c
 			}
