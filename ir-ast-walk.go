@@ -42,12 +42,12 @@ func (me *irABase) outerFunc() *irAFunc {
 	return nil
 }
 
-func (me *irABlock) perFuncDown(istoplevel bool, on func(bool, *irAFunc)) {
+func (me *irABlock) perFuncDown(on func(*irAFunc)) {
 	walk(me, false, func(a irA) irA { // false == don't recurse into inner func-vals
 		switch ax := a.(type) {
 		case *irAFunc: // we hit a func-val in the current block
-			on(istoplevel, ax) // invoke handler for it
-			// ax.FuncImpl.perFuncDown(false, on) // only now recurse into itself
+			on(ax)                      // invoke handler for it
+			ax.FuncImpl.perFuncDown(on) // only now recurse into itself
 		}
 		return a
 	})
@@ -63,7 +63,7 @@ func (me *irABase) perFuncUp(on func(*irAFunc)) {
 
 func (me *irAst) topLevelDefs(okay funcIra2Bool) (defs []irA) {
 	for _, ast := range me.Body {
-		if okay(ast) {
+		if okay == nil || okay(ast) {
 			defs = append(defs, ast)
 		}
 	}
@@ -139,13 +139,7 @@ func walk(ast irA, intofuncvals bool, on funcIra2Ira) irA {
 				a.FuncImpl = tmp
 			}
 		case *irAFunc:
-			walkinto := intofuncvals
-			if !walkinto {
-				if pb, _ := a.parent.(*irABlock); pb != nil && pb.parent == nil {
-					walkinto = true
-				}
-			}
-			if walkinto {
+			if intofuncvals {
 				if tmp, _ := walk(a.FuncImpl, intofuncvals, on).(*irABlock); tmp != nil {
 					a.FuncImpl = tmp
 				}

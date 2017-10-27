@@ -36,57 +36,59 @@ func (me *irAst) finalizePostPrep() {
 }
 
 func (me *irAst) postEnsureArgTypes() {
-	me.perFuncDown(true, func(istoplevel bool, fn *irAFunc) {
+	for _, a := range me.topLevelDefs(nil) {
+		switch atld := a.(type) {
+		case *irAFunc:
+			if tldname := atld.NamePs; tldname == "" {
+				panic(fmt.Sprintf("%T", atld.parent))
+			} else if gvd := me.irM.goValDeclByPsName(tldname); gvd != nil && gvd.RefFunc != nil {
+				atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+			}
+		}
+	}
+	me.perFuncDown(func(fn *irAFunc) {
 		if !fn.RefFunc.haveAllArgsTypeInfo() {
 			if len(fn.RefFunc.Rets) > 1 {
 				panic(notImplErr("multiple ret-args in func", fn.NamePs, me.mod.srcFilePath))
 			}
-			if istoplevel {
-				tldname := fn.NamePs
-				if tldname == "" {
-					println(me.mod.srcFilePath)
-					panic(fmt.Sprintf("%T", fn.parent))
-				}
-			} else {
-				if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
+			if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
+				walk(fn.FuncImpl, false, func(stmt irA) irA {
+					if !fn.RefFunc.Rets[0].hasTypeInfo() {
+						if ret, _ := stmt.(*irARet); ret != nil {
+							if tret := ret.ExprType(); tret != nil {
+								fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
+							}
+						}
+					}
+					return stmt
+				})
+			}
+			for _, arg := range fn.RefFunc.Args {
+				if !arg.hasTypeInfo() {
 					walk(fn.FuncImpl, false, func(stmt irA) irA {
-						if !fn.RefFunc.Rets[0].hasTypeInfo() {
-							if ret, _ := stmt.(*irARet); ret != nil {
-								if tret := ret.ExprType(); tret != nil {
-									fn.RefFunc.Rets[0].copyFrom(tret, false, true, false)
+						if !arg.hasTypeInfo() {
+							if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
+								if tsym := sym.ExprType(); tsym != nil {
+									arg.copyFrom(tsym, false, true, false)
 								}
 							}
 						}
 						return stmt
 					})
 				}
-				for _, arg := range fn.RefFunc.Args {
-					if !arg.hasTypeInfo() {
-						walk(fn.FuncImpl, false, func(stmt irA) irA {
-							if !arg.hasTypeInfo() {
-								if sym, _ := stmt.(*irASym); sym != nil && (sym.NamePs == arg.NamePs || sym.NameGo == arg.NameGo) {
-									if tsym := sym.ExprType(); tsym != nil {
-										arg.copyFrom(tsym, false, true, false)
-									}
-								}
-							}
-							return stmt
-						})
-					}
-				}
 			}
-			if !fn.RefFunc.haveAllArgsTypeInfo() {
-				if fnretouter, _ := fn.parent.(*irARet); fnretouter != nil {
-					if fnouter, _ := fnretouter.parent.Parent().(*irAFunc); fnouter != nil {
-						if fnretsig := fnouter.RefFunc.Rets[0].RefFunc; fnretsig != nil {
-							if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
-								panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
-							} else {
-								for i, a := range fnretsig.Args {
-									fn.RefFunc.Args[i].copyFrom(a, false, true, false)
-								}
-								fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
+		}
+		if !fn.RefFunc.haveAllArgsTypeInfo() {
+			if fnretouter, _ := fn.parent.(*irARet); fnretouter != nil {
+				if fnouter, _ := fnretouter.parent.Parent().(*irAFunc); fnouter != nil {
+					if fnretsig := fnouter.RefFunc.Rets[0].RefFunc; fnretsig != nil {
+						if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
+							panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
+						} else {
+							for i, a := range fnretsig.Args {
+								fn.RefFunc.Args[i].copyFrom(a, false, true, false)
 							}
+							fn.RefFunc.Rets[0].copyFrom(fnretsig.Rets[0], false, true, false)
 						}
 					}
 				}
@@ -114,16 +116,14 @@ func (me *irAst) postPerFuncFixups() {
 		}
 		return i, varname
 	}
-	me.perFuncDown(true, func(istoplevel bool, afn *irAFunc) {
+	me.perFuncDown(func(afn *irAFunc) {
 		fargsused := me.countSymRefs(afn.RefFunc.Args)
 		for _, farg := range afn.RefFunc.Args {
 			if farg.NameGo != "" && fargsused[farg.NameGo] == 0 {
 				farg.NameGo = "_"
 			}
 		}
-		if istoplevel { // each top-level func keeps its own fresh names-cache
-			namescache = map[string]string{}
-		}
+		namescache = map[string]string{}
 		for i := 0; i < len(afn.FuncImpl.Body); i++ {
 			var varname *irASym
 			switch ax := afn.FuncImpl.Body[i].(type) {

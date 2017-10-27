@@ -83,6 +83,10 @@ func (me *irABase) Equiv(cmp irA) bool {
 	return (me == nil && ab == nil) || (me != nil && ab != nil && me.irANamedTypeRef.equiv(&ab.irANamedTypeRef) && me.NameGo == ab.NameGo && me.NamePs == ab.NamePs)
 }
 
+func (me *irABase) isTopLevel() bool {
+	return me.parent == &me.Ast().irABlock
+}
+
 func (me *irABase) parentOp() (po1 *irAOp1, po2 *irAOp2) {
 	switch op := me.parent.(type) {
 	case *irAOp1:
@@ -233,6 +237,17 @@ type irAFunc struct {
 func (me *irAFunc) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irAFunc)
 	return me.Base().Equiv(c) && (c == nil || me.FuncImpl.Equiv(c.FuncImpl))
+}
+
+func (me *irAFunc) isTopLevel() (istld bool) {
+	if istld = me.irABase.isTopLevel(); !istld {
+		if pv, _ := me.parent.(*irALet); pv != nil {
+			istld = pv.isTopLevel()
+		} else if pc, _ := me.parent.(*irAConst); pc != nil {
+			istld = pc.isTopLevel()
+		}
+	}
+	return
 }
 
 type irALitStr struct {
