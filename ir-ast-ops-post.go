@@ -348,6 +348,10 @@ func (me *irAst) postLinkUpTcInstDecls() {
 func (me *irAst) postMiscFixups() {
 	me.walk(func(ast irA) irA {
 		switch a := ast.(type) {
+		case *irADot:
+			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
+				println(atl.RefAlias)
+			}
 		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts
