@@ -124,12 +124,15 @@ type irALet struct {
 	irABase
 	LetVal irA
 
-	okname string
+	typeConv struct {
+		okname string
+		vused  bool
+	}
 }
 
 func (me *irALet) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irALet)
-	return me.Base().Equiv(c) && (c == nil || (me.okname == c.okname && me.LetVal.Equiv(c.LetVal)))
+	return me.Base().Equiv(c) && (c == nil || (me.typeConv == c.typeConv && me.LetVal.Equiv(c.LetVal)))
 }
 
 func (me *irALet) isConstable() bool {
@@ -627,8 +630,15 @@ func (me *irADot) Equiv(cmp irA) bool {
 	return (me == nil && c == nil) || (me != nil && c != nil && me.DotLeft.Equiv(c.DotLeft) && me.DotRight.Equiv(c.DotRight))
 }
 
-func (me *irADot) symStr() string {
-	return me.DotLeft.(irASymStr).symStr() + "º" + me.DotRight.(irASymStr).symStr()
+func (me *irADot) symStr() (symstr string) {
+	if sl, _ := me.DotLeft.(irASymStr); sl != nil {
+		symstr = sl.symStr()
+	}
+	symstr += "º"
+	if sr, _ := me.DotRight.(irASymStr); sr != nil {
+		symstr += sr.symStr()
+	}
+	return
 }
 
 type irAIsType struct {
@@ -636,7 +646,9 @@ type irAIsType struct {
 	ExprToTest irA
 	TypeToTest string
 
-	names struct{ v, t string }
+	names struct {
+		v, t string
+	}
 }
 
 func (me *irAIsType) Equiv(cmp irA) bool {
@@ -689,6 +701,10 @@ func (me *irAPkgSym) ExprType() *irANamedTypeRef {
 		}
 	}
 	return me.exprType
+}
+
+func (me *irAPkgSym) symStr() string {
+	return me.PkgName + "º" + me.Symbol
 }
 
 func (me *irAst) typeCtorFunc(nameps string) *irACtor {

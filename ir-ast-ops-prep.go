@@ -124,33 +124,43 @@ func (me *irAst) prepFixupNameCasings() {
 }
 
 func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
-	me.perFuncDown(true, func(istoplevel bool, afn *irAFunc) {
-		done := map[string]bool{}
-		for i := 0; i < len(afn.FuncImpl.Body); i++ {
-			if aif, _ := afn.FuncImpl.Body[i].(*irAIf); aif != nil {
-				if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
-					for _, atc := range typechecks {
-						tcheck := atc.(*irAIsType)
-						tchkey := tcheck.names.v + "ª" + tcheck.names.t
-						if !done[tchkey] {
-							done[tchkey] = true
-							if tchkey == "v1ªNums" {
-								println(done[tchkey])
-							}
-							pname, tname := me.resolveGoTypeRefFromQName(tcheck.TypeToTest)
-							nulet := ªLet(tchkey, "", ªTo(tcheck.ExprToTest, pname, tname))
-							nulet.okname, nulet.parent = "isˇ"+tchkey, afn.FuncImpl
-							afn.FuncImpl.insert(i, nulet)
-							i++
-						}
-					}
-				}
-			}
-		}
-	})
 	me.walk(func(ast irA) irA {
 		if ast != nil {
 			switch a := ast.(type) {
+			case *irAFunc: // we swap out all type-checks (JS: `foo instanceof bar`) for Go-idiomatic type-assertions
+				afn, tconvs := a, map[string]*irALet{}
+				for i := 0; i < len(afn.FuncImpl.Body); i++ {
+					if aif, _ := afn.FuncImpl.Body[i].(*irAIf); aif != nil {
+						if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
+							for _, atc := range typechecks {
+								tcheck := atc.(*irAIsType)
+								tchkey := tcheck.names.v + "ª" + tcheck.names.t
+								tconv, _ := tconvs[tchkey]
+								if tconv == nil {
+									pname, tname := me.resolveGoTypeRefFromQName(tcheck.TypeToTest)
+									tconvto := ªTo(tcheck.ExprToTest, pname, tname)
+									tconv = ªLet(tchkey, "", tconvto)
+									tconv.typeConv.okname, tconv.parent = "isˇ"+tchkey, afn.FuncImpl
+									tconv.exprType, tconvto.exprType = &irANamedTypeRef{RefAlias: tcheck.TypeToTest}, &irANamedTypeRef{RefAlias: tcheck.TypeToTest}
+									afn.FuncImpl.insert(i, tconv)
+									i, tconvs[tchkey] = i+1, tconv
+								}
+								aif.Then = walk(aif.Then, false, func(a irA) irA {
+									if ss, _ := a.(irASymStr); ss != nil {
+										if symstr := ss.symStr(); symstr == tcheck.names.v {
+											tconv.typeConv.vused = true
+											symreftolet := ªSymGo(tchkey)
+											symreftolet.exprType = exprTypeBool
+											return symreftolet
+										}
+									}
+									return a
+								}).(*irABlock)
+							}
+						}
+					}
+				}
+				return afn
 			case *irAOp2: // coreimp represents Ints JS-like as: expr|0 --- we ditch the |0 part
 				if opright, _ := a.Right.(*irALitInt); opright != nil && a.Op2 == "|" && opright.LitInt == 0 {
 					return a.Left

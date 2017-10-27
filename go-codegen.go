@@ -92,20 +92,31 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irALet:
 		switch ato := a.LetVal.(type) {
 		case *irAToType:
-			fmt.Fprintf(w, "%s%s", tabs, a.NameGo)
-			if a.okname != "" {
-				fmt.Fprint(w, ", "+a.okname)
+			fmt.Fprint(w, tabs)
+			if a.typeConv.okname == "" {
+				fmt.Fprint(w, a.NameGo)
+			} else {
+				if a.typeConv.vused {
+					fmt.Fprint(w, a.NameGo)
+				} else {
+					fmt.Fprint(w, "_")
+				}
+				fmt.Fprint(w, ", "+a.typeConv.okname)
 			}
 			fmt.Fprint(w, " := ")
 			me.codeGenAst(w, indent, ato)
-			fmt.Fprint(w, "\n")
 		default:
-			fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
-			me.codeGenTypeRef(w, a.ExprType(), -1)
-			fmt.Fprint(w, " = ")
-			me.codeGenAst(w, indent, a.LetVal)
-			fmt.Fprint(w, "\n\n")
+			if at := a.ExprType(); at == nil || at.RefFunc != nil {
+				fmt.Fprintf(w, "%s%s := ", tabs, a.NameGo)
+				me.codeGenAst(w, indent, a.LetVal)
+			} else {
+				fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
+				me.codeGenTypeRef(w, at, -1)
+				fmt.Fprint(w, " = ")
+				me.codeGenAst(w, indent, a.LetVal)
+			}
 		}
+		fmt.Fprint(w, "\n")
 	case *irABlock:
 		if dbgEmitEmptyFuncs && a != nil && a.parent != nil {
 			me.codeGenAst(w, indent, ªRet(nil))
