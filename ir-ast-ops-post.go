@@ -365,10 +365,13 @@ func (me *irAst) postMiscFixups() {
 				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
 					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
 				} else {
-					println(gtd.RefStruct == nil)
-					// if gtdm := gtd.RefStruct.memberByPsName(a.DotRight.(*irASym).NamePs); gtdm != nil {
-					// 	println(gtd.NamePs + "." + gtdm.NamePs)
-					// }
+					asym := a.DotRight.(*irASym)
+					fname := asym.NamePs
+					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
+						asym.NameGo = gtdm.NameGo
+					} else {
+						println("MOOO")
+					}
 				}
 			}
 		case *irALet:

@@ -368,7 +368,7 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 			case "Int":
 				tname = "int"
 			default:
-				panic(notImplErr("Prim type", tname, me.mod.srcFilePath))
+				panic(notImplErr("Prim type '"+tname+"' for", tref, me.mod.srcFilePath))
 			}
 		} else {
 			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
@@ -443,6 +443,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 						field.setRefFrom(me.toIrATypeRef(tdict, ctorarg))
 						ctorarg.tmp_assoc = field
 						field.NameGo = fmt.Sprintf("%s%d", sanitizeSymbolForGo(ctor.Name, true), ia)
+						field.NamePs = fmt.Sprintf("value%d", ia)
 						ctor.gtd.RefStruct.Fields = append(ctor.gtd.RefStruct.Fields, field)
 					}
 					gtds = append(gtds, ctor.gtd)

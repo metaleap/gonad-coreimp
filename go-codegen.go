@@ -83,7 +83,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		fmt.Fprint(w, "}")
 	case *irAConst:
 		fmt.Fprintf(w, "%sconst %s ", tabs, a.NameGo)
-		me.codeGenTypeRef(w, &a.irANamedTypeRef, -1)
+		me.codeGenTypeRef(w, a.ExprType(), -1)
 		fmt.Fprint(w, " = ")
 		me.codeGenAst(w, indent, a.ConstVal)
 		fmt.Fprint(w, "\n")
@@ -285,16 +285,16 @@ func (me *irAst) codeGenGroupedVals(w io.Writer, consts bool, asts []irA) {
 		} else {
 			fmt.Fprint(w, "var (\n")
 		}
-		valºnameºtype := func(a irA) (val irA, name string, typeref *irANamedTypeRef) {
+		valˇnameˇtype := func(a irA) (val irA, name string, typeref *irANamedTypeRef) {
 			if ac, _ := a.(*irAConst); ac != nil && consts {
-				val, name, typeref = ac.ConstVal, ac.NameGo, &ac.irANamedTypeRef
+				val, name, typeref = ac.ConstVal, ac.NameGo, ac.ExprType()
 			} else if av, _ := a.(*irALet); av != nil {
 				val, name, typeref = av.LetVal, av.NameGo, &av.irANamedTypeRef
 			}
 			return
 		}
 		for i, a := range asts {
-			val, name, typeref := valºnameºtype(a)
+			val, name, typeref := valˇnameˇtype(a)
 			me.codeGenAst(w, 1, ªsetVarInGroup(name, val, typeref))
 			if i < (len(asts) - 1) {
 				if _, ok := asts[i+1].(*irAComments); ok {
