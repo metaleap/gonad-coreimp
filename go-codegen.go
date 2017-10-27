@@ -92,7 +92,11 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 	case *irALet:
 		switch ato := a.LetVal.(type) {
 		case *irAToType:
-			fmt.Fprintf(w, "%s%s := ", tabs, a.NameGo)
+			fmt.Fprintf(w, "%s%s", tabs, a.NameGo)
+			if a.okname != "" {
+				fmt.Fprint(w, ", "+a.okname)
+			}
+			fmt.Fprint(w, " := ")
 			me.codeGenAst(w, indent, ato)
 			fmt.Fprint(w, "\n")
 		default:
@@ -170,8 +174,8 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		me.codeGenAst(w, indent, a.IdxRight)
 		fmt.Fprint(w, "]")
 	case *irAIsType:
-		fmt.Fprint(w, a.VarName+"ˇisˇ")
-		fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromQName(a.TypeToTest)))
+		fmt.Fprint(w, "isˇ"+a.names.v+"ª"+a.names.t)
+		// fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromQName(a.TypeToTest)))
 	case *irAToType:
 		me.codeGenAst(w, indent, a.ExprToConv)
 		fmt.Fprintf(w, ".(%s)", typeNameWithPkgName(me.resolveGoTypeRefFromQName(ustr.PrefixWithSep(a.TypePkg, ".", a.TypeName))))

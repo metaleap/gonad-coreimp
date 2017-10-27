@@ -123,11 +123,13 @@ func (me *irAConst) isConstable() bool { return true }
 type irALet struct {
 	irABase
 	LetVal irA
+
+	okname string
 }
 
 func (me *irALet) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irALet)
-	return me.Base().Equiv(c) && (c == nil || me.LetVal.Equiv(c.LetVal))
+	return me.Base().Equiv(c) && (c == nil || (me.okname == c.okname && me.LetVal.Equiv(c.LetVal)))
 }
 
 func (me *irALet) isConstable() bool {
@@ -500,7 +502,7 @@ func (me *irAIf) Equiv(cmp irA) bool {
 }
 
 func (me *irAIf) typeAssertions() []irA {
-	return irALookupBelow(me, func(a irA) (ok bool) {
+	return irALookupBelow(me.If, func(a irA) (ok bool) {
 		_, ok = a.(*irAIsType)
 		return
 	})
@@ -631,14 +633,15 @@ func (me *irADot) symStr() string {
 
 type irAIsType struct {
 	irABase
-	VarName    string
 	ExprToTest irA
 	TypeToTest string
+
+	names struct{ v, t string }
 }
 
 func (me *irAIsType) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irAIsType)
-	return (me == nil && c == nil) || (me != nil && c != nil && me.TypeToTest == c.TypeToTest && me.VarName == c.VarName && me.ExprToTest.Equiv(c.ExprToTest))
+	return (me == nil && c == nil) || (me != nil && c != nil && me.TypeToTest == c.TypeToTest && me.names == c.names && me.ExprToTest.Equiv(c.ExprToTest))
 }
 
 func (_ *irAIsType) ExprType() *irANamedTypeRef { return exprTypeBool }

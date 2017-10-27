@@ -1,9 +1,5 @@
 package main
 
-import (
-	"fmt"
-)
-
 /*
 Golang intermediate-representation AST:
 various transforms and operations on the AST,
@@ -128,23 +124,24 @@ func (me *irAst) prepFixupNameCasings() {
 }
 
 func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
-	var done map[string]bool
 	me.perFuncDown(true, func(istoplevel bool, afn *irAFunc) {
-		if istoplevel {
-			done = map[string]bool{}
-		}
-		for i, a := range afn.FuncImpl.Body {
-			if aif, _ := a.(*irAIf); aif != nil {
+		done := map[string]bool{}
+		for i := 0; i < len(afn.FuncImpl.Body); i++ {
+			if aif, _ := afn.FuncImpl.Body[i].(*irAIf); aif != nil {
 				if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
 					for _, atc := range typechecks {
 						tcheck := atc.(*irAIsType)
-						tchkey := tcheck.VarName + "ª" + tcheck.TypeToTest
+						tchkey := tcheck.names.v + "ª" + tcheck.names.t
 						if !done[tchkey] {
-							nulet := ªLet(fmt.Sprintf("%sˇisˇ%s", tcheck.VarName, tcheck.TypeToTest), "", tcheck.ExprToTest)
-							nulet.parent = afn.FuncImpl
+							done[tchkey] = true
+							if tchkey == "v1ªNums" {
+								println(done[tchkey])
+							}
+							pname, tname := me.resolveGoTypeRefFromQName(tcheck.TypeToTest)
+							nulet := ªLet(tchkey, "", ªTo(tcheck.ExprToTest, pname, tname))
+							nulet.okname, nulet.parent = "isˇ"+tchkey, afn.FuncImpl
 							afn.FuncImpl.insert(i, nulet)
 							i++
-							done[tchkey] = true
 						}
 					}
 				}

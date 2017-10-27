@@ -133,9 +133,8 @@ func ªIndex(left irA, right irA) *irAIndex {
 }
 
 func ªIs(expr irA, typeexpr string) *irAIsType {
-	varname := expr.(irASymStr).symStr()
-	a := &irAIsType{ExprToTest: expr, TypeToTest: typeexpr, VarName: varname}
-	a.ExprToTest.Base().parent = a
+	a := &irAIsType{ExprToTest: expr, TypeToTest: typeexpr}
+	a.names.v, a.names.t, a.ExprToTest.Base().parent = expr.(irASymStr).symStr(), typeexpr, a
 	return a
 }
 
