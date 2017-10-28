@@ -431,14 +431,14 @@ func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpA
 				a.AstCommentDecl, decl.Comment, decl.parent = nil, a.Comment, parent
 				a, asts[ai] = decl, decl
 			}
-			//	or we might swap out a in here:
+			//	we might swap out a in here:
 			if parent != nil && a.AstTag == "Function" && a.Function != "" {
 				//	there are a handful of cases (TCO it looks like) where CoreImp function bodies contain inner "full" functions as top-level-style stand-alone defs instead of bound expressions --- we bind them to a var right here, early on.
 				nuvar := &coreImpAst{AstTag: "VariableIntroduction", VariableIntroduction: a.Function, AstRight: a, parent: parent}
 				a.parent, a.Function = nuvar, ""
 				a, asts[ai] = nuvar, nuvar
 			}
-			//	or we might swap out a in here:
+			//	we might swap out a in here:
 			if a.AstTag == "Unary" && a.AstOp == "Not" && a.Unary.AstTag == "BooleanLiteral" {
 				operand := a.Unary
 				operand.parent, operand.BooleanLiteral = parent, !a.Unary.BooleanLiteral
