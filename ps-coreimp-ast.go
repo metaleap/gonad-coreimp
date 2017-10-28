@@ -438,12 +438,13 @@ func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpA
 				a.parent, a.Function = nuvar, ""
 				a, asts[ai] = nuvar, nuvar
 			}
-			//	or, in here
+			//	or we might swap out a in here:
 			if a.AstTag == "Unary" && a.AstOp == "Not" && a.Unary.AstTag == "BooleanLiteral" {
 				operand := a.Unary
 				operand.parent, operand.BooleanLiteral = parent, !a.Unary.BooleanLiteral
 				a, asts[ai] = operand, operand
 			}
+			//	now proceed whatever a now is
 
 			a.For = strReplUnsanitize.Replace(a.For)
 			a.ForIn = strReplUnsanitize.Replace(a.ForIn)
