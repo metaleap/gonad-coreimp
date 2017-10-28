@@ -488,7 +488,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		// }
 		return &irATypeRefInterface{ /*Embeds: embeds*/ }
 	} else if tr.ConstrainedType != nil {
-		/*
+		/*	a whacky case from Semigroupoid.composeFlipped:
 			ForAll(d).ForAll(c).ForAll(b).ForAll(a).ConstrT(Semibla).TApp {
 				TApp { TCtor(Prim.Func), TApp { TApp { TVar(a),TVar(b) }, TVar(c) } },
 				TApp {
