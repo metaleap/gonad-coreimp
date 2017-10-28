@@ -101,7 +101,8 @@ func (me *modPkg) reGenPkgIrMeta() (err error) {
 }
 
 func (me *modPkg) prepIrAst() {
-	me.coreimp.preProcessTopLevel()
+	me.coreimp.initAstOnLoaded()
+	me.coreimp.prepTopLevel()
 	me.irAst = &irAst{mod: me, irM: me.irMeta}
 	me.irAst.prepFromCoreImp()
 }

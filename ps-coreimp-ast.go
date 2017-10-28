@@ -140,7 +140,7 @@ type coreImpAst struct {
 	root   *coreImp
 }
 
-func (me *coreImpAst) astForceIntoBlock(into *irABlock) {
+func (me *coreImpAst) ciAstForceIntoIrABlock(into *irABlock) {
 	switch maybebody := me.ciAstToIrAst().(type) {
 	case *irABlock:
 		into.Body = maybebody.Body
@@ -176,13 +176,13 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		f := ªFor()
 		f.ForCond = me.While.ciAstToIrAst()
 		f.ForCond.Base().parent = f
-		me.AstBody.astForceIntoBlock(f.ForDo)
+		me.AstBody.ciAstForceIntoIrABlock(f.ForDo)
 		a = f
 	case "ForIn":
 		f := ªFor()
 		f.ForRange = ªLet("", me.ForIn, me.AstFor1.ciAstToIrAst())
 		f.ForRange.parent = f
-		me.AstBody.astForceIntoBlock(f.ForDo)
+		me.AstBody.ciAstForceIntoIrABlock(f.ForDo)
 		a = f
 	case "For":
 		f := ªFor()
@@ -194,14 +194,14 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		f.ForCond.Base().parent = f
 		f.ForStep = []*irASet{ªSet(&fsset, ªO2(&fsadd, "+", ªI(1)))}
 		f.ForStep[0].parent = f
-		me.AstBody.astForceIntoBlock(f.ForDo)
+		me.AstBody.ciAstForceIntoIrABlock(f.ForDo)
 		a = f
 	case "IfElse":
 		i := ªIf(me.IfElse.ciAstToIrAst())
-		me.AstThen.astForceIntoBlock(i.Then)
+		me.AstThen.ciAstForceIntoIrABlock(i.Then)
 		if me.AstElse != nil {
 			i.Else = ªBlock()
-			me.AstElse.astForceIntoBlock(i.Else)
+			me.AstElse.ciAstForceIntoIrABlock(i.Else)
 			i.Else.parent = i
 		}
 		a = i
@@ -248,7 +248,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 			f.RefFunc.Args = append(f.RefFunc.Args, arg)
 		}
 		f.RefFunc.impl = f.FuncImpl
-		me.AstBody.astForceIntoBlock(f.FuncImpl)
+		me.AstBody.ciAstForceIntoIrABlock(f.FuncImpl)
 		if wastypefunc {
 			a = &irACtor{irAFunc: *f}
 		} else {
@@ -380,9 +380,12 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 	return
 }
 
-func (me *coreImp) preProcessTopLevel() {
+func (me *coreImp) initAstOnLoaded() {
+	me.Body = me.initSubAsts(nil, me.Body...)
+}
+
+func (me *coreImp) prepTopLevel() {
 	me.namedRequires = map[string]string{}
-	me.Body = me.preProcessAsts(nil, me.Body...)
 	i := 0
 	ditch := func() {
 		me.Body = append(me.Body[:i], me.Body[i+1:]...)
@@ -412,29 +415,42 @@ func (me *coreImp) preProcessTopLevel() {
 	}
 }
 
-func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpAsts {
+func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpAsts {
 	if parent != nil {
 		parent.root = me
 	}
-	for i := 0; i < len(asts); i++ {
-		if cia := asts[i]; cia != nil && cia.AstTag == "Comment" && cia.AstCommentDecl != nil {
-			if cia.AstCommentDecl.AstTag == "Comment" {
-				panic(notImplErr("comments", "nesting", me.mod.srcFilePath))
-			}
-			cdecl := cia.AstCommentDecl
-			cia.AstCommentDecl = nil
-			cdecl.Comment = cia.Comment
-			asts[i] = cdecl
-			i--
-		}
-	}
-	for _, a := range asts {
+	for ai, a := range asts {
 		if a != nil {
-			for _, sym := range []*string{&a.For, &a.ForIn, &a.Function, &a.Var, &a.VariableIntroduction} {
-				if *sym != "" {
-					*sym = strReplUnsanitize.Replace(*sym)
+			//	we might swap out a in here:
+			if a.AstTag == "Comment" && a.AstCommentDecl != nil {
+				//	decls as sub-asts of comments is handy for PureScript but not for our own traversals, we lift the inner decl outward and set its own Comment instead. hence, we never process any AstCommentDecl, after this branch they're all nil
+				if a.AstCommentDecl.AstTag == "Comment" {
+					panic(notImplErr("comments", "nesting", me.mod.srcFilePath))
 				}
+				decl := a.AstCommentDecl
+				a.AstCommentDecl, decl.Comment, decl.parent = nil, a.Comment, parent
+				a, asts[ai] = decl, decl
 			}
+			//	or we might swap out a in here:
+			if parent != nil && a.AstTag == "Function" && a.Function != "" {
+				//	there are a handful of cases (TCO it looks like) where CoreImp function bodies contain inner "full" functions as top-level-style stand-alone defs instead of bound expressions --- we bind them to a var right here, early on.
+				nuvar := &coreImpAst{AstTag: "VariableIntroduction", VariableIntroduction: a.Function, AstRight: a, parent: parent}
+				a.parent, a.Function = nuvar, ""
+				a, asts[ai] = nuvar, nuvar
+			}
+			//	or, in here
+			if a.AstTag == "Unary" && a.AstOp == "Not" && a.Unary.AstTag == "BooleanLiteral" {
+				operand := a.Unary
+				operand.parent, operand.BooleanLiteral = parent, !a.Unary.BooleanLiteral
+				a, asts[ai] = operand, operand
+			}
+
+			a.For = strReplUnsanitize.Replace(a.For)
+			a.ForIn = strReplUnsanitize.Replace(a.ForIn)
+			a.Function = strReplUnsanitize.Replace(a.Function)
+			a.Var = strReplUnsanitize.Replace(a.Var)
+			a.VariableIntroduction = strReplUnsanitize.Replace(a.VariableIntroduction)
+
 			for i, mkv := range a.ObjectLiteral {
 				for onename, oneval := range mkv {
 					if nuname := strReplUnsanitize.Replace(onename); nuname != onename {
@@ -450,30 +466,30 @@ func (me *coreImp) preProcessAsts(parent *coreImpAst, asts ...*coreImpAst) coreI
 
 			a.root = me
 			a.parent = parent
-			a.App = me.preProcessAsts(a, a.App)[0]
-			a.ArrayLiteral = me.preProcessAsts(a, a.ArrayLiteral...)
-			a.Assignment = me.preProcessAsts(a, a.Assignment)[0]
-			a.AstApplArgs = me.preProcessAsts(a, a.AstApplArgs...)
-			a.AstBody = me.preProcessAsts(a, a.AstBody)[0]
-			a.AstCommentDecl = me.preProcessAsts(a, a.AstCommentDecl)[0]
-			a.AstFor1 = me.preProcessAsts(a, a.AstFor1)[0]
-			a.AstFor2 = me.preProcessAsts(a, a.AstFor2)[0]
-			a.AstElse = me.preProcessAsts(a, a.AstElse)[0]
-			a.AstThen = me.preProcessAsts(a, a.AstThen)[0]
-			a.AstRight = me.preProcessAsts(a, a.AstRight)[0]
-			a.Binary = me.preProcessAsts(a, a.Binary)[0]
-			a.Block = me.preProcessAsts(a, a.Block...)
-			a.IfElse = me.preProcessAsts(a, a.IfElse)[0]
-			a.Indexer = me.preProcessAsts(a, a.Indexer)[0]
-			a.Assignment = me.preProcessAsts(a, a.Assignment)[0]
-			a.InstanceOf = me.preProcessAsts(a, a.InstanceOf)[0]
-			a.Return = me.preProcessAsts(a, a.Return)[0]
-			a.Throw = me.preProcessAsts(a, a.Throw)[0]
-			a.Unary = me.preProcessAsts(a, a.Unary)[0]
-			a.While = me.preProcessAsts(a, a.While)[0]
+			a.App = me.initSubAsts(a, a.App)[0]
+			a.ArrayLiteral = me.initSubAsts(a, a.ArrayLiteral...)
+			a.Assignment = me.initSubAsts(a, a.Assignment)[0]
+			a.AstApplArgs = me.initSubAsts(a, a.AstApplArgs...)
+			a.AstBody = me.initSubAsts(a, a.AstBody)[0]
+			a.AstCommentDecl = me.initSubAsts(a, a.AstCommentDecl)[0]
+			a.AstFor1 = me.initSubAsts(a, a.AstFor1)[0]
+			a.AstFor2 = me.initSubAsts(a, a.AstFor2)[0]
+			a.AstElse = me.initSubAsts(a, a.AstElse)[0]
+			a.AstThen = me.initSubAsts(a, a.AstThen)[0]
+			a.AstRight = me.initSubAsts(a, a.AstRight)[0]
+			a.Binary = me.initSubAsts(a, a.Binary)[0]
+			a.Block = me.initSubAsts(a, a.Block...)
+			a.IfElse = me.initSubAsts(a, a.IfElse)[0]
+			a.Indexer = me.initSubAsts(a, a.Indexer)[0]
+			a.Assignment = me.initSubAsts(a, a.Assignment)[0]
+			a.InstanceOf = me.initSubAsts(a, a.InstanceOf)[0]
+			a.Return = me.initSubAsts(a, a.Return)[0]
+			a.Throw = me.initSubAsts(a, a.Throw)[0]
+			a.Unary = me.initSubAsts(a, a.Unary)[0]
+			a.While = me.initSubAsts(a, a.While)[0]
 			for km, m := range a.ObjectLiteral {
 				for kx, expr := range m {
-					m[kx] = me.preProcessAsts(a, expr)[0]
+					m[kx] = me.initSubAsts(a, expr)[0]
 				}
 				a.ObjectLiteral[km] = m
 			}

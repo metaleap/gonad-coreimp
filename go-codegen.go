@@ -273,6 +273,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 			me.codeGenAst(w, indent, a.ForCond)
 			me.codeGenAst(w, indent, a.ForDo)
 		}
+		fmt.Fprint(w, "\n")
 	default:
 		b, _ := json.Marshal(&ast)
 		fmt.Fprintf(w, "/*****%v*****/", string(b))
