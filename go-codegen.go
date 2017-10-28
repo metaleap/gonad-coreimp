@@ -114,6 +114,9 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 				me.codeGenTypeRef(w, at, -1)
 				fmt.Fprint(w, " = ")
 				me.codeGenAst(w, indent, a.LetVal)
+				if a.isTopLevel() {
+					fmt.Fprint(w, "\n")
+				}
 			}
 		}
 		fmt.Fprint(w, "\n")

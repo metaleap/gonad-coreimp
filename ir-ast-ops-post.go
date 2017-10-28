@@ -44,7 +44,14 @@ func (me *irAst) postEnsureArgTypes() {
 				panic(fmt.Sprintf("%T", atld.parent))
 			} else if gvd := me.irM.goValDeclByPsName(tldname); gvd != nil && gvd.RefFunc != nil {
 				if tlcmem := me.irM.tcMember(tldname); tlcmem == nil {
-					atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+					if false && tldname == "composeFlipped" && len(atld.RefFunc.Args) == 1 && strings.HasPrefix(atld.RefFunc.Args[0].NamePs, "dict") {
+						atld.RefFunc.Args[0].clearTypeInfo()
+						atld.RefFunc.Args[0].RefAlias = "Semigroupoidˇ"
+						atld.RefFunc.Args[0].turnRefIntoRefPtr()
+						atld.RefFunc.Rets[0].copyTypeInfoFrom(gvd)
+					} else {
+						atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+					}
 				}
 			}
 		}

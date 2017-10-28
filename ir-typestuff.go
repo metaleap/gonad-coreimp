@@ -482,12 +482,30 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 	} else if tr.REmpty {
 		return nil
 	} else if tr.TypeVar != "" {
-		embeds := tdict[tr.TypeVar]
-		if len(embeds) == 1 {
-			return embeds[0]
-		}
-		return &irATypeRefInterface{Embeds: embeds}
+		// embeds := tdict[tr.TypeVar]
+		// if len(embeds) == 1 {
+		// 	return embeds[0]
+		// }
+		return &irATypeRefInterface{ /*Embeds: embeds*/ }
 	} else if tr.ConstrainedType != nil {
+		/*
+			ForAll(d).ForAll(c).ForAll(b).ForAll(a).ConstrT(Semibla).TApp {
+				TApp { TCtor(Prim.Func), TApp { TApp { TVar(a),TVar(b) }, TVar(c) } },
+				TApp {
+					TApp { TCtor(Prim.Func), TApp { TApp { TVar(a), TVar(c) }, TVar(d) } },
+					TApp { TApp{ TVar(a), TVar(b) }, TVar(d) }
+				}
+			}
+		*/
+		if tr.ConstrainedType.Ref.TypeApp != nil && tr.ConstrainedType.Ref.TypeApp.Left.TypeApp != nil && tr.ConstrainedType.Ref.TypeApp.Right.TypeApp != nil {
+			funtype := &irATypeRefFunc{}
+			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
+			funtype.Args[0].setRefFrom(tr.ConstrainedType.Class)
+			funtype.Args[0].turnRefIntoRefPtr()
+			funtype.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
+			funtype.Rets[0].setRefFrom(me.toIrATypeRef(tdict, tr.ConstrainedType.Ref))
+			return funtype
+		}
 		return me.toIrATypeRef(tdict, tr.ConstrainedType.Ref)
 	} else if tr.ForAll != nil {
 		return me.toIrATypeRef(tdict, tr.ForAll.Ref)
@@ -511,6 +529,8 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			array := &irATypeRefArray{Of: &irANamedTypeRef{}}
 			array.Of.setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Right))
 			return array
+		} else if strings.HasPrefix(tr.TypeApp.Left.TypeConstructor, "Prim.") {
+			panic(notImplErr("type-app left-hand primitive", tr.TypeApp.Left.TypeConstructor, me.mod.srcFilePath))
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" && tr.TypeApp.Left.TypeApp.Right.TypeApp != nil && tr.TypeApp.Left.TypeApp.Right.TypeApp.Left.TypeConstructor == "Prim.Record" && tr.TypeApp.Right.TypeApp != nil && tr.TypeApp.Right.TypeApp.Left != nil {
 			return funcyhackery(tr.TypeApp.Right.TypeApp.Left)
 		} else if tr.TypeApp.Left.TypeApp != nil && (tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" || /*insanely hacky*/ tr.TypeApp.Right.TypeVar != "") {
