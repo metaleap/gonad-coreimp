@@ -108,7 +108,7 @@ func (me *modPkg) prepIrAst() {
 }
 
 func (me *modPkg) reGenPkirAst() (err error) {
-	me.irAst.finalizePostPrep()
+	me.irAst.finalizePostPrepOps()
 	var buf bytes.Buffer
 	if Proj.BowerJsonFile.Gonad.Out.DumpAst {
 		if err = me.irAst.writeAsJsonTo(&buf); err == nil {

@@ -111,7 +111,7 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 						}
 					}
 					if isthisok {
-						println(modimppath)
+						fmt.Printf("dep level #%d\t%s\n", i, modimppath)
 						thisok = append(thisok, modimppath)
 					}
 				}

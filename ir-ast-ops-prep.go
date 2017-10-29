@@ -4,7 +4,7 @@ package main
 Golang intermediate-representation AST:
 various transforms and operations on the AST,
 "prep" ops are called from prepFromCoreImp
-and "post" ops are called from finalizePostPrep.
+and "post" ops are called from finalizePostPrepOps.
 */
 
 func (me *irAst) prepFromCoreImp() {
@@ -132,8 +132,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 				for i := 0; i < len(afn.FuncImpl.Body); i++ {
 					if aif, _ := afn.FuncImpl.Body[i].(*irAIf); aif != nil {
 						if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
-							for _, atc := range typechecks {
-								tcheck := atc.(*irAIsType)
+							for _, tcheck := range typechecks {
 								tchkey := tcheck.names.v + "ª" + tcheck.names.t
 								tconv, _ := tconvs[tchkey]
 								tconvt := &irANamedTypeRef{RefAlias: tcheck.TypeToTest}

@@ -20,7 +20,7 @@ var (
 	strReplDot2Underscore = strings.NewReplacer(".", "_")
 	strReplDot2Slash      = strings.NewReplacer(".", "/")
 	strReplSlash2Dot      = strings.NewReplacer("\\", ".", "/", ".")
-	strReplSanitizer      = strings.NewReplacer("'", "ˇ", "$", "Ø")
+	strReplSanitizer      = strings.NewReplacer("'", "ˇ", "$", "ø")
 	strReplUnsanitize     = strings.NewReplacer("$prime", "'", "$$", "")
 	_symcounter           = 0
 )

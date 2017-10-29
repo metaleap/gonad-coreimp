@@ -23,12 +23,32 @@ func irALookupInAncestorBlocks(a irA, check funcIra2Bool) irA {
 	return nil
 }
 
-func irALookupBelow(me irA, check func(irA) bool) (all []irA) {
-	walk(me, true, func(a irA) irA {
+func irALookupBelow(me irA, intofuncvals bool, check func(irA) bool) (all []irA) {
+	walk(me, intofuncvals, func(a irA) irA {
 		if check(a) {
 			all = append(all, a)
 		}
 		return a
+	})
+	return
+}
+
+func irALookupBelowˇIsType(me irA, intofuncvals bool) (all []*irAIsType) {
+	irALookupBelow(me, intofuncvals, func(a irA) bool {
+		if ax, _ := a.(*irAIsType); ax != nil {
+			all = append(all, ax)
+		}
+		return false
+	})
+	return
+}
+
+func irALookupBelowˇRet(me irA, intofuncvals bool) (all []*irARet) {
+	irALookupBelow(me, intofuncvals, func(a irA) bool {
+		if ax, _ := a.(*irARet); ax != nil {
+			all = append(all, ax)
+		}
+		return false
 	})
 	return
 }

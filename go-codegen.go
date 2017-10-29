@@ -413,7 +413,7 @@ func (me *irAst) codeGenTypeDef(w io.Writer, gtd *irANamedTypeRef) {
 
 func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int) {
 	if gtd == nil {
-		fmt.Fprint(w, "interface{/*irANamedTypeRef=Nil*/}")
+		fmt.Fprint(w, "interface{/*NIL*/}")
 		return
 	}
 	fmtembeds := "\t%s\n"
@@ -421,7 +421,7 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 	if gtd.RefAlias != "" {
 		me.codeGenAst(w, -1, ªPkgSym(me.resolveGoTypeRefFromQName(gtd.RefAlias)))
 	} else if gtd.RefUnknown != 0 {
-		fmt.Fprintf(w, "interface{/*%d*/}", gtd.RefUnknown)
+		fmt.Fprintf(w, "interface{/UNKNOWN:*%d*/}", gtd.RefUnknown)
 	} else if gtd.RefArray != nil {
 		fmt.Fprint(w, "[]")
 		me.codeGenTypeRef(w, gtd.RefArray.Of, -1)
@@ -430,7 +430,11 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 		me.codeGenTypeRef(w, gtd.RefPtr.Of, -1)
 	} else if gtd.RefInterface != nil {
 		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
-			fmt.Fprint(w, "interface{}")
+			if gtd.RefInterface.isTypeVar {
+				fmt.Fprint(w, "interface{/*TVAR*/}")
+			} else {
+				fmt.Fprint(w, "interface{}")
+			}
 		} else {
 			var tabind string
 			if indlevel > 0 {
@@ -495,6 +499,6 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Args, false, isfuncwithbodynotjustsig)
 		me.codeGenFuncArgs(w, indlevel, gtd.RefFunc.Rets, true, isfuncwithbodynotjustsig)
 	} else {
-		fmt.Fprint(w, "interface{/*EmptyNotNil*/}")
+		fmt.Fprint(w, "interface{/*EMPTY*/}")
 	}
 }

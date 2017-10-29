@@ -174,6 +174,7 @@ type irATypeRefInterface struct {
 	Embeds  []string         `json:",omitempty"`
 	Methods irANamedTypeRefs `json:",omitempty"`
 
+	isTypeVar        bool
 	xtc              *irMTypeClass
 	xtd              *irMTypeDataDecl
 	inheritedMethods irANamedTypeRefs
@@ -487,7 +488,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		// if len(embeds) == 1 {
 		// 	return embeds[0]
 		// }
-		return &irATypeRefInterface{ /*Embeds: embeds*/ }
+		return &irATypeRefInterface{isTypeVar: true /*, Embeds: embeds*/}
 	} else if tr.ConstrainedType != nil {
 		/*	a whacky case from Semigroupoid.composeFlipped:
 			ForAll(d).ForAll(c).ForAll(b).ForAll(a).ConstrT(Semibla).TApp {

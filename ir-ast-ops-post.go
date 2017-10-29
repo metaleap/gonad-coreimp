@@ -9,10 +9,10 @@ import (
 Golang intermediate-representation AST:
 various transforms and operations on the AST,
 "prep" ops are called from prepFromCoreImp
-and "post" ops are called from finalizePostPrep.
+and "post" ops are called from finalizePostPrepOps.
 */
 
-func (me *irAst) finalizePostPrep() {
+func (me *irAst) finalizePostPrepOps() {
 	//	various fix-ups
 	me.walk(func(ast irA) irA {
 		if ast != nil {
@@ -58,7 +58,7 @@ func (me *irAst) postEnsureArgTypes() {
 			if len(fn.RefFunc.Rets) > 1 {
 				panic(notImplErr("multiple ret-args in func", fn.NamePs, me.mod.srcFilePath))
 			}
-			if len(fn.RefFunc.Rets) > 0 && !fn.RefFunc.Rets[0].hasTypeInfo() {
+			if !fn.RefFunc.Rets[0].hasTypeInfo() {
 				walk(fn.FuncImpl, false, func(stmt irA) irA {
 					if !fn.RefFunc.Rets[0].hasTypeInfo() {
 						if ret, _ := stmt.(*irARet); ret != nil {
@@ -92,10 +92,19 @@ func (me *irAst) postEnsureArgTypes() {
 						if len(fnretsig.Args) != len(fn.RefFunc.Args) || len(fnretsig.Rets) != len(fn.RefFunc.Rets) {
 							panic(notImplErr("func-args count mismatch", fnouter.NamePs, me.mod.srcFilePath))
 						} else {
-							for i, a := range fnretsig.Args {
-								fn.RefFunc.Args[i].copyTypeInfoFrom(a)
+							fn.RefFunc.copyArgTypesOnlyFrom(false, fnretsig)
+						}
+					}
+				}
+			} else if fnletouter, _ := fn.parent.(*irALet); fnletouter != nil {
+				if fnletouter.NamePs == "spin" {
+					if fnouter, _ := fnletouter.parent.Parent().(*irAFunc); fnouter != nil && fnouter.RefFunc.haveAllArgsTypeInfo() {
+						for _, fnret := range irALookupBelowˇRet(fnouter.FuncImpl, false) {
+							if fnretcall, _ := fnret.RetArg.(*irACall); fnretcall != nil {
+								if fnretcallsym, _ := fnretcall.Callee.(*irASym); fnretcallsym != nil && fnretcallsym.NamePs == fnletouter.NamePs {
+									fn.RefFunc.copyArgTypesOnlyFrom(false, fnouter.RefFunc)
+								}
 							}
-							fn.RefFunc.Rets[0].copyTypeInfoFrom(fnretsig.Rets[0])
 						}
 					}
 				}
@@ -107,6 +116,9 @@ func (me *irAst) postEnsureArgTypes() {
 func (me *irAst) postPerFuncFixups() {
 	var namescache map[string]string
 	convertToTypeOf := func(i int, afn *irAFunc, from irA, totype *irANamedTypeRef) (int, *irASym) {
+		if totype.RefAlias == "" && totype.RefPtr == nil {
+			println(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
+		}
 		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
 		varname.copyTypeInfoFrom(totype)
 		if existing, _ := namescache[symname]; symname != "" && existing != "" {
@@ -134,6 +146,12 @@ func (me *irAst) postPerFuncFixups() {
 		for i := 0; i < len(afn.FuncImpl.Body); i++ {
 			var varname *irASym
 			switch ax := afn.FuncImpl.Body[i].(type) {
+			case *irARet:
+				if ax.RetArg == nil && len(afn.RefFunc.Rets) > 0 {
+					retarg := ªSymPs(afn.RefFunc.Args[0].NamePs, false)
+					retarg.copyTypeInfoFrom(afn.RefFunc.Args[0])
+					retarg.parent, ax.RetArg = ax, retarg
+				}
 			case *irAIf: // if condition isn't bool (eg testing an interface{}), convert it first to a temp bool var
 				axift := ax.If.ExprType()
 				switch axif := ax.If.(type) {
@@ -291,6 +309,20 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								switch fvx := axlv.ObjFields[i].FieldVal.(type) {
 								case *irAFunc:
 									fvx.RefFunc.copyArgTypesOnlyFrom(true, gtd.RefStruct.Fields[i].RefFunc)
+								case *irASym:
+									if gvd := me.irM.goValDeclByPsName(fvx.NamePs); gvd != nil {
+										gvd.RefFunc.copyArgTypesOnlyFrom(false, gtd.RefStruct.Fields[i].RefFunc)
+									}
+								case *irACall:
+								case *irAPkgSym:
+								case *irALitArr:
+								case *irALitNum:
+								case *irALitInt:
+								case *irALitStr:
+								case *irALitBool:
+								case *irADot:
+								default:
+									println(fvx.(*irAFunc))
 								}
 							}
 							if ax.RefAlias = axlv.RefAlias; gtd.RefStruct.PassByPtr {

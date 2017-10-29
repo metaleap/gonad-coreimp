@@ -528,11 +528,8 @@ func (me *irAIf) Equiv(cmp irA) bool {
 	return (me == nil && c == nil) || (me != nil && c != nil && me.If.Equiv(c.If) && me.Then.Equiv(c.Then) && me.Else.Equiv(c.Else))
 }
 
-func (me *irAIf) typeAssertions() []irA {
-	return irALookupBelow(me.If, func(a irA) (ok bool) {
-		_, ok = a.(*irAIsType)
-		return
-	})
+func (me *irAIf) typeAssertions() []*irAIsType {
+	return irALookupBelowˇIsType(me, false)
 }
 
 type irACall struct {
