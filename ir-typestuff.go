@@ -181,7 +181,7 @@ type irATypeRefInterface struct {
 }
 
 func (me *irATypeRefInterface) equiv(cmp *irATypeRefInterface) bool {
-	return (me == nil && cmp == nil) || (me != nil && cmp != nil && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.equiv(cmp.Methods))
+	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.isTypeVar == cmp.isTypeVar && uslice.StrEq(me.Embeds, cmp.Embeds) && me.Methods.equiv(cmp.Methods))
 }
 
 type irATypeRefFunc struct {

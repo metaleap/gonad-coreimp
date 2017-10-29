@@ -62,7 +62,7 @@ func (me *irAst) postEnsureArgTypes() {
 				walk(fn.FuncImpl, false, func(stmt irA) irA {
 					if !fn.RefFunc.Rets[0].hasTypeInfo() {
 						if ret, _ := stmt.(*irARet); ret != nil {
-							if tret := ret.ExprType(); tret != nil && tret.hasTypeInfo() {
+							if tret := ret.ExprType(); tret.hasTypeInfo() {
 								fn.RefFunc.Rets[0].copyTypeInfoFrom(tret)
 							}
 						}
@@ -130,7 +130,7 @@ func (me *irAst) postPerFuncFixups() {
 	var namescache map[string]string
 	convertToTypeOf := func(i int, afn *irAFunc, from irA, totype *irANamedTypeRef) (int, *irASym) {
 		if totype.RefAlias == "" && totype.RefPtr == nil {
-			// println(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
+			// 	panic(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
 		}
 		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
 		varname.copyTypeInfoFrom(totype)
@@ -184,7 +184,7 @@ func (me *irAst) postPerFuncFixups() {
 						}
 						if afn.RefFunc.Rets[0].hasTypeInfo() {
 							if aretsym, _ := a.RetArg.(*irASym); aretsym != nil {
-								if tretsym := aretsym.ExprType(); !tretsym.hasTypeInfoBeyondEmptyIface() {
+								if tretsym := aretsym.ExprType(); (!tretsym.hasTypeInfoBeyondEmptyIface()) && !tretsym.equiv(afn.RefFunc.Rets[0]) {
 									i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
 									a.RetArg, varname.parent = varname, a
 								}
