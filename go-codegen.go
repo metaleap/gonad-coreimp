@@ -106,14 +106,16 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 			fmt.Fprint(w, " := ")
 			me.codeGenAst(w, indent, ato)
 		default:
-			if at := a.ExprType(); at.RefFunc != nil {
+			if at := a.ExprType(); at.RefFunc != nil && a.LetVal != nil {
 				fmt.Fprintf(w, "%s%s := ", tabs, a.NameGo)
 				me.codeGenAst(w, indent, a.LetVal)
 			} else {
 				fmt.Fprintf(w, "%svar %s ", tabs, a.NameGo)
 				me.codeGenTypeRef(w, at, -1)
-				fmt.Fprint(w, " = ")
-				me.codeGenAst(w, indent, a.LetVal)
+				if a.LetVal != nil {
+					fmt.Fprint(w, " = ")
+					me.codeGenAst(w, indent, a.LetVal)
+				}
 				if a.isTopLevel() {
 					fmt.Fprint(w, "\n")
 				}
@@ -271,6 +273,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		} else {
 			fmt.Fprintf(w, "%sfor ", tabs)
 			me.codeGenAst(w, indent, a.ForCond)
+			fmt.Fprint(w, " ")
 			me.codeGenAst(w, indent, a.ForDo)
 		}
 		fmt.Fprint(w, "\n")

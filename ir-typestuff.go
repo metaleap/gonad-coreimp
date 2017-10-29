@@ -427,7 +427,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 		if numctors := len(td.Ctors); numctors == 0 {
 			panic(notImplErr(me.mod.srcFilePath+": unexpected ctor absence for", td.Name, td))
 		} else {
-			isnewtype, hasselfref, hasctorargs := false, false, false
+			isnewtype, hasctorargs := false, false
 			gid := &irANamedTypeRef{RefInterface: &irATypeRefInterface{xtd: td}, Export: me.hasExport(td.Name)}
 			gid.setBothNamesFromPsName(td.Name)
 			for _, ctor := range td.Ctors {
@@ -435,8 +435,6 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 					if hasctorargs = true; numargs == 1 && numctors == 1 {
 						if ctor.Args[0].TypeConstructor != (me.mod.qName + "." + td.Name) {
 							isnewtype = true
-						} else {
-							hasselfref = true
 						}
 					}
 				}
@@ -447,12 +445,15 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 			} else {
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &irANamedTypeRef{Export: me.hasExport(gid.NamePs + "ĸ" + ctor.Name),
-						RefStruct: &irATypeRefStruct{PassByPtr: hasselfref || (hasctorargs && len(ctor.Args) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount)}}
+						RefStruct: &irATypeRefStruct{PassByPtr: (hasctorargs && len(ctor.Args) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount)}}
 					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
 						field := &irANamedTypeRef{}
-						field.setRefFrom(me.toIrATypeRef(tdict, ctorarg))
+						if field.setRefFrom(me.toIrATypeRef(tdict, ctorarg)); field.RefAlias == (me.mod.qName + "." + ctor.Name) {
+							//	an inconstructable self-recursive type, aka Data.Void
+							field.turnRefIntoRefPtr()
+						}
 						ctorarg.tmp_assoc = field
 						field.NameGo = fmt.Sprintf("%s%d", sanitizeSymbolForGo(ctor.Name, true), ia)
 						field.NamePs = fmt.Sprintf("value%d", ia)

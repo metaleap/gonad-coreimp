@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -24,7 +25,7 @@ var (
 )
 
 func main() {
-	// runtime.SetGCPercent(-1) // turn off GC, we're a quickly-in-and-out-again program
+	debug.SetGCPercent(-1) // we're (hopefully) not a long-running process
 	starttime := time.Now()
 	// args match those of purs and/or pulp where there's overlap, other config goes in bower.json's `Gonad` field (see `psBowerFile`)
 	pflag.StringVar(&Proj.SrcDirPath, "src-path", "src", "Project-sources directory path")
