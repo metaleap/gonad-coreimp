@@ -103,7 +103,7 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 				if modimppath := mod.impPath(); !uslice.StrHas(okpkgs, modimppath) {
 					isthisok := true
 					for _, imp := range mod.irMeta.Imports {
-						if !uslice.StrHas(okpkgs, imp.ImpPath) {
+						if imp.emitted && !uslice.StrHas(okpkgs, imp.ImpPath) {
 							if !(imp.PsModQName == "" || strings.Contains(imp.PsModQName, nsPrefixDefaultFfiPkg)) {
 								isthisok = false
 								break
@@ -111,7 +111,7 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 						}
 					}
 					if isthisok {
-						fmt.Printf("dep level #%d\t%s\n", i, modimppath)
+						fmt.Printf("dep level #%d\t%s\n", i+1, modimppath)
 						thisok = append(thisok, modimppath)
 					}
 				}

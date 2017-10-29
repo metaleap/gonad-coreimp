@@ -62,7 +62,7 @@ func (me *irAst) postEnsureArgTypes() {
 				walk(fn.FuncImpl, false, func(stmt irA) irA {
 					if !fn.RefFunc.Rets[0].hasTypeInfo() {
 						if ret, _ := stmt.(*irARet); ret != nil {
-							if tret := ret.ExprType(); tret != nil {
+							if tret := ret.ExprType(); tret != nil && tret.hasTypeInfo() {
 								fn.RefFunc.Rets[0].copyTypeInfoFrom(tret)
 							}
 						}
@@ -97,12 +97,25 @@ func (me *irAst) postEnsureArgTypes() {
 					}
 				}
 			} else if fnletouter, _ := fn.parent.(*irALet); fnletouter != nil {
-				if fnletouter.NamePs == "spin" {
-					if fnouter, _ := fnletouter.parent.Parent().(*irAFunc); fnouter != nil && fnouter.RefFunc.haveAllArgsTypeInfo() {
-						for _, fnret := range irALookupBelowˇRet(fnouter.FuncImpl, false) {
-							if fnretcall, _ := fnret.RetArg.(*irACall); fnretcall != nil {
-								if fnretcallsym, _ := fnretcall.Callee.(*irASym); fnretcallsym != nil && fnretcallsym.NamePs == fnletouter.NamePs {
-									fn.RefFunc.copyArgTypesOnlyFrom(false, fnouter.RefFunc)
+				if fnouter, _ := fnletouter.parent.Parent().(*irAFunc); fnouter != nil && fnouter.RefFunc.haveAllArgsTypeInfo() {
+					for _, fnret := range irALookupBelowˇRet(fnouter.FuncImpl, false) {
+						if fnretcall, _ := fnret.RetArg.(*irACall); fnretcall != nil {
+							if fnretcallsym, _ := fnretcall.Callee.(*irASym); fnretcallsym != nil && fnretcallsym.NamePs == fnletouter.NamePs {
+								fn.RefFunc.copyArgTypesOnlyFrom(false, fnouter.RefFunc)
+							}
+						} else if fnretsym, _ := fnret.RetArg.(*irASym); fnretsym != nil {
+							if symref := fnretsym.refTo(); symref != nil {
+								if (!fnretsym.ExprType().hasTypeInfo()) && fnouter.RefFunc.Rets[0].hasTypeInfo() {
+									if !symref.ExprType().hasTypeInfo() {
+										symref.Base().copyTypeInfoFrom(fnouter.RefFunc.Rets[0])
+									}
+								}
+								if symvar, _ := symref.(*irALet); symvar != nil {
+									if symvarset := symvar.setterFromCallTo(fnletouter); symvarset != nil {
+										if fnretsym.ExprType().hasTypeInfo() {
+											fn.RefFunc.Rets[0].copyTypeInfoFrom(fnretsym.ExprType())
+										}
+									}
 								}
 							}
 						}
@@ -117,7 +130,7 @@ func (me *irAst) postPerFuncFixups() {
 	var namescache map[string]string
 	convertToTypeOf := func(i int, afn *irAFunc, from irA, totype *irANamedTypeRef) (int, *irASym) {
 		if totype.RefAlias == "" && totype.RefPtr == nil {
-			println(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
+			// println(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
 		}
 		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
 		varname.copyTypeInfoFrom(totype)
@@ -146,12 +159,6 @@ func (me *irAst) postPerFuncFixups() {
 		for i := 0; i < len(afn.FuncImpl.Body); i++ {
 			var varname *irASym
 			switch ax := afn.FuncImpl.Body[i].(type) {
-			case *irARet:
-				if ax.RetArg == nil && len(afn.RefFunc.Rets) > 0 {
-					retarg := ªSymPs(afn.RefFunc.Args[0].NamePs, false)
-					retarg.copyTypeInfoFrom(afn.RefFunc.Args[0])
-					retarg.parent, ax.RetArg = ax, retarg
-				}
 			case *irAIf: // if condition isn't bool (eg testing an interface{}), convert it first to a temp bool var
 				axift := ax.If.ExprType()
 				switch axif := ax.If.(type) {
@@ -170,9 +177,14 @@ func (me *irAst) postPerFuncFixups() {
 				walk(ax, false, func(ast irA) irA {
 					switch a := ast.(type) {
 					case *irARet:
-						if afn.RefFunc.Rets[0].hasTypeInfo() && a.RetArg != nil {
-							if asym, _ := a.RetArg.(*irASym); asym != nil {
-								if tsym := asym.ExprType(); !tsym.hasTypeInfoBeyondEmptyIface() {
+						if a.RetArg == nil {
+							retarg := ªSymPs(afn.RefFunc.Args[0].NamePs, false)
+							retarg.copyTypeInfoFrom(afn.RefFunc.Args[0])
+							retarg.parent, a.RetArg = a, retarg
+						}
+						if afn.RefFunc.Rets[0].hasTypeInfo() {
+							if aretsym, _ := a.RetArg.(*irASym); aretsym != nil {
+								if tretsym := aretsym.ExprType(); !tretsym.hasTypeInfoBeyondEmptyIface() {
 									i, varname = convertToTypeOf(i, afn, a.RetArg, afn.RefFunc.Rets[0])
 									a.RetArg, varname.parent = varname, a
 								}

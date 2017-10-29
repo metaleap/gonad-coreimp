@@ -133,6 +133,18 @@ type irALet struct {
 	}
 }
 
+func (me *irALet) callers() (all []*irACall) {
+	irALookupBelow(me.parent, true, func(a irA) bool {
+		if acall, _ := a.(*irACall); acall != nil {
+			if acallee, _ := acall.Callee.(*irASym); acallee != nil && acallee.refTo() == me {
+				all = append(all, acall)
+			}
+		}
+		return false
+	})
+	return
+}
+
 func (me *irALet) Equiv(cmp irA) bool {
 	c, _ := cmp.(*irALet)
 	return me.Base().Equiv(c) && (c == nil || (me.typeConv == c.typeConv && me.LetVal.Equiv(c.LetVal)))
@@ -152,6 +164,29 @@ func (me *irALet) ExprType() *irANamedTypeRef {
 		}
 	}
 	return &me.irANamedTypeRef
+}
+
+func (me *irALet) setterFromCallTo(fn *irALet) (set *irASet) {
+	for _, setter := range me.setters() {
+		if acall, _ := setter.ToRight.(*irACall); acall != nil {
+			if acallee, _ := acall.Callee.(*irASym); acallee != nil && acallee.refTo() == fn {
+				return setter
+			}
+		}
+	}
+	return
+}
+
+func (me *irALet) setters() (all []*irASet) {
+	irALookupBelow(me.parent, true, func(a irA) bool {
+		if aset, _ := a.(*irASet); aset != nil {
+			if asym, _ := aset.SetLeft.(*irASym); asym != nil && asym.refTo() == me {
+				all = append(all, aset)
+			}
+		}
+		return false
+	})
+	return
 }
 
 type irASym struct {
