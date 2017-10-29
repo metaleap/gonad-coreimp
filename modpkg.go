@@ -12,7 +12,7 @@ import (
 
 /*
 Representation of a PureScript module from which a
-Golang package will be generated. Hence 'modpkg'.
+Golang package will be generated. Hence 'modpkg'..
 
 Holds intermediate representations in irMeta and irAst.
 */

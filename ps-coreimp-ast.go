@@ -421,7 +421,7 @@ func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpA
 	}
 	for ai, a := range asts {
 		if a != nil {
-			//	we might swap out a in here:
+			//	we might swap out `a` in here
 			if a.AstTag == "Comment" && a.AstCommentDecl != nil {
 				//	decls as sub-asts of comments is handy for PureScript but not for our own traversals, we lift the inner decl outward and set its own Comment instead. hence, we never process any AstCommentDecl, after this branch they're all nil
 				if a.AstCommentDecl.AstTag == "Comment" {
@@ -431,20 +431,20 @@ func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpA
 				a.AstCommentDecl, decl.Comment, decl.parent = nil, a.Comment, parent
 				a, asts[ai] = decl, decl
 			}
-			//	we might swap out a in here:
+			//	we might swap out `a` in here
 			if parent != nil && a.AstTag == "Function" && a.Function != "" {
 				//	there are a handful of cases (TCO it looks like) where CoreImp function bodies contain inner "full" functions as top-level-style stand-alone defs instead of bound expressions --- we bind them to a var right here, early on.
 				nuvar := &coreImpAst{AstTag: "VariableIntroduction", VariableIntroduction: a.Function, AstRight: a, parent: parent}
 				a.parent, a.Function = nuvar, ""
 				a, asts[ai] = nuvar, nuvar
 			}
-			//	we might swap out a in here:
+			//	we might swap out `a` in here
 			if a.AstTag == "Unary" && a.AstOp == "Not" && a.Unary.AstTag == "BooleanLiteral" {
 				operand := a.Unary
 				operand.parent, operand.BooleanLiteral = parent, !a.Unary.BooleanLiteral
 				a, asts[ai] = operand, operand
 			}
-			//	now proceed whatever a now is
+			//	now proceed whatever `a` now is
 
 			a.For = strReplUnsanitize.Replace(a.For)
 			a.ForIn = strReplUnsanitize.Replace(a.ForIn)
