@@ -190,7 +190,7 @@ func (me *irAst) codeGenAst(w io.Writer, indent int, ast irA) {
 		me.codeGenAst(w, indent, a.IdxRight)
 		fmt.Fprint(w, "]")
 	case *irAIsType:
-		fmt.Fprint(w, "isˇ"+a.names.v+"ª"+a.names.t)
+		fmt.Fprint(w, "ː"+a.names.v+"ᐧ"+a.names.t)
 		// fmt.Fprint(w, typeNameWithPkgName(me.resolveGoTypeRefFromQName(a.TypeToTest)))
 	case *irAToType:
 		me.codeGenAst(w, indent, a.ExprToConv)

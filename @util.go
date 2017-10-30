@@ -19,15 +19,18 @@ const (
 )
 
 var (
+	//ꓸ۰٠ᛌ
 	strReplˈ2Slash      = strings.NewReplacer("ˈ", "/")
 	strReplDot2ˈ        = strings.NewReplacer(".", "ˈ")
+	strReplDot2ꓸ        = strings.NewReplacer(".", "ꓸ")
 	strReplDot2Slash    = strings.NewReplacer(".", "/")
-	strReplDot2ᛌ        = strings.NewReplacer(".", "ᛌ")
-	strReplSlash2Dot    = strings.NewReplacer("\\", ".", "/", ".")
-	strReplSanitizer    = strings.NewReplacer("'", "ˇ", "$", "ø")
-	strReplUnderscore2ᛌ = strings.NewReplacer("_", "ᛌ")
-	strReplUnsanitize   = strings.NewReplacer("$prime", "'", "$$", "")
-	_symcounter         = 0
+	strReplFsSlash2Dot  = strings.NewReplacer("\\", ".", "/", ".")
+	strReplUnderscore2ꓸ = strings.NewReplacer("_", "ꓸ")
+
+	strReplSanitizer  = strings.NewReplacer("'", "ˈ", "$", "ᵒ")
+	strReplUnsanitize = strings.NewReplacer("$prime", "'", "$$", "")
+
+	_symcounter = 0
 )
 
 func notImplErr(cat string, name string, in interface{}) error {
@@ -108,6 +111,13 @@ func findGoTypeByPsQName(me *modPkg, qname string) (*modPkg, *irANamedTypeRef) {
 	return mod, mod.irMeta.goTypeDefByPsName(tname)
 }
 
+func irASymStrOr(me irA, or string) string {
+	if asymstr, _ := me.(irASymStr); asymstr != nil {
+		return asymstr.symStr()
+	}
+	return or
+}
+
 func sanitizeSymbolForGo(name string, upper bool) string {
 	if name == "" {
 		return name
@@ -124,9 +134,9 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
-				return "ˇ" + name + "ˇ"
+				return name + "ˆ"
 			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "ˇ" + name
+				return "ˆ" + name
 			}
 		}
 	}

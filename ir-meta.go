@@ -475,10 +475,10 @@ func (me *irMeta) populateGoValDecls() {
 		gvd := &irANamedTypeRef{Export: me.hasExport(evd.Name)}
 		gvd.setBothNamesFromPsName(evd.Name)
 		for gtd := me.goTypeDefByGoName(gvd.NameGo); gtd != nil; gtd = me.goTypeDefByGoName(gvd.NameGo) {
-			gvd.NameGo += "º"
+			gvd.NameGo += "ᣳ"
 		}
 		for gvd2 := me.goValDeclByGoName(gvd.NameGo); gvd2 != nil; gvd2 = me.goValDeclByGoName(gvd.NameGo) {
-			gvd.NameGo += "ª"
+			gvd.NameGo += "ᣛ"
 		}
 		gvd.setRefFrom(me.toIrATypeRef(tdict, evd.Ref))
 		me.GoValDecls = append(me.GoValDecls, gvd)

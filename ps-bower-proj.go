@@ -78,7 +78,7 @@ func (me *psBowerProject) moduleByQName(qname string) *modPkg {
 
 func (me *psBowerProject) moduleByPName(pname string) *modPkg {
 	if pname != "" {
-		pᛌname := strReplUnderscore2ᛌ.Replace(pname)
+		pᛌname := strReplUnderscore2ꓸ.Replace(pname)
 		for _, m := range me.Modules {
 			if m.pName == pᛌname || m.pName == pname {
 				return m
@@ -149,10 +149,10 @@ func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgd
 	i, l, opt := strings.LastIndexAny(relpath, "/\\"), len(relpath)-5, Proj.BowerJsonFile.Gonad
 	modinfo := &modPkg{
 		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
-		qName: strReplSlash2Dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
+		qName: strReplFsSlash2Dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
 	}
 	if modinfo.impFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
-		modinfo.pName = strReplDot2ᛌ.Replace(modinfo.qName)
+		modinfo.pName = strReplDot2ꓸ.Replace(modinfo.qName)
 		modinfo.extFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "externs.json")
 		modinfo.irMetaFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]

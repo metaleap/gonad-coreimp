@@ -306,7 +306,7 @@ func (me *irMeta) populateGoTypeDefs() {
 		gtd.setBothNamesFromPsName(ts.Name)
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
 		if tc != nil {
-			if gtd.NameGo += "ˇ"; gtd.RefStruct != nil {
+			if gtd.NameGo += "ᣳ"; gtd.RefStruct != nil {
 				gtd.RefStruct.PassByPtr = true
 				for _, gtdf := range gtd.RefStruct.Fields {
 					if gtdf.Export != gtd.Export {
@@ -445,7 +445,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 				for _, ctor := range td.Ctors {
 					ctor.gtd = &irANamedTypeRef{Export: me.hasExport(gid.NamePs + "ĸ" + ctor.Name),
 						RefStruct: &irATypeRefStruct{PassByPtr: (hasctorargs && len(ctor.Args) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount)}}
-					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "ˇ" + ctor.Name)
+					ctor.gtd.setBothNamesFromPsName(gid.NamePs + "۰" + ctor.Name)
 					ctor.gtd.NamePs = ctor.Name
 					for ia, ctorarg := range ctor.Args {
 						field := &irANamedTypeRef{}

@@ -72,7 +72,7 @@ func (me *irAst) prepAddEnumishAdtGlobals() (nuglobalsmap map[string]*irALet) {
 		if gtd.RefInterface != nil && gtd.RefInterface.xtd != nil {
 			for _, ctor := range gtd.RefInterface.xtd.Ctors {
 				if ctor.gtd != nil && len(ctor.Args) == 0 {
-					nuvar := ªLet("º"+ctor.Name, "", ªO(&irANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
+					nuvar := ªLet("ᣳ"+ctor.Name, "", ªO(&irANamedTypeRef{RefAlias: ctor.gtd.NameGo}))
 					nuglobalsmap[ctor.Name] = nuvar
 					nuglobals = append(nuglobals, nuvar)
 				}
@@ -132,14 +132,14 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 					if aif, _ := afn.FuncImpl.Body[i].(*irAIf); aif != nil {
 						if typechecks := aif.typeAssertions(); len(typechecks) > 0 {
 							for _, tcheck := range typechecks {
-								tchkey := tcheck.names.v + "ª" + tcheck.names.t
+								tchkey := tcheck.names.v + "ᐧ" + tcheck.names.t
 								tconv, _ := tconvs[tchkey]
 								tconvt := &irANamedTypeRef{RefAlias: tcheck.TypeToTest}
 								if tconv == nil {
 									pname, tname := me.resolveGoTypeRefFromQName(tcheck.TypeToTest)
 									tconvto := ªTo(tcheck.ExprToTest, pname, tname)
 									tconv = ªLet(tchkey, "", tconvto)
-									tconv.typeConv.okname, tconv.parent = "isˇ"+tchkey, afn.FuncImpl
+									tconv.typeConv.okname, tconv.parent = "ː"+tchkey, afn.FuncImpl
 									tconv.copyTypeInfoFrom(tconvt)
 									tconvto.copyTypeInfoFrom(tconvt)
 									afn.FuncImpl.insert(i, tconv)

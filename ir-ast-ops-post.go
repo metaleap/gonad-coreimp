@@ -132,7 +132,7 @@ func (me *irAst) postPerFuncFixups() {
 		if totype.RefAlias == "" && totype.RefPtr == nil {
 			// 	panic(fmt.Sprintf("WUT:\t%s: type-conversion via %#v", me.mod.srcFilePath, totype))
 		}
-		symname, varname := from.Base().NameGo, ªSymGo(fmt.Sprintf("ˇ%cˇ", rune(i+97)))
+		symname, varname := from.Base().NameGo, ªSymGo(irASymStrOr(from, string(rune(i+97)))+"ᕽ")
 		varname.copyTypeInfoFrom(totype)
 		if existing, _ := namescache[symname]; symname != "" && existing != "" {
 			varname.NameGo = existing
@@ -169,7 +169,7 @@ func (me *irAst) postPerFuncFixups() {
 					}
 				case *irAOp1:
 					if axift = axif.Of.ExprType(); (!axift.hasTypeInfo()) || axift.RefAlias != exprTypeBool.RefAlias {
-						i, varname = convertToTypeOf(i, afn, axif.Of.(*irASym), exprTypeBool)
+						i, varname = convertToTypeOf(i, afn, axif.Of, exprTypeBool)
 						axif.Of, varname.parent = varname, axif
 					}
 				}
