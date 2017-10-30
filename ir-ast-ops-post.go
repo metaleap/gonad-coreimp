@@ -160,7 +160,7 @@ func (me *irAst) postFinalFixups() {
 			//	some dots' rhs refers to a member (field/method) of the lhs and needs the name fixed up
 			if atl := a.DotLeft.ExprType(); atl.RefAlias != "" {
 				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
-					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
+					// panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
 				} else {
 					asym := a.DotRight.(*irASym)
 					fname := asym.NamePs
@@ -385,7 +385,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 		if ab := a.Base(); a != nil {
 			if tci := me.irM.tcInst(ab.NamePs); tci != nil {
 				if tcmod, gtd := findGoTypeByPsQName(me.mod, tci.ClassName); gtd == nil || gtd.RefStruct == nil {
-					panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
+					// panic(notImplErr("type-class '"+tci.ClassName+"' (its struct type-def wasn't found) for instance", tci.Name, me.mod.srcFilePath))
 				} else {
 					switch ax := a.(type) {
 					case *irALet:
@@ -408,6 +408,8 @@ func (me *irAst) postLinkUpTcInstDecls() {
 								case *irALitStr:
 								case *irALitBool:
 								case *irADot:
+								case *irALitObj:
+								case *irAOp2:
 								default:
 									println(fvx.(*irAFunc))
 								}
@@ -420,6 +422,7 @@ func (me *irAst) postLinkUpTcInstDecls() {
 							}
 						case *irAPkgSym:
 							ax.RefAlias = tci.ClassName
+						case *irACall:
 						default:
 							panicWithType(me.mod.srcFilePath, axlv, ab.NamePs+".LetVal")
 						}

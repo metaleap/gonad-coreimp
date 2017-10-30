@@ -212,8 +212,10 @@ func (me *irATypeRefFunc) copyArgTypesOnlyFrom(namesIfMeNil bool, from *irATypeR
 		}
 		return meargs
 	}
-	me.Args = copyargs(me.Args, from.Args)
-	me.Rets = copyargs(me.Rets, from.Rets)
+	if from != nil {
+		me.Args = copyargs(me.Args, from.Args)
+		me.Rets = copyargs(me.Rets, from.Rets)
+	}
 }
 
 func (me *irATypeRefFunc) equiv(cmp *irATypeRefFunc) bool {
@@ -333,12 +335,7 @@ func (me *irMeta) populateGoTypeDefs() {
 							for retfunc := rfn.Rets[0].RefFunc; retfunc != nil; retfunc = rfn.Rets[0].RefFunc {
 								rfn = retfunc
 							}
-							if rfn.Rets[0].RefAlias == "" {
-								panic(notImplErr("ultimate-return type in super-class-referencing-struct-field for", gtdf.NamePs, me.mod.srcFilePath))
-							} else {
-								refptr := &irATypeRefPtr{Of: &irANamedTypeRef{RefAlias: rfn.Rets[0].RefAlias}}
-								rfn.Rets[0].RefAlias, rfn.Rets[0].RefPtr = "", refptr
-							}
+							rfn.Rets[0].turnRefIntoRefPtr()
 						}
 					}
 				}
@@ -437,7 +434,7 @@ func (me *irMeta) toIrADataTypeDefs(typedatadecls []*irMTypeDataDecl) (gtds irAN
 	for _, td := range typedatadecls {
 		tdict := map[string][]string{}
 		if numctors := len(td.Ctors); numctors == 0 {
-			panic(notImplErr(me.mod.srcFilePath+": unexpected ctor absence for", td.Name, td))
+			// panic(notImplErr(me.mod.srcFilePath+": unexpected ctor absence for", td.Name, td))
 		} else {
 			isnewtype, hasctorargs := false, false
 			gid := &irANamedTypeRef{RefInterface: &irATypeRefInterface{xtd: td}, Export: me.hasExport(td.Name)}
@@ -526,8 +523,8 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 		myfield.setBothNamesFromPsName(tr.RCons.Label)
 		myfield.setRefFrom(me.toIrATypeRef(tdict, tr.RCons.Left))
 		rectype.Fields = append(rectype.Fields, myfield)
-		if nextrow := me.toIrATypeRef(tdict, tr.RCons.Right); nextrow != nil {
-			rectype.Fields = append(rectype.Fields, nextrow.(*irATypeRefStruct).Fields...)
+		if nextrow, _ := me.toIrATypeRef(tdict, tr.RCons.Right).(*irATypeRefStruct); nextrow != nil {
+			rectype.Fields = append(rectype.Fields, nextrow.Fields...)
 		}
 		rectype.PassByPtr = len(rectype.Fields) >= Proj.BowerJsonFile.Gonad.CodeGen.PtrStructMinFieldCount
 		return rectype
@@ -538,8 +535,8 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 			array := &irATypeRefArray{Of: &irANamedTypeRef{}}
 			array.Of.setRefFrom(me.toIrATypeRef(tdict, tr.TypeApp.Right))
 			return array
-		} else if strings.HasPrefix(tr.TypeApp.Left.TypeConstructor, "Prim.") {
-			panic(notImplErr("type-app left-hand primitive", tr.TypeApp.Left.TypeConstructor, me.mod.srcFilePath))
+			// } else if strings.HasPrefix(tr.TypeApp.Left.TypeConstructor, "Prim.") {
+			// 	panic(notImplErr("type-app left-hand primitive", tr.TypeApp.Left.TypeConstructor, me.mod.srcFilePath))
 		} else if tr.TypeApp.Left.TypeApp != nil && tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" && tr.TypeApp.Left.TypeApp.Right.TypeApp != nil && tr.TypeApp.Left.TypeApp.Right.TypeApp.Left.TypeConstructor == "Prim.Record" && tr.TypeApp.Right.TypeApp != nil && tr.TypeApp.Right.TypeApp.Left != nil {
 			return funcyhackery(tr.TypeApp.Right.TypeApp.Left)
 		} else if tr.TypeApp.Left.TypeApp != nil && (tr.TypeApp.Left.TypeApp.Left.TypeConstructor == "Prim.Function" || /*insanely hacky*/ tr.TypeApp.Right.TypeVar != "") {

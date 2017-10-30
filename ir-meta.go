@@ -335,6 +335,8 @@ func (me *irMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *irMTypeRef)
 		for _, tca := range tc.constr.Args {
 			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromEnvTag(tca))
 		}
+	} else if tc.isTypeLevelString() {
+		//	nothing to do so far
 	} else {
 		panic(notImplErr("tagged-type", tc.Tag, me.mod.srcFilePath))
 	}

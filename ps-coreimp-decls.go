@@ -59,10 +59,7 @@ type coreImpEnvClass struct {
 
 func (me *coreImpEnvClass) prep() {
 	for _, tca := range me.Args {
-		if tca.Type != nil {
-			panic(notImplErr("tcArgs", tca.Name+"!=nil", "'typeClasses'"))
-			tca.prep()
-		}
+		tca.prep()
 	}
 	for _, tcm := range me.Members {
 		tcm.prep()
@@ -321,7 +318,6 @@ type coreImpEnvTagType struct {
 	constr *coreImpEnvConstr
 }
 
-// func (me *coreImpEnvTagType) isTypeLevelString() bool     { return me.Tag == "TypeLevelString" }
 // func (me *coreImpEnvTagType) isTypeWildcard() bool        { return me.Tag == "TypeWildcard" }
 // func (me *coreImpEnvTagType) isTypeOp() bool              { return me.Tag == "TypeOp" }
 // func (me *coreImpEnvTagType) isProxyType() bool           { return me.Tag == "ProxyType" }
@@ -332,6 +328,7 @@ type coreImpEnvTagType struct {
 // func (me *coreImpEnvTagType) isBinaryNoParensType() bool  { return me.Tag == "BinaryNoParensType" }
 // func (me *coreImpEnvTagType) isParensInType() bool        { return me.Tag == "ParensInType" }
 // func (me *coreImpEnvTagType) isTUnknown() bool        { return me.Tag == "TUnknown" }
+func (me *coreImpEnvTagType) isTypeLevelString() bool { return me.Tag == "TypeLevelString" }
 func (me *coreImpEnvTagType) isTypeVar() bool         { return me.Tag == "TypeVar" }
 func (me *coreImpEnvTagType) isTypeConstructor() bool { return me.Tag == "TypeConstructor" }
 func (me *coreImpEnvTagType) isSkolem() bool          { return me.Tag == "Skolem" }
@@ -387,7 +384,7 @@ func (me *coreImpEnvTagType) prep() {
 		me.type0.prep()
 		me.type1 = me.new(tuple[2].(map[string]interface{}))
 		me.type1.prep()
-	} else if me.isREmpty() {
+	} else if me.isREmpty() || me.isTypeLevelString() {
 		// nothing to do
 	} else {
 		panic(notImplErr("tagged-type", me.Tag, me.Contents))
