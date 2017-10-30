@@ -506,7 +506,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 				}
 			}
 		*/
-		if finalconstr := tr.ConstrainedType; finalconstr.Ref.TypeApp != nil && finalconstr.Ref.TypeApp.Left.TypeApp != nil && finalconstr.Ref.TypeApp.Right.TypeApp != nil {
+		if finalconstr := tr.ConstrainedType.final(); finalconstr.Ref.TypeApp != nil && finalconstr.Ref.TypeApp.Left.TypeApp != nil && finalconstr.Ref.TypeApp.Right.TypeApp != nil {
 			funtype := &irATypeRefFunc{}
 			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
 			funtype.Args[0].setRefFrom(tr.ConstrainedType.Class)

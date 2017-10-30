@@ -27,7 +27,7 @@ type psBowerFile struct {
 			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
 			MainDepLevel int    // temporary option
 			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
-			GoNamespace  string // defaults to github.com/gonadz (or github.com\gonadz under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
+			GoNamespace  string // defaults to github.com/gonadz/ps2go (or github.com\gonadz\ps2go under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
 		}
 		CodeGen struct {
 			// TypeClasses2Interfaces bool
@@ -97,7 +97,7 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 				cfg.In.CoreImpDumpsDirPath = "output"
 			}
 			if cfg.Out.GoNamespace == "" {
-				cfg.Out.GoNamespace = filepath.Join("github.com", "gonadz")
+				cfg.Out.GoNamespace = filepath.Join("github.com", "gonadz", "ps2go")
 			}
 			if cfg.Out.GoDirSrcPath == "" {
 				for _, gopath := range udevgo.AllGoPaths() {
