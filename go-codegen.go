@@ -431,7 +431,8 @@ func (me *irAst) codeGenTypeRef(w io.Writer, gtd *irANamedTypeRef, indlevel int)
 	} else if gtd.RefInterface != nil {
 		if len(gtd.RefInterface.Embeds) == 0 && len(gtd.RefInterface.Methods) == 0 {
 			if gtd.RefInterface.isTypeVar {
-				fmt.Fprint(w, "interface{/*TVAR*/}")
+				fmt.Fprint(w, "𝒈.𝑻")
+				me.irM.ensureImp("", "github.com/gonadz/-", "").emitted = true
 			} else {
 				fmt.Fprint(w, "interface{}")
 			}

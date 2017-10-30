@@ -1,12 +1,14 @@
-package ps2goFFI_Data_Show
+package 𝙜ˈDataˈShow
 
 import (
 	"bytes"
 	"fmt"
 	"reflect"
+
+	"github.com/gonadz/-"
 )
 
-type Shows func(interface{}) string
+type Shows func(𝒈.𝑻) string
 
 var (
 	ShowIntImpl    Shows = ShowImpl
@@ -14,16 +16,16 @@ var (
 	ShowCharImpl   Shows = ShowStringImpl
 )
 
-func ShowImpl(v interface{}) string {
+func ShowImpl(v 𝒈.𝑻) string {
 	return fmt.Sprintf("%#v", v)
 }
 
-func ShowStringImpl(v interface{}) string {
+func ShowStringImpl(v 𝒈.𝑻) string {
 	return fmt.Sprintf("%q", v)
 }
 
 func ShowArrayImpl(showItemImpl Shows) Shows {
-	return func(v interface{}) string {
+	return func(v 𝒈.𝑻) string {
 		switch reflect.TypeOf(v).Kind() {
 		case reflect.Slice, reflect.Array:
 			var buf bytes.Buffer

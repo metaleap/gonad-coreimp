@@ -28,8 +28,7 @@ func (me *irAst) prepFromCoreImp() {
 	}
 
 	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; reqforeign != "" {
-		qn := nsPrefixDefaultFfiPkg + me.mod.qName
-		me.irM.ForeignImp = me.irM.ensureImp(strReplDot2Underscore.Replace(qn), "github.com/metaleap/gonad/"+strReplDot2Slash.Replace(qn), qn)
+		me.irM.ForeignImp = me.irM.ensureImp("", prefixDefaultFfiPkgImpPath+strReplDot2Slash.Replace(me.mod.qName), "")
 	}
 
 	me.prepFixupNameCasings()
@@ -182,7 +181,7 @@ func (me *irAst) prepMiscFixups(nuglobalsmap map[string]*irALet) {
 								if imp.GoName == dl.NameGo || (dl.NamePs == "$foreign" && imp == me.irM.ForeignImp) {
 									dr.Export = true
 									dr.NameGo = sanitizeSymbolForGo(dr.NameGo, dr.Export)
-									return ªPkgSym(imp.GoName, dr.NameGo)
+									return ªPkgSym(prefixDefaultFfiPkgNs+strReplDot2ˈ.Replace(me.mod.qName), dr.NameGo)
 								}
 							}
 						}

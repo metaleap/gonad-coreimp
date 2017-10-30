@@ -104,7 +104,7 @@ func writeTestMainGo(allpkgimppaths map[string]bool) (err error) {
 					isthisok := true
 					for _, imp := range mod.irMeta.Imports {
 						if imp.emitted && !uslice.StrHas(okpkgs, imp.ImpPath) {
-							if !(imp.PsModQName == "" || strings.Contains(imp.PsModQName, nsPrefixDefaultFfiPkg)) {
+							if !(imp.PsModQName == "" || strings.HasPrefix(imp.ImpPath, prefixDefaultFfiPkgImpPath)) {
 								isthisok = false
 								break
 							}

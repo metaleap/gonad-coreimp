@@ -66,7 +66,12 @@ func (me irMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
 
 func (me *irMPkgRefs) addIfMissing(lname, imppath, qname string) (pkgref *irMPkgRef, added bool) {
 	if imppath == "" {
-		imppath = lname
+		if strings.HasPrefix(lname, prefixDefaultFfiPkgNs) {
+			imppath = prefixDefaultFfiPkgImpPath + strReplˈ2Slash.Replace(lname[len(prefixDefaultFfiPkgNs):])
+			lname, qname = "", ""
+		} else {
+			imppath = lname
+		}
 	}
 	if pkgref = me.byImpPath(imppath); pkgref == nil {
 		added, pkgref = true, &irMPkgRef{GoName: lname, ImpPath: imppath, PsModQName: qname}
@@ -85,9 +90,11 @@ func (me irMPkgRefs) byImpPath(imppath string) *irMPkgRef {
 }
 
 func (me irMPkgRefs) byImpName(pkgname string) *irMPkgRef {
-	for _, imp := range me {
-		if imp.GoName == pkgname || (imp.GoName == "" && imp.ImpPath == pkgname) {
-			return imp
+	if pkgname != "" {
+		for _, imp := range me {
+			if imp.GoName == pkgname || (imp.GoName == "" && imp.ImpPath == pkgname) {
+				return imp
+			}
 		}
 	}
 	return nil
@@ -206,6 +213,14 @@ type irMTypeRefConstr struct {
 	Ref   *irMTypeRef `json:"cr,omitempty"`
 }
 
+func (me *irMTypeRefConstr) final() (lastinchain *irMTypeRefConstr) {
+	lastinchain = me
+	for lastinchain.Ref.ConstrainedType != nil {
+		lastinchain = lastinchain.Ref.ConstrainedType
+	}
+	return
+}
+
 func (me *irMTypeRefConstr) eq(cmp *irMTypeRefConstr) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Class == cmp.Class && me.Ref.eq(cmp.Ref) && me.Args.eq(cmp.Args))
 }
@@ -230,8 +245,8 @@ func (me *irMTypeRefSkolem) eq(cmp *irMTypeRefSkolem) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Name == cmp.Name && me.Value == cmp.Value && me.Scope == cmp.Scope)
 }
 
-func (me *irMeta) ensureImp(lname, imppath, qname string) (imp *irMPkgRef) {
-	if imp = me.Imports.byImpName(lname); imp != nil {
+func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
+	if imp := me.Imports.byImpName(lname); imp != nil {
 		return imp
 	}
 	if imppath == "" && (ustr.BeginsUpper(lname) || ustr.BeginsUpper(qname)) {
@@ -245,8 +260,7 @@ func (me *irMeta) ensureImp(lname, imppath, qname string) (imp *irMPkgRef) {
 			lname, qname, imppath = mod.pName, mod.qName, mod.impPath()
 		}
 	}
-	var save bool
-	imp, save = me.Imports.addIfMissing(lname, imppath, qname)
+	imp, save := me.Imports.addIfMissing(lname, imppath, qname)
 	if save {
 		me.save = true
 	}
@@ -332,7 +346,7 @@ func (me *irMeta) populateEnvTypeDataDecls() {
 				panic(me.mod.srcFilePath + ": time to handle FFI " + ffigofilepath)
 			} else {
 				//	special case for official purescript core libs: alias to applicable struct from gonad's default ffi packages
-				ta := &irMNamedTypeRef{Name: tdefname, Ref: &irMTypeRef{TypeConstructor: nsPrefixDefaultFfiPkg + me.mod.qName + "." + tdefname}}
+				ta := &irMNamedTypeRef{Name: tdefname, Ref: &irMTypeRef{TypeConstructor: prefixDefaultFfiPkgNs + strReplDot2ˈ.Replace(me.mod.qName) + "." + tdefname}}
 				me.EnvTypeSyns = append(me.EnvTypeSyns, ta)
 			}
 		} else {
@@ -445,7 +459,7 @@ func (me *irMeta) populateFromCoreImp() {
 func (me *irMeta) populateFromLoaded() {
 	me.imports = nil
 	for _, imp := range me.Imports {
-		if !strings.HasPrefix(imp.PsModQName, nsPrefixDefaultFfiPkg) {
+		if !strings.HasPrefix(imp.ImpPath, prefixDefaultFfiPkgImpPath) {
 			if impmod := findModuleByQName(imp.PsModQName); impmod != nil {
 				me.imports = append(me.imports, impmod)
 			} else if imp.PsModQName != "" {

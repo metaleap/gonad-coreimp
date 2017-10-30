@@ -1,4 +1,4 @@
-package ps2goFFI_Control_Monad_Eff_Uncurried
+package 𝙜ˈControlˈMonadˈEffˈUncurried
 
 type EffFn1 struct{}
 

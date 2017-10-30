@@ -268,7 +268,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		case "New":
 			o.Op1 = "&"
 		default:
-			panic(notImplErr("Unary", o.Op1, me.root.mod.srcFilePath))
+			panic(notImplErr("Unary", o.Op1, me.root.mod.impFilePath))
 		}
 		a = o
 	case "Binary":
@@ -313,7 +313,7 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 		case "ZeroFillShiftRight":
 			o.Op2 = "&^"
 		default:
-			panic(notImplErr("Binary", o.Op2, me.root.mod.srcFilePath))
+			panic(notImplErr("Binary", o.Op2, me.root.mod.impFilePath))
 		}
 		a = o
 	case "Comment":
@@ -367,12 +367,14 @@ func (me *coreImpAst) ciAstToIrAst() (a irA) {
 	case "InstanceOf":
 		if me.AstRight.Var != "" {
 			a = ªIs(me.InstanceOf.ciAstToIrAst(), me.AstRight.Var)
-		} else /*if me.AstRight.Indexer != nil*/ {
+		} else if me.AstRight.Indexer != nil {
 			apkgsym := me.AstRight.ciAstToIrAst().(*irAPkgSym)
 			a = ªIs(me.InstanceOf.ciAstToIrAst(), findModuleByPName(apkgsym.PkgName).qName+"."+apkgsym.Symbol)
+		} else {
+			panic(notImplErr("InstanceOf right-hand-side", me.AstRight.AstTag, me.root.mod.impFilePath))
 		}
 	default:
-		panic(notImplErr("CoreImp AST tag", me.AstTag, me.root.mod.srcFilePath))
+		panic(notImplErr("CoreImp AST tag", me.AstTag, me.root.mod.impFilePath))
 	}
 	if ab := a.Base(); ab != nil {
 		ab.Comments = me.Comment
@@ -410,7 +412,7 @@ func (me *coreImp) prepTopLevel() {
 				a.parent, me.Body[i] = nil, a
 			}
 		} else if a.AstTag != "Function" && a.AstTag != "VariableIntroduction" && a.AstTag != "Comment" {
-			panic(notImplErr("top-level CoreImp AST tag", a.AstTag, me.mod.srcFilePath))
+			panic(notImplErr("top-level CoreImp AST tag", a.AstTag, me.mod.impFilePath))
 		}
 	}
 }
@@ -425,7 +427,7 @@ func (me *coreImp) initSubAsts(parent *coreImpAst, asts ...*coreImpAst) coreImpA
 			if a.AstTag == "Comment" && a.AstCommentDecl != nil {
 				//	decls as sub-asts of comments is handy for PureScript but not for our own traversals, we lift the inner decl outward and set its own Comment instead. hence, we never process any AstCommentDecl, after this branch they're all nil
 				if a.AstCommentDecl.AstTag == "Comment" {
-					panic(notImplErr("comments", "nesting", me.mod.srcFilePath))
+					panic(notImplErr("comments", "nesting", me.mod.impFilePath))
 				}
 				decl := a.AstCommentDecl
 				a.AstCommentDecl, decl.Comment, decl.parent = nil, a.Comment, parent

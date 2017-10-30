@@ -13,16 +13,21 @@ import (
 type never struct{}
 
 const (
-	msgfmt = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
+	prefixDefaultFfiPkgImpPath = "github.com/metaleap/gonad/ffi/ps2go/"
+	prefixDefaultFfiPkgNs      = "𝙜ˈ"
+	msgfmt                     = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
 )
 
 var (
-	strReplDot2Underscore = strings.NewReplacer(".", "_")
-	strReplDot2Slash      = strings.NewReplacer(".", "/")
-	strReplSlash2Dot      = strings.NewReplacer("\\", ".", "/", ".")
-	strReplSanitizer      = strings.NewReplacer("'", "ˇ", "$", "ø")
-	strReplUnsanitize     = strings.NewReplacer("$prime", "'", "$$", "")
-	_symcounter           = 0
+	strReplˈ2Slash      = strings.NewReplacer("ˈ", "/")
+	strReplDot2ˈ        = strings.NewReplacer(".", "ˈ")
+	strReplDot2Slash    = strings.NewReplacer(".", "/")
+	strReplDot2ᛌ        = strings.NewReplacer(".", "ᛌ")
+	strReplSlash2Dot    = strings.NewReplacer("\\", ".", "/", ".")
+	strReplSanitizer    = strings.NewReplacer("'", "ˇ", "$", "ø")
+	strReplUnderscore2ᛌ = strings.NewReplacer("_", "ᛌ")
+	strReplUnsanitize   = strings.NewReplacer("$prime", "'", "$$", "")
+	_symcounter         = 0
 )
 
 func notImplErr(cat string, name string, in interface{}) error {

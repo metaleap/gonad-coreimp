@@ -384,10 +384,8 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 				panic(notImplErr("Prim type '"+tname+"' for", tref, me.mod.srcFilePath))
 			}
 		} else {
-			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, nsPrefixDefaultFfiPkg)
-			if isffi {
-				pname = strReplDot2Underscore.Replace(pname)
-			} else {
+			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, prefixDefaultFfiPkgNs)
+			if !isffi {
 				if mod = findModuleByQName(qn); mod == nil {
 					if mod = findModuleByPName(qn); mod == nil {
 						panic(notImplErr("module qname", qn, me.mod.srcFilePath))
@@ -404,7 +402,7 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 			if !foundimport {
 				var imp *irMPkgRef
 				if isffi {
-					imp = &irMPkgRef{ImpPath: "github.com/metaleap/gonad/" + strReplDot2Slash.Replace(qn), PsModQName: qn, GoName: pname}
+					imp = &irMPkgRef{ImpPath: prefixDefaultFfiPkgImpPath + strReplDot2Slash.Replace(qn)}
 				} else {
 					imp = mod.newModImp()
 				}
@@ -499,7 +497,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 				}
 			}
 		*/
-		if tr.ConstrainedType.Ref.TypeApp != nil && tr.ConstrainedType.Ref.TypeApp.Left.TypeApp != nil && tr.ConstrainedType.Ref.TypeApp.Right.TypeApp != nil {
+		if finalconstr := tr.ConstrainedType.final(); finalconstr.Ref.TypeApp != nil && finalconstr.Ref.TypeApp.Left.TypeApp != nil && finalconstr.Ref.TypeApp.Right.TypeApp != nil {
 			funtype := &irATypeRefFunc{}
 			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
 			funtype.Args[0].setRefFrom(tr.ConstrainedType.Class)

@@ -18,10 +18,6 @@ represents the code in a generated Go package, minus
 This latter 'design accident' should probably be revamped.
 */
 
-const (
-	nsPrefixDefaultFfiPkg = "ps2goFFI."
-)
-
 var (
 	exprTypeInt  = &irANamedTypeRef{RefAlias: "Prim.Int"}
 	exprTypeNum  = &irANamedTypeRef{RefAlias: "Prim.Number"}
@@ -694,7 +690,7 @@ func (me *irADot) symStr() (symstr string) {
 	if sl, _ := me.DotLeft.(irASymStr); sl != nil {
 		symstr = sl.symStr()
 	}
-	symstr += "º"
+	symstr += "ꓸ"
 	if sr, _ := me.DotRight.(irASymStr); sr != nil {
 		symstr += sr.symStr()
 	}
@@ -763,7 +759,7 @@ func (me *irAPkgSym) ExprType() *irANamedTypeRef {
 }
 
 func (me *irAPkgSym) symStr() string {
-	return me.PkgName + "º" + me.Symbol
+	return me.PkgName + "ꓸ" + me.Symbol
 }
 
 func (me *irAst) typeCtorFunc(nameps string) *irACtor {

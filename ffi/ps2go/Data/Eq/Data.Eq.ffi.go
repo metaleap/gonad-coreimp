@@ -1,4 +1,4 @@
-package ps2goFFI_Data_Eq
+package 𝙜ˈDataˈEq
 
 func RefEq(r1 interface{}) func(interface{}) bool {
 	return func(r2 interface{}) bool {
