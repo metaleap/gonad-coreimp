@@ -49,10 +49,12 @@ func (me *irAst) postEnsureArgTypes() {
 				}
 			}
 		case *irALet:
-			if gvd := me.irM.goValDeclByPsName(atld.NamePs); gvd != nil {
-				atld.copyTypeInfoFrom(gvd)
-				if lval := atld.LetVal.Base(); !lval.hasTypeInfo() {
-					lval.copyTypeInfoFrom(gvd)
+			if !atld.ExprType().hasTypeInfo() {
+				if gvd := me.irM.goValDeclByPsName(atld.NamePs); gvd != nil {
+					atld.copyTypeInfoFrom(gvd)
+					if lval := atld.LetVal.Base(); !lval.hasTypeInfo() {
+						lval.copyTypeInfoFrom(gvd)
+					}
 				}
 			}
 		}
@@ -136,8 +138,38 @@ func (me *irAst) postEnsureArgTypes() {
 
 func (me *irAst) postFinalFixups() {
 	me.walk(func(ast irA) irA {
-		// switch a := ast.(type) {
-		// }
+		switch a := ast.(type) {
+		case *irALitObj:
+			//	record literals that *could* be matched to an existing struct (hopefully all of them) now need field names fixed up
+			if atl := a.ExprType(); atl.RefAlias != "" {
+				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd != nil && gtd.RefStruct != nil {
+					if numfields := len(gtd.RefStruct.Fields); numfields != len(a.ObjFields) {
+						panic(notImplErr("field-count mismatch", atl.RefAlias, me.mod.srcFilePath))
+					} else if a.fieldsNamed() {
+						for _, objfield := range a.ObjFields {
+							if gtdfield := gtd.RefStruct.Fields.byPsName(objfield.NamePs); gtdfield != nil {
+								objfield.NameGo = gtdfield.NameGo
+							} else {
+								panic(notImplErr("object field name '"+objfield.NamePs+"' not defined for", atl.RefAlias, me.mod.srcFilePath))
+							}
+						}
+					}
+				}
+			}
+		case *irADot:
+			//	some dots' rhs refers to a member (field/method) of the lhs and needs the name fixed up
+			if atl := a.DotLeft.ExprType(); atl.RefAlias != "" {
+				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
+					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
+				} else {
+					asym := a.DotRight.(*irASym)
+					fname := asym.NamePs
+					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
+						asym.NameGo = gtdm.NameGo
+					}
+				}
+			}
+		}
 		return ast
 	})
 }
@@ -203,18 +235,6 @@ func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
 func (me *irAst) postInitialFixups() {
 	me.walk(func(ast irA) irA {
 		switch a := ast.(type) {
-		case *irADot:
-			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
-				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
-					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
-				} else {
-					asym := a.DotRight.(*irASym)
-					fname := asym.NamePs
-					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
-						asym.NameGo = gtdm.NameGo
-					}
-				}
-			}
 		case *irALet:
 			if a != nil && a.isConstable() {
 				//	turn var=literal's into consts

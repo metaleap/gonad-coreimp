@@ -600,6 +600,17 @@ func (me *irALitObj) Equiv(cmp irA) bool {
 	return me == nil && c == nil
 }
 
+func (me *irALitObj) fieldsNamed() (named bool) {
+	for i, f := range me.ObjFields {
+		if n := f.hasName(); i > 0 && n != named {
+			panic(notImplErr("mix of named and unnamed fields", me.NamePs, me.root.mod.srcFilePath))
+		} else {
+			named = n
+		}
+	}
+	return
+}
+
 type irALitObjField struct {
 	irABase
 	FieldVal irA

@@ -72,12 +72,6 @@ type irANamedTypeRef struct {
 	sortIndex int
 }
 
-func (me *irANamedTypeRef) turnRefIntoRefPtr() {
-	refptr := &irATypeRefPtr{Of: &irANamedTypeRef{}}
-	refptr.Of.copyTypeInfoFrom(me)
-	me.RefAlias, me.RefArray, me.RefFunc, me.RefInterface, me.RefPtr, me.RefStruct, me.RefUnknown = "", nil, nil, nil, refptr, nil, 0
-}
-
 func (me *irANamedTypeRef) clearTypeInfo() {
 	me.RefAlias, me.RefUnknown, me.RefInterface, me.RefFunc, me.RefStruct, me.RefArray, me.RefPtr = "", 0, nil, nil, nil, nil, nil
 }
@@ -106,6 +100,10 @@ func (me *irANamedTypeRef) nameless() (copy *irANamedTypeRef) {
 
 func (me *irANamedTypeRef) equiv(cmp *irANamedTypeRef) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.RefAlias == cmp.RefAlias && me.RefUnknown == cmp.RefUnknown && me.RefInterface.equiv(cmp.RefInterface) && me.RefFunc.equiv(cmp.RefFunc) && me.RefStruct.equiv(cmp.RefStruct) && me.RefArray.equiv(cmp.RefArray) && me.RefPtr.equiv(cmp.RefPtr))
+}
+
+func (me *irANamedTypeRef) hasName() bool {
+	return me.NamePs != ""
 }
 
 func (me *irANamedTypeRef) hasTypeInfoBeyondEmptyIface() (welltyped bool) {
@@ -152,6 +150,12 @@ func (me *irANamedTypeRef) setRefFrom(tref interface{}) {
 	default:
 		panicWithType("setRefFrom", tref, "tref")
 	}
+}
+
+func (me *irANamedTypeRef) turnRefIntoRefPtr() {
+	refptr := &irATypeRefPtr{Of: &irANamedTypeRef{}}
+	refptr.Of.copyTypeInfoFrom(me)
+	me.RefAlias, me.RefArray, me.RefFunc, me.RefInterface, me.RefPtr, me.RefStruct, me.RefUnknown = "", nil, nil, nil, refptr, nil, 0
 }
 
 type irATypeRefArray struct {
@@ -390,7 +394,7 @@ func (me *irAst) resolveGoTypeRefFromQName(tref string) (pname string, tname str
 			case "Int":
 				tname = "int"
 			default:
-				panic(notImplErr("Prim type '"+tname+"' for", tref, me.mod.srcFilePath))
+				tname = "interface{/*Prim." + tname + "*/}"
 			}
 		} else {
 			qn, foundimport, isffi := pname, false, strings.HasPrefix(pname, prefixDefaultFfiPkgNs)
