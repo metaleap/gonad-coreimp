@@ -491,6 +491,14 @@ func (me *irMeta) populateGoValDecls() {
 			gvd.NameGo += "ˇ"
 		}
 		gvd.setRefFrom(me.toIrATypeRef(tdict, evd.Ref))
+		if gvd.RefStruct != nil && len(gvd.RefStruct.Fields) > 0 {
+			for _, gtd := range me.GoTypeDefs {
+				if gtd.RefStruct != nil && gtd.RefStruct.equiv(gvd.RefStruct) {
+					gvd.RefStruct = nil
+					gvd.RefAlias = me.mod.qName + "." + gtd.NamePs
+				}
+			}
+		}
 		me.GoValDecls = append(me.GoValDecls, gvd)
 	}
 }

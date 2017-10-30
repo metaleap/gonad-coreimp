@@ -491,11 +491,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 	} else if tr.REmpty {
 		return nil
 	} else if tr.TypeVar != "" {
-		// embeds := tdict[tr.TypeVar]
-		// if len(embeds) == 1 {
-		// 	return embeds[0]
-		// }
-		return &irATypeRefInterface{isTypeVar: true /*, Embeds: embeds*/}
+		return &irATypeRefInterface{isTypeVar: true}
 	} else if tr.ConstrainedType != nil {
 		/*	a whacky case from Semigroupoid.composeFlipped:
 			ForAll(d).ForAll(c).ForAll(b).ForAll(a).ConstrT(Semibla).TApp {

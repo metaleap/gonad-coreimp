@@ -30,9 +30,10 @@ func (me *irAst) finalizePostPrepOps() {
 
 	me.postLinkUpTcMemberFuncs()
 	me.postLinkUpTcInstDecls()
-	me.postMiscFixups()
+	me.postInitialFixups()
 	me.postEnsureArgTypes()
 	me.postPerFuncFixups()
+	me.postFinalFixups()
 }
 
 func (me *irAst) postEnsureArgTypes() {
@@ -40,11 +41,18 @@ func (me *irAst) postEnsureArgTypes() {
 	for _, a := range me.topLevelDefs(nil) {
 		switch atld := a.(type) {
 		case *irAFunc:
-			if tldname := atld.NamePs; tldname == "" {
+			if atld.NamePs == "" {
 				panic(fmt.Sprintf("%T", atld.parent))
-			} else if gvd := me.irM.goValDeclByPsName(tldname); gvd != nil && gvd.RefFunc != nil {
-				if tlcmem := me.irM.tcMember(tldname); tlcmem == nil {
+			} else if gvd := me.irM.goValDeclByPsName(atld.NamePs); gvd != nil && gvd.RefFunc != nil {
+				if tlcmem := me.irM.tcMember(atld.NamePs); tlcmem == nil {
 					atld.RefFunc.copyArgTypesOnlyFrom(false, gvd.RefFunc)
+				}
+			}
+		case *irALet:
+			if gvd := me.irM.goValDeclByPsName(atld.NamePs); gvd != nil {
+				atld.copyTypeInfoFrom(gvd)
+				if lval := atld.LetVal.Base(); !lval.hasTypeInfo() {
+					lval.copyTypeInfoFrom(gvd)
 				}
 			}
 		}
@@ -123,6 +131,110 @@ func (me *irAst) postEnsureArgTypes() {
 				}
 			}
 		}
+	})
+}
+
+func (me *irAst) postFinalFixups() {
+	me.walk(func(ast irA) irA {
+		// switch a := ast.(type) {
+		// }
+		return ast
+	})
+}
+
+func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
+	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
+	//	(half of this just translates the Error(msg) constructor.. =)
+	var gtd *irANamedTypeRef
+	var mod *modPkg
+	if ocpkgsym, _ := oc.Callee.(*irAPkgSym); ocpkgsym != nil {
+		if mod = findModuleByPName(ocpkgsym.PkgName); mod != nil {
+			gtd = mod.irMeta.goTypeDefByPsName(ocpkgsym.Symbol)
+		}
+	}
+	ocv, _ := oc.Callee.(*irASym)
+	if gtd == nil && ocv != nil {
+		gtd = me.irM.goTypeDefByPsName(ocv.NamePs)
+	}
+	if gtd != nil {
+		o := ªO(&irANamedTypeRef{RefAlias: gtd.NameGo})
+		if mod != nil {
+			o.RefAlias = mod.pName + "." + o.RefAlias
+		}
+		for _, ctorarg := range oc.CallArgs {
+			of := ªOFld(ctorarg)
+			of.parent = o
+			o.ObjFields = append(o.ObjFields, of)
+		}
+		return o
+	} else if ocv != nil && ocv.NamePs == "Error" {
+		if len(oc.CallArgs) == 1 {
+			if op2, _ := oc.CallArgs[0].(*irAOp2); op2 != nil && op2.Op2 == "+" {
+				oc.CallArgs[0] = op2.Left
+				op2.Left.Base().parent = oc
+				if oparr := op2.Right.(*irALitArr); oparr != nil {
+					for _, oparrelem := range oparr.ArrVals {
+						nucallarg := oparrelem
+						if oaedot, _ := oparrelem.(*irADot); oaedot != nil {
+							if oaedot2, _ := oaedot.DotLeft.(*irADot); oaedot2 != nil {
+								nucallarg = oaedot2.DotLeft
+							} else {
+								nucallarg = oaedot
+							}
+						}
+						oc.CallArgs = append(oc.CallArgs, ªCall(ªPkgSym("reflect", "TypeOf"), nucallarg))
+						oc.CallArgs = append(oc.CallArgs, nucallarg)
+					}
+				}
+				if len(oc.CallArgs) > 1 {
+					me.irM.ensureImp("reflect", "", "")
+					oc.CallArgs[0].(*irALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
+				}
+			}
+		}
+		call := ªCall(ªPkgSym("fmt", "Errorf"), oc.CallArgs...)
+		return call
+	} else if ocv != nil {
+		// println("TODO:\t" + me.mod.srcFilePath + "\t" + ocv.NamePs)
+	}
+	return a
+}
+
+func (me *irAst) postInitialFixups() {
+	me.walk(func(ast irA) irA {
+		switch a := ast.(type) {
+		case *irADot:
+			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
+				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
+					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
+				} else {
+					asym := a.DotRight.(*irASym)
+					fname := asym.NamePs
+					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
+						asym.NameGo = gtdm.NameGo
+					}
+				}
+			}
+		case *irALet:
+			if a != nil && a.isConstable() {
+				//	turn var=literal's into consts
+				c := ªConst(&a.irANamedTypeRef, a.LetVal)
+				c.copyTypeInfoFrom(a.ExprType())
+				c.parent = a.parent
+				return c
+			}
+		case *irAFunc:
+			if a.irANamedTypeRef.RefFunc != nil {
+				// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
+				if len(a.irANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
+					// otherwise, add an empty-for-now 'unknown' (aka interface{}) return type
+					a.irANamedTypeRef.RefFunc.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
+				}
+			} else {
+				panic(notImplErr("lack of RefFunc in irAFunc", a.NameGo+"/"+a.NamePs, me.mod.srcFilePath))
+			}
+		}
+		return ast
 	})
 }
 
@@ -213,63 +325,6 @@ func (me *irAst) postPerFuncFixups() {
 			}
 		}
 	})
-}
-
-func (me *irAst) postFixupAmpCtor(a *irAOp1, oc *irACall) irA {
-	//	restore data-ctors from calls like (&CtorName(1, '2', "3")) to turn into DataNameˇCtorName{1, '2', "3"}
-	var gtd *irANamedTypeRef
-	var mod *modPkg
-	if ocpkgsym, _ := oc.Callee.(*irAPkgSym); ocpkgsym != nil {
-		if mod = findModuleByPName(ocpkgsym.PkgName); mod != nil {
-			gtd = mod.irMeta.goTypeDefByPsName(ocpkgsym.Symbol)
-		}
-	}
-	ocv, _ := oc.Callee.(*irASym)
-	if gtd == nil && ocv != nil {
-		gtd = me.irM.goTypeDefByPsName(ocv.NamePs)
-	}
-	if gtd != nil {
-		o := ªO(&irANamedTypeRef{RefAlias: gtd.NameGo})
-		if mod != nil {
-			o.RefAlias = mod.pName + "." + o.RefAlias
-		}
-		for _, ctorarg := range oc.CallArgs {
-			of := ªOFld(ctorarg)
-			of.parent = o
-			o.ObjFields = append(o.ObjFields, of)
-		}
-		return o
-	} else if ocv != nil && ocv.NamePs == "Error" {
-		if len(oc.CallArgs) == 1 {
-			if op2, _ := oc.CallArgs[0].(*irAOp2); op2 != nil && op2.Op2 == "+" {
-				oc.CallArgs[0] = op2.Left
-				op2.Left.Base().parent = oc
-				if oparr := op2.Right.(*irALitArr); oparr != nil {
-					for _, oparrelem := range oparr.ArrVals {
-						nucallarg := oparrelem
-						if oaedot, _ := oparrelem.(*irADot); oaedot != nil {
-							if oaedot2, _ := oaedot.DotLeft.(*irADot); oaedot2 != nil {
-								nucallarg = oaedot2.DotLeft
-							} else {
-								nucallarg = oaedot
-							}
-						}
-						oc.CallArgs = append(oc.CallArgs, ªCall(ªPkgSym("reflect", "TypeOf"), nucallarg))
-						oc.CallArgs = append(oc.CallArgs, nucallarg)
-					}
-				}
-				if len(oc.CallArgs) > 1 {
-					me.irM.ensureImp("reflect", "", "")
-					oc.CallArgs[0].(*irALitStr).LitStr += strings.Repeat(", ‹%v› %v", (len(oc.CallArgs)-1)/2)[2:]
-				}
-			}
-		}
-		call := ªCall(ªPkgSym("fmt", "Errorf"), oc.CallArgs...)
-		return call
-	} else if ocv != nil {
-		// println("TODO:\t" + me.mod.srcFilePath + "\t" + ocv.NamePs)
-	}
-	return a
 }
 
 func (me *irAst) postLinkUpTcMemberFuncs() {
@@ -400,43 +455,5 @@ func (me *irAst) postLinkUpTcInstDecls() {
 				}
 			}
 		}
-	})
-}
-
-func (me *irAst) postMiscFixups() {
-	me.walk(func(ast irA) irA {
-		switch a := ast.(type) {
-		case *irADot:
-			if atl := a.DotLeft.ExprType(); atl != nil && atl.RefAlias != "" {
-				if _, gtd := findGoTypeByPsQName(me.mod, atl.RefAlias); gtd == nil || gtd.RefStruct == nil {
-					panic(notImplErr("unresolvable expression-type ref-alias", atl.RefAlias, me.mod.srcFilePath))
-				} else {
-					asym := a.DotRight.(*irASym)
-					fname := asym.NamePs
-					if gtdm := gtd.RefStruct.memberByPsName(fname); gtdm != nil {
-						asym.NameGo = gtdm.NameGo
-					}
-				}
-			}
-		case *irALet:
-			if a != nil && a.isConstable() {
-				//	turn var=literal's into consts
-				c := ªConst(&a.irANamedTypeRef, a.LetVal)
-				c.copyTypeInfoFrom(a.ExprType())
-				c.parent = a.parent
-				return c
-			}
-		case *irAFunc:
-			if a.irANamedTypeRef.RefFunc != nil {
-				// coreimp doesn't give us return-args for funcs, prep them with interface{} initially
-				if len(a.irANamedTypeRef.RefFunc.Rets) == 0 { // but some do have ret-args from prior gonad ops
-					// otherwise, add an empty-for-now 'unknown' (aka interface{}) return type
-					a.irANamedTypeRef.RefFunc.Rets = irANamedTypeRefs{&irANamedTypeRef{}}
-				}
-			} else {
-				panic(notImplErr("lack of RefFunc in irAFunc", a.NameGo+"/"+a.NamePs, me.mod.srcFilePath))
-			}
-		}
-		return ast
 	})
 }
