@@ -53,16 +53,21 @@ type irMeta struct {
 
 	imports []*modPkg
 
-	mod  *modPkg
-	proj *psBowerProject
-	save bool
+	mod     *modPkg
+	proj    *psBowerProject
+	isDirty bool
 }
 
 type irMPkgRefs []*irMPkgRef
 
-func (me irMPkgRefs) Len() int           { return len(me) }
-func (me irMPkgRefs) Less(i, j int) bool { return me[i].ImpPath < me[j].ImpPath }
-func (me irMPkgRefs) Swap(i, j int)      { me[i], me[j] = me[j], me[i] }
+func (me irMPkgRefs) Len() int { return len(me) }
+func (me irMPkgRefs) Less(i, j int) bool {
+	if u1, u2 := me[i].isUriForm(), me[j].isUriForm(); u1 != u2 {
+		return u2
+	}
+	return me[i].ImpPath < me[j].ImpPath
+}
+func (me irMPkgRefs) Swap(i, j int) { me[i], me[j] = me[j], me[i] }
 
 func (me *irMPkgRefs) addIfMissing(lname, imppath, qname string) (pkgref *irMPkgRef, added bool) {
 	if imppath == "" {
@@ -106,6 +111,11 @@ type irMPkgRef struct {
 	ImpPath    string
 
 	emitted bool
+}
+
+func (me *irMPkgRef) isUriForm() bool {
+	id, is := strings.IndexRune(me.ImpPath, '.'), strings.IndexRune(me.ImpPath, '/')
+	return id > 0 && id < is
 }
 
 func (me *modPkg) newModImp() *irMPkgRef {
@@ -260,9 +270,9 @@ func (me *irMeta) ensureImp(lname, imppath, qname string) *irMPkgRef {
 			lname, qname, imppath = mod.pName, mod.qName, mod.impPath()
 		}
 	}
-	imp, save := me.Imports.addIfMissing(lname, imppath, qname)
-	if save {
-		me.save = true
+	imp, haschanged := me.Imports.addIfMissing(lname, imppath, qname)
+	if haschanged {
+		me.isDirty = true
 	}
 	return imp
 }
@@ -475,10 +485,10 @@ func (me *irMeta) populateGoValDecls() {
 		gvd := &irANamedTypeRef{Export: me.hasExport(evd.Name)}
 		gvd.setBothNamesFromPsName(evd.Name)
 		for gtd := me.goTypeDefByGoName(gvd.NameGo); gtd != nil; gtd = me.goTypeDefByGoName(gvd.NameGo) {
-			gvd.NameGo += "ᣳ"
+			gvd.NameGo += "ˆ"
 		}
 		for gvd2 := me.goValDeclByGoName(gvd.NameGo); gvd2 != nil; gvd2 = me.goValDeclByGoName(gvd.NameGo) {
-			gvd.NameGo += "ᣛ"
+			gvd.NameGo += "ˇ"
 		}
 		gvd.setRefFrom(me.toIrATypeRef(tdict, evd.Ref))
 		me.GoValDecls = append(me.GoValDecls, gvd)

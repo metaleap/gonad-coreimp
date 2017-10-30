@@ -216,6 +216,15 @@ func (me *irATypeRefFunc) equiv(cmp *irATypeRefFunc) bool {
 	return (me == nil && cmp == nil) || (me != nil && cmp != nil && me.Args.equiv(cmp.Args) && me.Rets.equiv(cmp.Rets))
 }
 
+func (me *irATypeRefFunc) forEachArgAndRet(on func(*irANamedTypeRef)) {
+	for _, a := range me.Args {
+		on(a)
+	}
+	for _, r := range me.Rets {
+		on(r)
+	}
+}
+
 func (me *irATypeRefFunc) haveAllArgsTypeInfo() bool {
 	for _, arg := range me.Args {
 		if !arg.hasTypeInfo() {
@@ -497,7 +506,7 @@ func (me *irMeta) toIrATypeRef(tdict map[string][]string, tr *irMTypeRef) interf
 				}
 			}
 		*/
-		if finalconstr := tr.ConstrainedType.final(); finalconstr.Ref.TypeApp != nil && finalconstr.Ref.TypeApp.Left.TypeApp != nil && finalconstr.Ref.TypeApp.Right.TypeApp != nil {
+		if finalconstr := tr.ConstrainedType; finalconstr.Ref.TypeApp != nil && finalconstr.Ref.TypeApp.Left.TypeApp != nil && finalconstr.Ref.TypeApp.Right.TypeApp != nil {
 			funtype := &irATypeRefFunc{}
 			funtype.Args = irANamedTypeRefs{&irANamedTypeRef{}}
 			funtype.Args[0].setRefFrom(tr.ConstrainedType.Class)

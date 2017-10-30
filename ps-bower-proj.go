@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -25,7 +24,6 @@ type psBowerFile struct {
 			CoreImpDumpsDirPath string // dir path containing Some.Module.QName/coreimp.json files
 		}
 		Out struct {
-			ForceAll     bool   // if false, only regenerate packages that are out of date with respect to coreimp.json or externs.json
 			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
 			MainDepLevel int    // temporary option
 			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
@@ -184,7 +182,7 @@ func (me *psBowerProject) ensureModPkgIrMetas() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		var err error
-		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
+		if modinfo.reGenIr || Flag.ForceAll {
 			err = modinfo.reGenPkgIrMeta()
 		} else if err = modinfo.loadPkgIrMeta(); err != nil {
 			modinfo.reGenIr = true // we capture this so the .go file later also gets re-gen'd from the re-gen'd IRs
@@ -207,7 +205,7 @@ func (me *psBowerProject) populateModPkgIrMetas() {
 func (me *psBowerProject) prepModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
+		if modinfo.reGenIr || Flag.ForceAll {
 			modinfo.prepIrAst()
 		}
 	})
@@ -216,7 +214,7 @@ func (me *psBowerProject) prepModPkirAsts() {
 func (me *psBowerProject) reGenModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
-		if modinfo.reGenIr || Proj.BowerJsonFile.Gonad.Out.ForceAll {
+		if modinfo.reGenIr || Flag.ForceAll {
 			if err := modinfo.reGenPkirAst(); err != nil {
 				panic(err)
 			}
@@ -224,17 +222,20 @@ func (me *psBowerProject) reGenModPkirAsts() {
 	})
 }
 
-func (me *psBowerProject) writeOutDirtyIrMetas(isagain bool) (err error) {
-	isfirst := !isagain
+func (me *psBowerProject) writeOutFiles() (err error) {
 	me.forAll(func(wg *sync.WaitGroup, m *modPkg) {
 		defer wg.Done()
-		shouldwrite := (isagain && m.irMeta.save) ||
-			(isfirst && (m.reGenIr || m.irMeta.save || Proj.BowerJsonFile.Gonad.Out.ForceAll))
-		if shouldwrite {
-			var buf bytes.Buffer
-			if err = m.irMeta.writeAsJsonTo(&buf); err == nil {
-				if err = ufs.WriteBinaryFile(m.irMetaFilePath, buf.Bytes()); err == nil {
-					m.irMeta.save = false
+		if m.irMeta.isDirty || m.reGenIr || Flag.ForceAll {
+			//	maybe gonad.json
+			err = m.writeIrMetaFile()
+			if err == nil && (m.reGenIr || Flag.ForceAll) {
+				//	maybe gonad.ast.json
+				if Proj.BowerJsonFile.Gonad.Out.DumpAst {
+					err = m.writeIrAstFile()
+				}
+				//	maybe .go file
+				if err == nil {
+					err = m.writeGoFile()
 				}
 			}
 			if err != nil {

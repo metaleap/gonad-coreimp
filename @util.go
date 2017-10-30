@@ -13,7 +13,7 @@ import (
 type never struct{}
 
 const (
-	prefixDefaultFfiPkgImpPath = "github.com/metaleap/gonad/ffi/ps2go/"
+	prefixDefaultFfiPkgImpPath = "github.com/gonadz/-/ffi/ps2go/"
 	prefixDefaultFfiPkgNs      = "𝙜ˈ"
 	msgfmt                     = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
 )
@@ -87,25 +87,29 @@ func findPsTypeByQName(qname string) (mod *modPkg, tr interface{}) {
 	return
 }
 
-func findGoTypeByGoQName(me *modPkg, qname string) (mod *modPkg, tref *irANamedTypeRef) {
+func findGoTypeByGoQName(curmod *modPkg, qname string) (mod *modPkg, tref *irANamedTypeRef) {
 	pname, tname := ustr.SplitOnce(qname, '.')
 	if mod = findModuleByPName(pname); mod == nil {
-		mod = me
+		mod = curmod
 	}
 	tref = mod.irMeta.goTypeDefByGoName(tname)
 	return
 }
 
-func findGoTypeByPsQName(me *modPkg, qname string) (*modPkg, *irANamedTypeRef) {
+func findGoTypeByPsQName(curmod *modPkg, qname string) (*modPkg, *irANamedTypeRef) {
 	var pname, tname string
-	mod, i := me, strings.LastIndex(qname, ".")
+	mod, i := curmod, strings.LastIndex(qname, ".")
 	if tname = qname[i+1:]; i > 0 {
 		pname = qname[:i]
 		if mod = findModuleByQName(pname); mod == nil {
 			mod = findModuleByPName(pname)
 		}
 		if mod == nil {
-			panic(notImplErr("module qname", pname, qname))
+			if pname == "Prim" {
+				return nil, nil
+			} else {
+				panic(notImplErr("module qname", pname, qname))
+			}
 		}
 	}
 	return mod, mod.irMeta.goTypeDefByPsName(tname)
@@ -134,9 +138,9 @@ func sanitizeSymbolForGo(name string, upper bool) string {
 		} else {
 			switch name {
 			case "append", "false", "iota", "nil", "true":
-				return name + "ˆ"
+				return name + "ᣳ"
 			case "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var":
-				return "ˆ" + name
+				return name + "ᣛ"
 			}
 		}
 	}

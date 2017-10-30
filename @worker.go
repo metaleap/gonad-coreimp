@@ -53,15 +53,16 @@ func (me *mainWorker) populateIrMetas(dep *psBowerProject) {
 func (me *mainWorker) prepIrAsts(dep *psBowerProject) {
 	defer me.Done()
 	dep.prepModPkirAsts()
-	if err := dep.writeOutDirtyIrMetas(false); err != nil {
-		panic(err)
-	}
 }
 
 func (me *mainWorker) reGenIrAsts(dep *psBowerProject) {
 	defer me.Done()
 	dep.reGenModPkirAsts()
-	if err := dep.writeOutDirtyIrMetas(true); err != nil {
+}
+
+func (me *mainWorker) writeOutFiles(dep *psBowerProject) {
+	defer me.Done()
+	if err := dep.writeOutFiles(); err != nil {
 		panic(err)
 	}
 }

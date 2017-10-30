@@ -19,6 +19,7 @@ var (
 	Proj psBowerProject
 	Deps = map[string]*psBowerProject{}
 	Flag struct {
+		ForceAll bool
 		NoPrefix bool
 		Comments bool
 	}
@@ -33,6 +34,7 @@ func main() {
 	pflag.StringVar(&Proj.BowerJsonFilePath, "bower-file", "bower.json", "Project file path (further configuration options possible in the Gonad field)")
 	pflag.BoolVar(&Flag.NoPrefix, "no-prefix", false, "Do not include comment header")
 	pflag.BoolVar(&Flag.Comments, "comments", false, "Include comments in the generated code")
+	pflag.BoolVar(&Flag.ForceAll, "force", false, "Force-regenerate all *.go & *.json files, not just the outdated or missing ones")
 	pflag.Parse()
 	var err error
 	if !ufs.DirExists(Proj.DepsDirPath) {
@@ -60,10 +62,11 @@ func main() {
 			do.forAllDeps(do.populateIrMetas)
 			do.forAllDeps(do.prepIrAsts)
 			do.forAllDeps(do.reGenIrAsts)
+			do.forAllDeps(do.writeOutFiles)
 			dur := time.Since(starttime)
 			allpkgimppaths := map[string]bool{}
 			numregen, numtotal := countNumOfReGendModules(allpkgimppaths) // do this even when ForceAll to have the map filled for writeTestMainGo
-			if Proj.BowerJsonFile.Gonad.Out.ForceAll {
+			if Flag.ForceAll {
 				numregen = numtotal
 			}
 			if Proj.BowerJsonFile.Gonad.Out.MainDepLevel > 0 {

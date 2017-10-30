@@ -362,8 +362,13 @@ func (me *irAst) codeGenModImps(w io.Writer) (err error) {
 		if len(modimps) > 0 {
 			sort.Sort(modimps)
 			if _, err = fmt.Fprint(w, "import (\n"); err == nil {
+				wasuriform := modimps[0].isUriForm()
 				for _, modimp := range modimps {
-					if modimp.GoName == modimp.ImpPath {
+					if modimp.isUriForm() != wasuriform {
+						wasuriform = !wasuriform
+						_, err = fmt.Fprint(w, "\n")
+					}
+					if modimp.GoName == modimp.ImpPath || /*for the time being*/ true {
 						_, err = fmt.Fprintf(w, "\t%q\n", modimp.ImpPath)
 					} else {
 						_, err = fmt.Fprintf(w, "\t%s %q\n", modimp.GoName, modimp.ImpPath)

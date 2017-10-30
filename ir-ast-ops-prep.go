@@ -31,6 +31,11 @@ func (me *irAst) prepFromCoreImp() {
 		me.irM.ForeignImp = me.irM.ensureImp("", prefixDefaultFfiPkgImpPath+strReplDot2Slash.Replace(me.mod.qName), "")
 	}
 
+	for _, gvd := range me.irM.GoValDecls {
+		if gvd != nil {
+		}
+	}
+
 	me.prepFixupNameCasings()
 	nuglobals := me.prepAddEnumishAdtGlobals()
 	me.prepMiscFixups(nuglobals)
