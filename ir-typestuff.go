@@ -306,7 +306,7 @@ func (me *irMeta) populateGoTypeDefs() {
 		gtd.setBothNamesFromPsName(ts.Name)
 		gtd.setRefFrom(me.toIrATypeRef(tdict, ts.Ref))
 		if tc != nil {
-			if gtd.NameGo += "ᣳ"; gtd.RefStruct != nil {
+			if gtd.NameGo += "ᛌ"; gtd.RefStruct != nil {
 				gtd.RefStruct.PassByPtr = true
 				for _, gtdf := range gtd.RefStruct.Fields {
 					if gtdf.Export != gtd.Export {
