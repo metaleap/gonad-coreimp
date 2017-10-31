@@ -62,7 +62,5 @@ func (me *mainWorker) reGenIrAsts(dep *psBowerProject) {
 
 func (me *mainWorker) writeOutFiles(dep *psBowerProject) {
 	defer me.Done()
-	if err := dep.writeOutFiles(); err != nil {
-		panic(err)
-	}
+	dep.writeOutFiles()
 }

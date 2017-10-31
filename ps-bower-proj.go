@@ -21,7 +21,7 @@ type psBowerFile struct {
 
 	Gonad struct { // all settings in here apply to all Deps equally as they do to the main Proj --- ie. the former get a copy of the latter, ignoring their own Gonad field even if present
 		In struct {
-			CoreImpDumpsDirPath string // dir path containing Some.Module.QName/coreimp.json files
+			CoreFilesDirPath string // dir path containing Some.Module.QName/coreimp.json files
 		}
 		Out struct {
 			DumpAst         bool   // dumps an additional gonad.ast.json next to gonad.json
@@ -94,8 +94,8 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 		if isdep {
 			cfg = &Proj.BowerJsonFile.Gonad
 		} else {
-			if cfg.In.CoreImpDumpsDirPath == "" {
-				cfg.In.CoreImpDumpsDirPath = "output"
+			if cfg.In.CoreFilesDirPath == "" {
+				cfg.In.CoreFilesDirPath = "output"
 			}
 			if cfg.Out.GoNamespaceProj == "" {
 				panic("missing in bower.json: `Gonad{Out{GoNamespaceProj=\"...\"}}` setting (the directory path relative to either your GOPATH or the specified `Gonad{Out{GoDirSrcPath=\"...\"}}`)")
@@ -153,10 +153,10 @@ func (me *psBowerProject) addModPkgFromPsSrcFileIfCoreimp(relpath string, gopkgd
 		proj: me, srcFilePath: filepath.Join(me.SrcDirPath, relpath),
 		qName: strReplFsSlash2Dot.Replace(relpath[:l]), lName: relpath[i+1 : l],
 	}
-	if modinfo.impFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
+	if modinfo.impFilePath = filepath.Join(opt.In.CoreFilesDirPath, modinfo.qName, "coreimp.json"); ufs.FileExists(modinfo.impFilePath) {
 		modinfo.pName = strReplDot2ꓸ.Replace(modinfo.qName)
-		modinfo.extFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "externs.json")
-		modinfo.irMetaFilePath = filepath.Join(opt.In.CoreImpDumpsDirPath, modinfo.qName, "gonad.json")
+		modinfo.extFilePath = filepath.Join(opt.In.CoreFilesDirPath, modinfo.qName, "externs.json")
+		modinfo.irMetaFilePath = filepath.Join(opt.In.CoreFilesDirPath, modinfo.qName, "gonad.json")
 		modinfo.goOutDirPath = relpath[:l]
 		modinfo.goOutFilePath = filepath.Join(modinfo.goOutDirPath, modinfo.qName) + ".go"
 		modinfo.gopkgfilepath = filepath.Join(gopkgdir, modinfo.goOutFilePath)
@@ -224,12 +224,12 @@ func (me *psBowerProject) reGenModPkirAsts() {
 	})
 }
 
-func (me *psBowerProject) writeOutFiles() (err error) {
+func (me *psBowerProject) writeOutFiles() {
 	me.forAll(func(wg *sync.WaitGroup, m *modPkg) {
 		defer wg.Done()
 		if m.irMeta.isDirty || m.reGenIr || Flag.ForceAll {
 			//	maybe gonad.json
-			err = m.writeIrMetaFile()
+			err := m.writeIrMetaFile()
 			if err == nil && (m.reGenIr || Flag.ForceAll) {
 				//	maybe gonad.ast.json
 				if Proj.BowerJsonFile.Gonad.Out.DumpAst {
