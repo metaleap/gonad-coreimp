@@ -27,7 +27,7 @@ type psBowerFile struct {
 			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
 			MainDepLevel int    // temporary option
 			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
-			GoNamespace  string // defaults to github.com/gonadz/ps2go (or github.com\gonadz\ps2go under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
+			GoNamespace  string // defaults to github.com/gonadz/pscoreimp2go (or github.com\gonadz\pscoreimp2go under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
 		}
 		CodeGen struct {
 			// TypeClasses2Interfaces bool
@@ -97,7 +97,7 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 				cfg.In.CoreImpDumpsDirPath = "output"
 			}
 			if cfg.Out.GoNamespace == "" {
-				cfg.Out.GoNamespace = filepath.Join("github.com", "gonadz", "ps2go")
+				panic("missing in bower.json: `Gonad{Out{GoNamespace=\"...\"}}` setting (the directory path relative to either your GOPATH or the specified `Gonad{Out{GoDirSrcPath=\"...\"}}`)")
 			}
 			if cfg.Out.GoDirSrcPath == "" {
 				for _, gopath := range udevgo.AllGoPaths() {
@@ -114,19 +114,20 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 		}
 		if err == nil {
 			// proceed
-			me.GoOut.PkgDirPath = cfg.Out.GoNamespace
-			if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && repourl.Path != "" {
-				if i := strings.LastIndex(repourl.Path, "."); i > 0 {
-					me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path[:i])
-				} else {
-					me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path)
+			if me.GoOut.PkgDirPath = cfg.Out.GoNamespace; isdep && false {
+				if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && repourl.Path != "" {
+					if i := strings.LastIndex(repourl.Path, "."); i > 0 {
+						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path[:i])
+					} else {
+						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path)
+					}
 				}
-			}
-			if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.BowerJsonFile.Name) {
-				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Name)
-			}
-			if me.BowerJsonFile.Version != "" {
-				me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Version)
+				if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.BowerJsonFile.Name) {
+					me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Name)
+				}
+				if me.BowerJsonFile.Version != "" {
+					me.GoOut.PkgDirPath = filepath.Join(me.GoOut.PkgDirPath, me.BowerJsonFile.Version)
+				}
 			}
 			gopkgdir := filepath.Join(cfg.Out.GoDirSrcPath, me.GoOut.PkgDirPath)
 			ufs.WalkAllFiles(me.SrcDirPath, func(relpath string) bool {
@@ -215,9 +216,7 @@ func (me *psBowerProject) reGenModPkirAsts() {
 	me.forAll(func(wg *sync.WaitGroup, modinfo *modPkg) {
 		defer wg.Done()
 		if modinfo.reGenIr || Flag.ForceAll {
-			if err := modinfo.reGenPkirAst(); err != nil {
-				panic(err)
-			}
+			modinfo.reGenPkgIrAst()
 		}
 	})
 }

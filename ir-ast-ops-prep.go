@@ -14,7 +14,7 @@ func (me *irAst) prepFromCoreImp() {
 	//	into irMeta. Anything that relies on *complete* type infos from *other*
 	//	modules then needs to happen in the "post" stage
 	for _, cia := range me.mod.coreimp.Body { // traverse the original CoreImp AST
-		me.prepAddOrCull(cia.ciAstToIrAst()) // convert every top-level node into our Golang IR
+		me.prepAddOrCull(me.mod.coreimp.astToIrA(cia)) // convert every top-level node into our Golang IR
 	}
 	//	at this point, the Golang IR highly resembles CoreImp ie JS. No types, lots of closures etc.
 	//	here begins to long arduous road to transform into more idiomatic well-typed Golang.
@@ -27,7 +27,7 @@ func (me *irAst) prepFromCoreImp() {
 		}
 	}
 
-	if reqforeign := me.mod.coreimp.namedRequires["$foreign"]; reqforeign != "" {
+	if reqforeign := me.mod.coreimp.My.NamedRequires["$foreign"]; reqforeign != "" {
 		me.irM.ForeignImp = me.irM.ensureImp("", prefixDefaultFfiPkgImpPath+strReplDot2Slash.Replace(me.mod.qName), "")
 	}
 

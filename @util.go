@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/slice"
 	"github.com/metaleap/go-util/str"
 )
@@ -15,7 +16,7 @@ type never struct{}
 const (
 	prefixDefaultFfiPkgImpPath = "github.com/gonadz/-/ffi/ps2go/"
 	prefixDefaultFfiPkgNs      = "𝙜ˈ"
-	msgfmt                     = "Encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it, to: https://github.com/metaleap/gonad/issues."
+	msgfmt                     = "encountered un-anticipated %s '%s' in %v,\n\tplease report the case with the *.purs code(base) so that I can support it"
 )
 
 var (
@@ -32,6 +33,11 @@ var (
 
 	_symcounter = 0
 )
+
+func init() {
+	udevps.NotImplErr = notImplErr
+	udevps.StrReplUnsanitize = strReplUnsanitize
+}
 
 func notImplErr(cat string, name string, in interface{}) error {
 	return fmt.Errorf(msgfmt, cat, name, in)

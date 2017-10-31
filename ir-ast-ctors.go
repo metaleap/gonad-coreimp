@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/str"
 )
 
@@ -80,7 +81,7 @@ func ªCall(callee irA, callargs ...irA) *irACall {
 	return a
 }
 
-func ªComments(comments ...*coreImpComment) *irAComments {
+func ªComments(comments ...*udevps.CoreComment) *irAComments {
 	a := &irAComments{}
 	a.Comments = comments
 	return a

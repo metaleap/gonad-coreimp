@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/str"
 )
 
@@ -31,7 +32,7 @@ func (_ *irAst) codeGenCommaIf(w io.Writer, i int) {
 	}
 }
 
-func (_ *irAst) codeGenComments(w io.Writer, singlelineprefix string, comments ...*coreImpComment) {
+func (_ *irAst) codeGenComments(w io.Writer, singlelineprefix string, comments ...*udevps.CoreComment) {
 	for _, c := range comments {
 		if c.BlockComment != "" {
 			fmt.Fprintf(w, "/*%s*/", c.BlockComment)

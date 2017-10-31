@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/fs"
 	"github.com/metaleap/go-util/slice"
 	"github.com/metaleap/go-util/str"
@@ -310,32 +311,32 @@ func (me *irMeta) tcMember(name string) *irMTypeClassMember {
 	return nil
 }
 
-func (me *irMeta) newTypeRefFromEnvTag(tc *coreImpEnvTagType) (tref *irMTypeRef) {
+func (me *irMeta) newTypeRefFromEnvTag(tc *udevps.CoreTagType) (tref *irMTypeRef) {
 	tref = &irMTypeRef{}
-	if tc.isTypeConstructor() {
-		tref.TypeConstructor = tc.text
-	} else if tc.isTypeVar() {
-		tref.TypeVar = tc.text
-	} else if tc.isREmpty() {
+	if tc.IsTypeConstructor() {
+		tref.TypeConstructor = tc.Text
+	} else if tc.IsTypeVar() {
+		tref.TypeVar = tc.Text
+	} else if tc.IsREmpty() {
 		tref.REmpty = true
-	} else if tc.isRCons() {
+	} else if tc.IsRCons() {
 		tref.RCons = &irMTypeRefRow{
-			Label: tc.text, Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
-	} else if tc.isForAll() {
-		tref.ForAll = &irMTypeRefExist{Name: tc.text, Ref: me.newTypeRefFromEnvTag(tc.type0)}
-		if tc.skolem >= 0 {
-			tref.ForAll.SkolemScope = &tc.skolem
+			Label: tc.Text, Left: me.newTypeRefFromEnvTag(tc.Type0), Right: me.newTypeRefFromEnvTag(tc.Type1)}
+	} else if tc.IsForAll() {
+		tref.ForAll = &irMTypeRefExist{Name: tc.Text, Ref: me.newTypeRefFromEnvTag(tc.Type0)}
+		if tc.Skolem >= 0 {
+			tref.ForAll.SkolemScope = &tc.Skolem
 		}
-	} else if tc.isSkolem() {
-		tref.Skolem = &irMTypeRefSkolem{Name: tc.text, Value: tc.num, Scope: tc.skolem}
-	} else if tc.isTypeApp() {
-		tref.TypeApp = &irMTypeRefAppl{Left: me.newTypeRefFromEnvTag(tc.type0), Right: me.newTypeRefFromEnvTag(tc.type1)}
-	} else if tc.isConstrainedType() {
-		tref.ConstrainedType = &irMTypeRefConstr{Ref: me.newTypeRefFromEnvTag(tc.type0), Class: tc.constr.Class}
-		for _, tca := range tc.constr.Args {
+	} else if tc.IsSkolem() {
+		tref.Skolem = &irMTypeRefSkolem{Name: tc.Text, Value: tc.Num, Scope: tc.Skolem}
+	} else if tc.IsTypeApp() {
+		tref.TypeApp = &irMTypeRefAppl{Left: me.newTypeRefFromEnvTag(tc.Type0), Right: me.newTypeRefFromEnvTag(tc.Type1)}
+	} else if tc.IsConstrainedType() {
+		tref.ConstrainedType = &irMTypeRefConstr{Ref: me.newTypeRefFromEnvTag(tc.Type0), Class: tc.Constr.Cls}
+		for _, tca := range tc.Constr.Args {
 			tref.ConstrainedType.Args = append(tref.ConstrainedType.Args, me.newTypeRefFromEnvTag(tca))
 		}
-	} else if tc.isTypeLevelString() {
+	} else if tc.IsTypeLevelString() {
 		//	nothing to do so far
 	} else {
 		panic(notImplErr("tagged-type", tc.Tag, me.mod.srcFilePath))
@@ -397,7 +398,7 @@ func (me *irMeta) populateEnvTypeClasses() {
 			tc.Members = append(tc.Members, &irMTypeClassMember{tc: tc, irMNamedTypeRef: irMNamedTypeRef{Name: tcmdef.Ident, Ref: tref}})
 		}
 		for _, tcsc := range tcdef.Superclasses {
-			c := &irMTypeRefConstr{Class: tcsc.Class}
+			c := &irMTypeRefConstr{Class: tcsc.Cls}
 			for _, tcsca := range tcsc.Args {
 				c.Args = append(c.Args, me.newTypeRefFromEnvTag(tcsca))
 			}
@@ -419,7 +420,7 @@ func (me *irMeta) populateEnvTypeClasses() {
 }
 
 func (me *irMeta) populateFromCoreImp() {
-	me.mod.coreimp.prep()
+	me.mod.coreimp.Prep()
 	// discover and store exports
 	for _, exp := range me.mod.ext.EfExports {
 		if len(exp.TypeRef) > 1 {

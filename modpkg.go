@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/fs"
 )
 
@@ -33,8 +34,8 @@ type modPkg struct {
 	irAst         *irAst
 	proj          *psBowerProject // parent
 	gopkgfilepath string          // full target file path (not necessarily absolute but starting with the given gopath)
-	ext           *psExt
-	coreimp       *coreImp
+	ext           *udevps.Extern
+	coreimp       *psCoreImp
 }
 
 func findModuleByQName(qname string) (modinfo *modPkg) {
@@ -101,15 +102,14 @@ func (me *modPkg) reGenPkgIrMeta() (err error) {
 }
 
 func (me *modPkg) prepIrAst() {
-	me.coreimp.initAstOnLoaded()
-	me.coreimp.prepTopLevel()
+	me.coreimp.InitAstOnLoaded()
+	me.coreimp.PrepTopLevel()
 	me.irAst = &irAst{mod: me, irM: me.irMeta}
 	me.irAst.prepFromCoreImp()
 }
 
-func (me *modPkg) reGenPkirAst() (err error) {
+func (me *modPkg) reGenPkgIrAst() {
 	me.irAst.finalizePostPrepOps()
-	return
 }
 
 func (me *modPkg) writeGoFile() (err error) {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/metaleap/go-util/dev/ps"
 	"github.com/metaleap/go-util/str"
 )
 
@@ -57,8 +58,8 @@ type irA interface {
 }
 
 type irABase struct {
-	irANamedTypeRef                   // don't use all of this, but exprs with names and/or types do as needed
-	Comments        []*coreImpComment `json:",omitempty"`
+	irANamedTypeRef                       // don't use all of this, but exprs with names and/or types do as needed
+	Comments        []*udevps.CoreComment `json:",omitempty"`
 	parent          irA
 	root            *irAst // usually nil but set in top-level irABlock. for the rare occasions a irA impl needs this, it uses Ast() which traverses parents to the root then stores in ast --- rather than passing the root to all irA constructors etc
 }
