@@ -24,10 +24,11 @@ type psBowerFile struct {
 			CoreImpDumpsDirPath string // dir path containing Some.Module.QName/coreimp.json files
 		}
 		Out struct {
-			DumpAst      bool   // dumps an additional gonad.ast.json next to gonad.json
-			MainDepLevel int    // temporary option
-			GoDirSrcPath string // defaults to the first `GOPATH` found that has a `src` sub-directory
-			GoNamespace  string // defaults to github.com/gonadz/pscoreimp2go (or github.com\gonadz\pscoreimp2go under Windows). only used to construct psBowerProject.GoOut.PkgDirPath
+			DumpAst         bool   // dumps an additional gonad.ast.json next to gonad.json
+			MainDepLevel    int    // temporary option
+			GoDirSrcPath    string // defaults to the first `GOPATH` found that has a `src` sub-directory
+			GoNamespaceProj string
+			GoNamespaceDeps string
 		}
 		CodeGen struct {
 			// TypeClasses2Interfaces bool
@@ -96,8 +97,8 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 			if cfg.In.CoreImpDumpsDirPath == "" {
 				cfg.In.CoreImpDumpsDirPath = "output"
 			}
-			if cfg.Out.GoNamespace == "" {
-				panic("missing in bower.json: `Gonad{Out{GoNamespace=\"...\"}}` setting (the directory path relative to either your GOPATH or the specified `Gonad{Out{GoDirSrcPath=\"...\"}}`)")
+			if cfg.Out.GoNamespaceProj == "" {
+				panic("missing in bower.json: `Gonad{Out{GoNamespaceProj=\"...\"}}` setting (the directory path relative to either your GOPATH or the specified `Gonad{Out{GoDirSrcPath=\"...\"}}`)")
 			}
 			if cfg.Out.GoDirSrcPath == "" {
 				for _, gopath := range udevgo.AllGoPaths() {
@@ -114,12 +115,14 @@ func (me *psBowerProject) loadFromJsonFile() (err error) {
 		}
 		if err == nil {
 			// proceed
-			if me.GoOut.PkgDirPath = cfg.Out.GoNamespace; isdep && false {
+			me.GoOut.PkgDirPath = cfg.Out.GoNamespaceProj
+			if isdep && cfg.Out.GoNamespaceDeps != "" {
+				me.GoOut.PkgDirPath = cfg.Out.GoNamespaceDeps
 				if repourl := me.BowerJsonFile.RepositoryURLParsed(); repourl != nil && repourl.Path != "" {
 					if i := strings.LastIndex(repourl.Path, "."); i > 0 {
-						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path[:i])
+						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespaceDeps, repourl.Path[:i])
 					} else {
-						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespace, repourl.Path)
+						me.GoOut.PkgDirPath = filepath.Join(cfg.Out.GoNamespaceDeps, repourl.Path)
 					}
 				}
 				if me.GoOut.PkgDirPath = strings.Trim(me.GoOut.PkgDirPath, "/\\"); !strings.HasSuffix(me.GoOut.PkgDirPath, me.BowerJsonFile.Name) {

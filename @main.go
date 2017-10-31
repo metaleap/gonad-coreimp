@@ -52,6 +52,7 @@ func main() {
 		do.Wait()
 		do.forAllDeps(do.loadDepFromBowerFile)
 		Deps[""] = &Proj // from now on, all Deps and the main Proj are handled in parallel and equivalently
+		confirmNoOutDirConflicts()
 		do.forAllDeps(do.loadIrMetas)
 		for _, dep := range Deps {
 			if err = dep.ensureOutDirs(); err != nil {
@@ -79,6 +80,20 @@ func main() {
 	}
 	if err != nil {
 		panic(err.Error())
+	}
+}
+
+func confirmNoOutDirConflicts() {
+	gooutdirs := map[string]*psBowerProject{}
+	for _, dep := range Deps {
+		for _, mod := range dep.Modules {
+			modoutdirpath := filepath.Join(dep.GoOut.PkgDirPath, mod.goOutDirPath)
+			if prev := gooutdirs[modoutdirpath]; prev == nil {
+				gooutdirs[modoutdirpath] = dep
+			} else {
+				panic(fmt.Sprintf("Conflicting Go output packages: both '%s' and '%s' want to write to %s", prev.BowerJsonFile.Name, dep.BowerJsonFile.Name, modoutdirpath))
+			}
+		}
 	}
 }
 
