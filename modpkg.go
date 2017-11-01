@@ -92,7 +92,7 @@ func (me *modPkg) reGenPkgIrMeta() (err error) {
 		if err = json.Unmarshal(jsonbytes, &me.ext); err == nil {
 			if jsonbytes, err = ioutil.ReadFile(me.impFilePath); err == nil {
 				if err = json.Unmarshal(jsonbytes, &me.coreimp); err == nil {
-					me.coreimp.mod = me
+					me.coreimp.mod, me.coreimp.My.ImpFilePath = me, me.impFilePath
 					me.irMeta = &irMeta{isDirty: true, mod: me, proj: me.proj}
 				}
 			}
